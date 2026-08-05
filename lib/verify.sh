@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 # lib/verify.sh — vérifications avant lancement + résumé d'installation.
+#
+# CORRECTIF (problème 1) : la détection des modèles H3 se fait maintenant par
+# recherche récursive (find) sous models/, au lieu de globs figés sur un
+# sous-dossier précis. Les motifs ne portent que sur le préfixe stable du nom
+# de fichier (minimax_h3_fl2va_, minimax_h3_ref2va_, qwen3vl*minimax_h3*,
+# minimax_h3_video_vae_, minimax_h3_audio_vae_) : tout ce qui vient après
+# (bf16, fp16, fp32, nvfp4_awq, int8_convrot, pruned_int8_convrot, etc.) est
+# couvert par le caractère générique, sans avoir à toucher ce script si de
+# nouvelles variantes sortent plus tard.
 
 VERIFY_FAILED=0
 
@@ -51,34 +60,47 @@ verify_installation() {
     _v_warn "ComfyUI-Manager absent (facultatif mais recommandé)."
   fi
 
-  # --- Modèles H3 ---
+  # --- Modèles H3 : recherche récursive, peu importe le sous-dossier réel ---
   local base="${INSTALL_DIR}/models"
-  local tier; tier="$(resolve_h3_tier 2>/dev/null || echo "?")"
-  local workflows="$H3_WORKFLOWS"; [[ "$workflows" == "all" ]] && workflows="t2v,i2v,r2v"
-  local any_diffusion=0
 
-  for f in "${base}/diffusion_models"/minimax_h3_*.safetensors; do
-    [[ -f "$f" ]] && { any_diffusion=1; break; }
-  done
-  if (( any_diffusion )); then
-    _v_ok "Au moins un modèle de diffusion MiniMax H3 présent."
-    for f in "${base}/diffusion_models"/minimax_h3_*.safetensors; do
-      [[ -f "$f" ]] && log_info "   - $(basename "$f") ($(du -h "$f" 2>/dev/null | cut -f1))"
+  local _diffusion_files=()
+  if [[ -d "$base" ]]; then
+    mapfile -t _diffusion_files < <(find "$base" -type f \
+      \( -iname "minimax_h3_fl2va_*.safetensors" -o -iname "minimax_h3_ref2va_*.safetensors" \) \
+      2>/dev/null)
+  fi
+  if (( ${#_diffusion_files[@]} > 0 )); then
+    _v_ok "Au moins un modèle de diffusion MiniMax H3 présent (${#_diffusion_files[@]})."
+    for f in "${_diffusion_files[@]}"; do
+      log_info "   - ${f#"$base"/} ($(du -h "$f" 2>/dev/null | cut -f1))"
     done
   else
     _v_warn "Aucun modèle de diffusion MiniMax H3 trouvé — lancez : bash install.sh --only-models"
   fi
 
-  if compgen -G "${base}/text_encoders/qwen3vl_32b_minimax_h3_*.safetensors" > /dev/null; then
+  local _text_encoder_files=()
+  if [[ -d "$base" ]]; then
+    mapfile -t _text_encoder_files < <(find "$base" -type f -iname "*qwen3vl*" -iname "*minimax_h3*" -iname "*.safetensors" 2>/dev/null)
+  fi
+  if (( ${#_text_encoder_files[@]} > 0 )); then
     _v_ok "Encodeur de texte MiniMax H3 présent."
+    for f in "${_text_encoder_files[@]}"; do
+      log_info "   - ${f#"$base"/} ($(du -h "$f" 2>/dev/null | cut -f1))"
+    done
   else
     _v_warn "Encodeur de texte MiniMax H3 manquant."
   fi
 
-  if [[ -f "${base}/vae/minimax_h3_video_vae_fp16.safetensors" && -f "${base}/vae/minimax_h3_audio_vae_fp32.safetensors" ]]; then
+  local _video_vae="" _audio_vae=""
+  if [[ -d "$base" ]]; then
+    _video_vae="$(find "$base" -type f -iname "minimax_h3_video_vae_*.safetensors" 2>/dev/null | head -n1)"
+    _audio_vae="$(find "$base" -type f -iname "minimax_h3_audio_vae_*.safetensors" 2>/dev/null | head -n1)"
+  fi
+  if [[ -n "$_video_vae" && -n "$_audio_vae" ]]; then
     _v_ok "VAE vidéo + audio MiniMax H3 présents."
   else
-    _v_warn "VAE MiniMax H3 (vidéo et/ou audio) manquant(s)."
+    [[ -z "$_video_vae" ]] && _v_warn "VAE vidéo MiniMax H3 manquant."
+    [[ -z "$_audio_vae" ]] && _v_warn "VAE audio MiniMax H3 manquant."
   fi
 
   # --- espace disque ---

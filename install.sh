@@ -105,30 +105,6 @@ run_step "comfyui_cloned"     clone_or_update_comfyui     "$FORCE"
 run_step "python_venv"        setup_python_venv          "$FORCE"
 run_step "comfyui_requirements" install_comfyui_requirements "$FORCE"
 install_extra_requirements
-source "${VENV_DIR}/bin/activate"
-
-pip install -U hf_xet
-
-pip uninstall -y torch torchvision torchaudio || true
-
-pip cache purge || true
-
-pip install --no-cache-dir \
-    torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cu128
-python - <<'EOF'
-import torch
-
-print("=" * 60)
-print("Torch :", torch.__version__)
-print("CUDA  :", torch.version.cuda)
-print("GPU   :", torch.cuda.is_available())
-print("=" * 60)
-
-if not torch.cuda.is_available():
-    raise SystemExit("ERREUR : CUDA n'est pas disponible.")
-EOF
-deactivate
 run_step "manager_installed"  install_or_update_manager   "$FORCE"
 run_step "optional_nodes"     install_optional_nodes      "$FORCE"
 run_step "model_folders"      create_model_folders        "$FORCE"
