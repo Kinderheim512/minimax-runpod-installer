@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # launch.sh — démarre ComfyUI avec les optimisations calculées pour le GPU.
 
+if curl -fs http://127.0.0.1:8188 >/dev/null 2>&1; then
+
+    echo
+    echo "[INFO] ComfyUI est déjà lancé."
+    echo
+
+    exit 0
+
+fi
 set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="${PROJECT_ROOT}/logs/launch.log"
