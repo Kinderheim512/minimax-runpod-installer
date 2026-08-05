@@ -190,7 +190,13 @@ download_diffusion_model() {
     local filename; filename="$(basename "$hf_subpath")"
     download_civitai_model "$civitai_url" "${base}/diffusion_models/${filename}"
   else
-    download_hf_file "$H3_HF_REPO" "$hf_subpath" "$base"
+    # download_hf_file() écrit le fichier dans <dest_dir>/$(basename subpath) :
+    # elle ne recrée PAS elle-même l'arborescence du dépôt HF (diffusion_models/,
+    # text_encoders/, vae/...). C'est à l'appelant de fournir le sous-dossier
+    # final, sous peine de tout aplatir dans models/ (bug corrigé ici).
+    local dest_subdir; dest_subdir="$(dirname "$hf_subpath")"
+    mkdir -p "${base}/${dest_subdir}"
+    download_hf_file "$H3_HF_REPO" "$hf_subpath" "${base}/${dest_subdir}"
   fi
 }
 
@@ -472,15 +478,18 @@ download_missing_models() {
   # soit MODEL_SOURCE (CivitAI ne les propose pas).
   if [[ "${H3_MODEL_MISSING[text_encoder]}" == "true" ]]; then
     entry="$(_pick_for_tier "$tier" H3_TEXT_ENCODER)"; subpath="${entry%%|*}"
-    download_hf_file "$H3_HF_REPO" "$subpath" "$base"
+    mkdir -p "${base}/$(dirname "$subpath")"
+    download_hf_file "$H3_HF_REPO" "$subpath" "${base}/$(dirname "$subpath")"
   fi
 
   if [[ "${H3_MODEL_MISSING[video_vae]}" == "true" ]]; then
-    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[video_vae]}" "$base"
+    mkdir -p "${base}/$(dirname "${H3_MODEL_FILES[video_vae]}")"
+    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[video_vae]}" "${base}/$(dirname "${H3_MODEL_FILES[video_vae]}")"
   fi
 
   if [[ "${H3_MODEL_MISSING[audio_vae]}" == "true" ]]; then
-    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[audio_vae]}" "$base"
+    mkdir -p "${base}/$(dirname "${H3_MODEL_FILES[audio_vae]}")"
+    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[audio_vae]}" "${base}/$(dirname "${H3_MODEL_FILES[audio_vae]}")"
   fi
 
   echo "------------------------------------------------"
