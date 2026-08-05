@@ -92,12 +92,13 @@ estimate_download_size_gb() {
 download_h3_models() {
   log_step "Téléchargement des modèles MiniMax H3"
 
-  # Forcé sur le palier "light" (ref2va_pruned_int8_convrot + nvfp4_awq) et
-  # le workflow r2v uniquement — ce sont les seuls poids utilisés par les
-  # workflows officiels retenus pour ce projet. Plus aucun téléchargement
-  # fl2va ni BF16, quels que soient H3_TIER / H3_WORKFLOWS dans config.env.
+  # Forcé sur le palier "light" (pruned_int8_convrot + nvfp4_awq). Workflows
+  # t2v + i2v + r2v : les trois workflows officiels partagent le même
+  # encodeur de texte et les mêmes VAE, mais t2v/i2v ont besoin du modèle
+  # fl2va tandis que r2v a besoin du modèle ref2va — les deux UNet sont donc
+  # nécessaires simultanément, d'où les trois workflows listés ici.
   local tier="light"
-  local workflows="r2v"
+  local workflows="t2v,i2v,r2v"
 
   local est_gb; est_gb="$(estimate_download_size_gb "$tier" "$workflows")"
   local free_gb; free_gb="$(free_disk_gb "$INSTALL_DIR")"
