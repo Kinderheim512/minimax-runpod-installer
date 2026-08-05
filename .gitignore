@@ -1,0 +1,10 @@
+logs/
+.state/
+__pycache__/
+*.pyc
+
+.env
+.env.local
+
+workspace/
+models/

@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# lib/utils.sh — logging, gestion d'erreurs, helpers communs.
+# Ce fichier est destiné à être "sourcé", jamais exécuté directement.
+
+if [[ -n "${MINIMAX_UTILS_LOADED:-}" ]]; then return 0 2>/dev/null || exit 0; fi
+MINIMAX_UTILS_LOADED=1
+
+# ----------------------------------------------------------------------------
+# Couleurs
+# ----------------------------------------------------------------------------
+if [[ -t 1 ]]; then
+  C_RED=$'\033[0;31m'; C_GREEN=$'\033[0;32m'; C_YELLOW=$'\033[0;33m'
+  C_BLUE=$'\033[0;34m'; C_CYAN=$'\033[0;36m'; C_BOLD=$'\033[1m'; C_RESET=$'\033[0m'
+else
+  C_RED=""; C_GREEN=""; C_YELLOW=""; C_BLUE=""; C_CYAN=""; C_BOLD=""; C_RESET=""
+fi
+
+# ----------------------------------------------------------------------------
+# Logging — chaque script appelant définit LOG_FILE avant de sourcer utils.sh
+# (sinon on retombe sur logs/install.log)
+# ----------------------------------------------------------------------------
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
+mkdir -p "$LOG_DIR"
+LOG_FILE="${LOG_FILE:-${LOG_DIR}/install.log}"
+
+_ts() { date '+%Y-%m-%d %H:%M:%S'; }
+
+log_info()  { echo -e "${C_BLUE}[INFO]${C_RESET}  $*" | tee -a "$LOG_FILE" >&2; }
+log_ok()    { echo -e "${C_GREEN}[ OK ]${C_RESET}  $*" | tee -a "$LOG_FILE" >&2; }
+log_warn()  { echo -e "${C_YELLOW}[WARN]${C_RESET}  $*" | tee -a "$LOG_FILE" >&2; }
+log_error() { echo -e "${C_RED}[FAIL]${C_RESET}  $*" | tee -a "$LOG_FILE" >&2; }
+log_step()  { echo -e "\n${C_BOLD}${C_CYAN}==> $*${C_RESET}" | tee -a "$LOG_FILE" >&2; }
+log_raw()   { echo "$*" >> "$LOG_FILE"; }
+
+# ----------------------------------------------------------------------------
+# Gestion d'erreurs
+# ----------------------------------------------------------------------------
+_on_error() {
+  local exit_code=$?
+  local line_no=$1
+  log_error "Échec ligne ${line_no} (code ${exit_code}) dans ${BASH_SOURCE[1]:-?}."
+  log_error "Consultez ${LOG_FILE} pour le détail. Vous pouvez relancer install.sh : les étapes déjà validées seront sautées."
+  exit "$exit_code"
+}
+enable_error_trap() {
+  set -Eeuo pipefail
+  trap '_on_error $LINENO' ERR
+}
+
+# ----------------------------------------------------------------------------
+# Confirmation utilisateur
+# ----------------------------------------------------------------------------
+ASSUME_YES="${ASSUME_YES:-false}"
+confirm() {
+  local prompt="$1"
+  if [[ "$ASSUME_YES" == "true" ]]; then return 0; fi
+  local reply
+  read -r -p "$(echo -e "${C_YELLOW}?${C_RESET} ${prompt} [o/N] ")" reply || true
+  [[ "$reply" =~ ^([oOyY])([uUeE][iIsS])?$ ]]
+}
+
+# ----------------------------------------------------------------------------
+# Divers helpers
+# ----------------------------------------------------------------------------
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+retry() {
+  # retry <n_tentatives> <commande...>
+  local n="$1"; shift
+  local i=1
+  until "$@"; do
+    if (( i >= n )); then
+      log_error "Échec après ${n} tentatives : $*"
+      return 1
+    fi
+    log_warn "Tentative ${i}/${n} échouée, nouvelle tentative dans 5s..."
+    sleep 5
+    ((i++))
+  done
+}
+
+human_gb() {
+  # affiche un nombre d'octets en Go, 1 décimale
+  awk -v b="$1" 'BEGIN{printf "%.1f Go", b/1000000000}'
+}
+
+free_disk_gb() {
+  # espace libre en Go sur le point de montage du chemin donné
+  local path="$1"
+  df -PB1 "$path" 2>/dev/null | awk 'NR==2{printf "%.0f", $4/1000000000}'
+}
+
+# ----------------------------------------------------------------------------
+# État d'installation (reprise après interruption)
+# ----------------------------------------------------------------------------
+state_file() { echo "${PROJECT_ROOT}/.minimax_installer_state"; }
+
+step_done() {
+  local step="$1"
+  local f; f="$(state_file)"
+  [[ -f "$f" ]] && grep -qxF "$step" "$f"
+}
+
+mark_step_done() {
+  local step="$1"
+  local f; f="$(state_file)"
+  mkdir -p "$(dirname "$f")"
+  touch "$f"
+  grep -qxF "$step" "$f" 2>/dev/null || echo "$step" >> "$f"
+}
+
+run_step() {
+  # run_step <nom_etape> <fonction> [force]
+  local name="$1" fn="$2" force="${3:-false}"
+  if [[ "$force" != "true" ]] && step_done "$name"; then
+    log_ok "Étape '${name}' déjà réalisée, on passe. (--force pour refaire)"
+    return 0
+  fi
+  "$fn"
+  mark_step_done "$name"
+}

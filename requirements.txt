@@ -1,0 +1,10 @@
+# Dépendances additionnelles du projet, en complément de
+# ComfyUI/requirements.txt (torch, etc.) installé séparément par
+# lib/python.sh::install_comfyui_requirements.
+#
+# On ne pin pas torch ici pour ne jamais entrer en conflit avec la version
+# choisie par ComfyUI lui-même.
+
+huggingface_hub>=0.26.0
+hf_transfer>=0.1.6
+packaging>=23.0
