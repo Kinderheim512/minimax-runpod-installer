@@ -9,7 +9,7 @@ install_system_packages() {
     return 0
   fi
 
-  local pkgs=(git wget curl aria2 ffmpeg unzip python3 python3-venv python3-pip build-essential ca-certificates)
+  local pkgs=(git wget curl aria2 ffmpeg unzip tmux python3 python3-venv python3-pip build-essential ca-certificates)
   local missing=()
   for p in "${pkgs[@]}"; do
     dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p")

@@ -169,6 +169,24 @@ Already downloaded models are never downloaded again.
 
 ---
 
+# 🖇 Surviving Web Terminal Disconnects (tmux)
+
+RunPod's web terminal can occasionally disconnect while a long-running task (model download, installation, generation...) is still running in the background. Without tmux, a disconnect can look like your work was lost — it wasn't, but there's no way to get back to it.
+
+- `tmux` is installed automatically as part of the standard system dependencies.
+- It is **never** started or used automatically by this installer — no script launches itself inside a tmux session.
+- Using it is entirely optional and up to you.
+
+To create or reattach to a session:
+
+```bash
+tmux new-session -A -s minimax
+```
+
+`-A` attaches to the `minimax` session if it already exists, or creates it if it doesn't — the same command works whether you're starting fresh or reconnecting after a disconnect. Detach with `Ctrl+b` then `d`; your session (and whatever is running inside it) keeps going in the background.
+
+---
+
 # 🖥 Recommended GPUs
 
 | GPU | Recommended |
@@ -208,7 +226,6 @@ Detailed documentation is available:
 
 ### v1.2
 
-- Automatic LoRA installer
 - LoRA manager
 - Workflow installer
 - Interactive CLI
