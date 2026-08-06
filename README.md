@@ -140,6 +140,21 @@ ComfyUI/models/loras/
 
 ---
 
+# ⚡ Spectrum MiniMax H3 (optional)
+
+[Spectrum MiniMax H3](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3) is an optional acceleration node for MiniMax H3.
+
+- Enabled by default
+- No additional Python dependencies
+- Installs automatically into `custom_nodes/`
+- Can be disabled by setting in `config.env`:
+
+```bash
+INSTALL_SPECTRUM=false
+```
+
+---
+
 # 🔄 Updating
 
 Updating is simple:
