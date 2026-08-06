@@ -31,7 +31,7 @@ Automatically installs ComfyUI, MiniMax H3, official workflows, dependencies and
 - 🧠 Intelligent model validation
 - 🛠 Automatic repair of corrupted models
 - 📦 Automatic installation of official MiniMax H3 workflows
-- 🎨 Automatic LoRA installer *(coming soon)*
+- 🎨 Automatic LoRA installer
 - 🌐 Hugging Face support
 - 🌐 CivitAI support
 - 📈 Automatic GPU optimization
@@ -125,8 +125,6 @@ No manual configuration required.
 ---
 
 # 🎨 Installing LoRAs
-
-*(Available in the next release.)*
 
 ```bash
 bash install_lora.sh "https://..."
