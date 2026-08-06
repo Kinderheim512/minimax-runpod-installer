@@ -20,8 +20,8 @@ if require_cmd nvidia-smi && nvidia-smi >/dev/null 2>&1; then
   detect_gpu
 fi
 
-verify_installation
-exit_code=$?
+exit_code=0
+verify_installation || exit_code=$?
 
 if [[ "${INSTALL_SPECTRUM:-true}" == "true" ]]; then
   if [[ -d "${INSTALL_DIR}/custom_nodes/ComfyUI-Spectrum-MiniMax-H3" ]]; then

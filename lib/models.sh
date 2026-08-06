@@ -59,45 +59,97 @@ resolve_h3_tier() {
     tier="${GPU_TIER_RECOMMENDED:-balanced}"
     log_info "H3_TIER=auto → palier '${tier}' choisi selon la VRAM détectée."
   fi
+  case "$tier" in
+    light|balanced|max) ;;
+    *)
+      log_warn "H3_TIER/--tier='${tier}' inconnu (valeurs valides : light, balanced, max, auto) — repli sur 'balanced'."
+      tier="balanced"
+      ;;
+  esac
   echo "$tier"
 }
 
-estimate_download_size_gb() {
-  local tier="$1"
-  local workflows="$2"
-  local total=0
+# resolve_h3_workflows — normalise H3_WORKFLOWS/--workflows= : étend "all" en
+# "t2v,i2v,r2v", ignore les jetons inconnus (avec avertissement), et retombe
+# sur "t2v,i2v,r2v" si la liste résultante est vide. Seule fonction du projet
+# à interpréter cette variable — tout le reste (choix des poids à
+# télécharger) en dérive via _workflow_needs() ci-dessous.
+resolve_h3_workflows() {
+  local raw="${H3_WORKFLOWS:-t2v,i2v,r2v}"
+  raw="${raw/all/t2v,i2v,r2v}"
 
-  IFS=',' read -ra wf <<< "${workflows/all/t2v,i2v,r2v}"
-  local need_fl2va="false" need_ref2va="false"
-  for w in "${wf[@]}"; do
-    case "$w" in t2v|i2v) need_fl2va="true";; r2v) need_ref2va="true";; esac
+  local -a tokens=() valid=()
+  IFS=',' read -ra tokens <<< "$raw"
+  local t
+  for t in "${tokens[@]}"; do
+    case "$t" in
+      t2v|i2v|r2v) valid+=("$t") ;;
+      "") ;;
+      *) log_warn "H3_WORKFLOWS/--workflows= : jeton inconnu ignoré : '${t}' (valides : t2v, i2v, r2v, all)." ;;
+    esac
   done
 
-  local entry size
-  if [[ "$need_fl2va" == "true" ]]; then
-    entry="$(_pick_for_tier "$tier" H3_DIFFUSION_FL2VA)"; size="${entry##*|}"
-    total=$(awk -v a="$total" -v b="$size" 'BEGIN{print a+b}')
+  if [[ ${#valid[@]} -eq 0 ]]; then
+    log_warn "H3_WORKFLOWS/--workflows='${H3_WORKFLOWS:-}' ne contient aucun workflow valide — repli sur t2v,i2v,r2v."
+    valid=(t2v i2v r2v)
   fi
-  if [[ "$need_ref2va" == "true" ]]; then
-    entry="$(_pick_for_tier "$tier" H3_DIFFUSION_REF2VA)"; size="${entry##*|}"
-    total=$(awk -v a="$total" -v b="$size" 'BEGIN{print a+b}')
-  fi
-  entry="$(_pick_for_tier "$tier" H3_TEXT_ENCODER)"; size="${entry##*|}"
-  total=$(awk -v a="$total" -v b="$size" 'BEGIN{print a+b}')
-  total=$(awk -v a="$total" 'BEGIN{print a+3}')  # marge ~3 Go pour les deux VAE
 
-  echo "$total"
+  local IFS=','
+  echo "${valid[*]}"
+}
+
+# _workflow_needs <workflows_csv> <t2v|i2v|r2v...>
+# Vrai si la liste de workflows résolue contient au moins un des workflows
+# donnés. Utilisé pour dériver need_fl2va (t2v ou i2v) / need_ref2va (r2v) à
+# un seul endroit, réutilisé par l'estimation de taille et le téléchargement.
+_workflow_needs() {
+  local workflows="$1"; shift
+  local -a wf=()
+  IFS=',' read -ra wf <<< "$workflows"
+  local w want
+  for w in "${wf[@]}"; do
+    for want in "$@"; do
+      [[ "$w" == "$want" ]] && return 0
+    done
+  done
+  return 1
+}
+
+# build_h3_model_manifest <tier>
+# Point d'entrée UNIQUE qui peuple H3_MODEL_FILES pour le palier donné, à
+# partir du manifeste H3_DIFFUSION_FL2VA / H3_DIFFUSION_REF2VA /
+# H3_TEXT_ENCODER / H3_VAE (seule source de vérité pour les chemins et
+# tailles). À appeler avant collect_missing_models()/download_missing_models()
+# — tout le reste du fichier lit H3_MODEL_FILES, plus aucune fonction ne
+# rappelle _pick_for_tier() séparément pour fl2va/ref2va/text_encoder.
+declare -A H3_MODEL_FILES=()
+build_h3_model_manifest() {
+  local tier="$1"
+  local entry
+
+  entry="$(_pick_for_tier "$tier" H3_DIFFUSION_FL2VA)"
+  H3_MODEL_FILES[fl2va]="${entry%%|*}"
+  entry="$(_pick_for_tier "$tier" H3_DIFFUSION_REF2VA)"
+  H3_MODEL_FILES[ref2va]="${entry%%|*}"
+  entry="$(_pick_for_tier "$tier" H3_TEXT_ENCODER)"
+  H3_MODEL_FILES[text_encoder]="${entry%%|*}"
+
+  for entry in "${H3_VAE[@]}"; do
+    case "$entry" in
+      *video_vae*) H3_MODEL_FILES[video_vae]="$entry" ;;
+      *audio_vae*) H3_MODEL_FILES[audio_vae]="$entry" ;;
+    esac
+  done
 }
 
 # Taille approximative (Go) des deux VAE — non tarifées par palier dans le
-# manifeste (H3_VAE ne liste que les chemins). Somme = 3 Go, la même marge
-# forfaitaire qu'utilisait déjà estimate_download_size_gb() ci-dessus, donc
-# aucun changement de comportement pour les estimations "tout manque".
+# manifeste (H3_VAE ne liste que les chemins) : elles ne varient pas selon le
+# palier choisi.
 H3_VAE_SIZE_GB_VIDEO="2.7"
 H3_VAE_SIZE_GB_AUDIO="0.3"
 
 # get_model_size_gb <key> <tier> -> taille approximative (Go) sur stdout.
-# Réutilise le même manifeste de tailles que estimate_download_size_gb() —
+# Réutilise le même manifeste de tailles que build_h3_model_manifest() —
 # aucune duplication des chiffres eux-mêmes, juste un accès par clé de modèle
 # plutôt que par liste de workflows.
 get_model_size_gb() {
@@ -124,17 +176,20 @@ get_model_size_gb() {
   esac
 }
 
-# estimate_missing_download_size_gb <tier>
-# Contrairement à estimate_download_size_gb() (qui chiffre tout le
-# workflow), ne totalise que les modèles marqués manquants dans
-# H3_MODEL_MISSING — reflète donc le volume réellement téléchargé.
+# estimate_missing_download_size_gb <tier> <workflows_csv>
+# Ne totalise que les modèles marqués manquants dans H3_MODEL_MISSING ET
+# réellement requis par les workflows sélectionnés (fl2va pour t2v/i2v,
+# ref2va pour r2v) — reflète donc le volume réellement téléchargé.
 # Doit être appelée après collect_missing_models().
 estimate_missing_download_size_gb() {
   local tier="$1"
+  local workflows="$2"
   local total=0
   local key size
 
   for key in "${H3_MODEL_KEYS[@]}"; do
+    [[ "$key" == "fl2va" ]] && ! _workflow_needs "$workflows" t2v i2v && continue
+    [[ "$key" == "ref2va" ]] && ! _workflow_needs "$workflows" r2v && continue
     if [[ "${H3_MODEL_MISSING[$key]:-true}" == "true" ]]; then
       size="$(get_model_size_gb "$key" "$tier")"
       total=$(awk -v a="$total" -v b="$size" 'BEGIN{print a+b}')
@@ -204,25 +259,20 @@ download_diffusion_model() {
 # Détection locale des modèles déjà installés (aucun accès réseau ici)
 # =============================================================================
 #
-# Chaque modèle final (palier "light", seul palier utilisé par
-# download_h3_models) est décrit une seule fois : chemin relatif sous
-# models/, taille minimale plausible (détecte un téléchargement coupé) et
-# libellé affiché. C'est la seule source de vérité utilisée par le scan, la
-# suppression des fichiers corrompus et le calcul des téléchargements
-# manquants — donc aucune duplication entre ces étapes.
+# Chaque modèle final est décrit une seule fois : chemin relatif sous
+# models/ (résolu pour le palier actif par build_h3_model_manifest(), voir
+# plus haut — H3_MODEL_FILES n'est plus figé sur le palier "light"), taille
+# minimale plausible (détecte un téléchargement coupé) et libellé affiché.
+# C'est la seule source de vérité utilisée par le scan, la suppression des
+# fichiers corrompus et le calcul des téléchargements manquants — donc
+# aucune duplication entre ces étapes.
 
 H3_MODEL_KEYS=(fl2va ref2va text_encoder video_vae audio_vae)
 
-declare -A H3_MODEL_FILES=(
-  [fl2va]="diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors"
-  [ref2va]="diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors"
-  [text_encoder]="text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
-  [video_vae]="vae/minimax_h3_video_vae_fp16.safetensors"
-  [audio_vae]="vae/minimax_h3_audio_vae_fp32.safetensors"
-)
-
-# Seuils volontairement conservateurs : ils ne servent qu'à repérer un
-# téléchargement interrompu, pas à valider un checksum exact.
+# Seuils volontairement conservateurs et valables pour les trois paliers
+# (light/balanced/max sont tous très au-dessus de ces minimums) : ils ne
+# servent qu'à repérer un téléchargement interrompu, pas à valider un
+# checksum exact.
 declare -A H3_MODEL_MIN_BYTES=(
   [fl2va]=$((15 * 1024 * 1024 * 1024))          # > 15 Go
   [ref2va]=$((15 * 1024 * 1024 * 1024))         # > 15 Go
@@ -397,54 +447,69 @@ collect_missing_models() {
   done
 }
 
-# any_model_missing — vrai si au moins un modèle doit être téléchargé.
+# any_model_missing <workflows_csv>
+# Vrai si au moins un modèle RÉELLEMENT REQUIS par les workflows sélectionnés
+# doit être téléchargé (fl2va n'est requis que pour t2v/i2v, ref2va que pour
+# r2v — Text Encoder et VAE sont toujours requis).
 any_model_missing() {
+  local workflows="$1"
   local key
   for key in "${H3_MODEL_KEYS[@]}"; do
+    [[ "$key" == "fl2va" ]] && ! _workflow_needs "$workflows" t2v i2v && continue
+    [[ "$key" == "ref2va" ]] && ! _workflow_needs "$workflows" r2v && continue
     [[ "${H3_MODEL_MISSING[$key]:-true}" == "true" ]] && return 0
   done
   return 1
 }
 
-# need_hf_download <model_source>
+# need_hf_download <model_source> <workflows_csv>
 # Vrai si au moins un téléchargement HuggingFace est réellement nécessaire :
 # Text Encoder / VAE manquants (toujours servis par HF), ou modèles de
-# diffusion manquants alors que MODEL_SOURCE=huggingface.
+# diffusion manquants ET requis par les workflows sélectionnés alors que
+# MODEL_SOURCE=huggingface.
 need_hf_download() {
   local source="$1"
+  local workflows="$2"
 
   [[ "${H3_MODEL_MISSING[text_encoder]}" == "true" ]] && return 0
   [[ "${H3_MODEL_MISSING[video_vae]}" == "true" ]] && return 0
   [[ "${H3_MODEL_MISSING[audio_vae]}" == "true" ]] && return 0
 
   if [[ "$source" != "civitai" ]]; then
-    [[ "${H3_MODEL_MISSING[fl2va]}" == "true" ]] && return 0
-    [[ "${H3_MODEL_MISSING[ref2va]}" == "true" ]] && return 0
+    _workflow_needs "$workflows" t2v i2v && [[ "${H3_MODEL_MISSING[fl2va]}" == "true" ]] && return 0
+    _workflow_needs "$workflows" r2v && [[ "${H3_MODEL_MISSING[ref2va]}" == "true" ]] && return 0
   fi
   return 1
 }
 
-# need_civitai_download <model_source>
-# Vrai si au moins un modèle de diffusion manquant doit venir de CivitAI.
+# need_civitai_download <model_source> <workflows_csv>
+# Vrai si au moins un modèle de diffusion manquant ET requis par les
+# workflows sélectionnés doit venir de CivitAI.
 need_civitai_download() {
   local source="$1"
+  local workflows="$2"
 
   [[ "$source" == "civitai" ]] || return 1
-  [[ "${H3_MODEL_MISSING[fl2va]}" == "true" ]] && return 0
-  [[ "${H3_MODEL_MISSING[ref2va]}" == "true" ]] && return 0
+  _workflow_needs "$workflows" t2v i2v && [[ "${H3_MODEL_MISSING[fl2va]}" == "true" ]] && return 0
+  _workflow_needs "$workflows" r2v && [[ "${H3_MODEL_MISSING[ref2va]}" == "true" ]] && return 0
   return 1
 }
 
-# download_missing_models <base_dir> <model_source> <tier>
-# Ne télécharge que les modèles marqués manquants dans H3_MODEL_MISSING.
-# N'appelle hf_check_h3_access() que si need_hf_download() est vrai, et ne
-# lance jamais curl (CivitAI) si les modèles de diffusion sont déjà valides.
+# download_missing_models <base_dir> <model_source> <workflows_csv>
+# Ne télécharge que les modèles marqués manquants dans H3_MODEL_MISSING ET
+# requis par les workflows sélectionnés. N'appelle hf_check_h3_access() que
+# si need_hf_download() est vrai, et ne lance jamais curl (CivitAI) si les
+# modèles de diffusion sont déjà valides ou pas requis.
+# Les chemins téléchargés viennent uniquement de H3_MODEL_FILES (déjà résolu
+# pour le palier actif par build_h3_model_manifest()) — aucun second appel à
+# _pick_for_tier() ici, pour ne garder qu'un seul endroit qui décide "quel
+# fichier pour quel palier".
 download_missing_models() {
   local base="$1"
   local model_source="$2"
-  local tier="$3"
+  local workflows="$3"
 
-  if ! any_model_missing; then
+  if ! any_model_missing "$workflows"; then
     echo "------------------------------------------------"
     echo "All required MiniMax H3 models are already installed."
     echo "Skipping all downloads."
@@ -454,7 +519,7 @@ download_missing_models() {
     return 0
   fi
 
-  if need_hf_download "$model_source"; then
+  if need_hf_download "$model_source" "$workflows"; then
     if ! hf_check_h3_access; then
       log_error "Téléchargement des modèles annulé : accès au dépôt non confirmé."
       log_error "Acceptez la licence puis relancez : bash install.sh --only-models"
@@ -462,24 +527,20 @@ download_missing_models() {
     fi
   fi
 
-  local entry subpath
-
-  if [[ "${H3_MODEL_MISSING[fl2va]}" == "true" ]]; then
-    entry="$(_pick_for_tier "$tier" H3_DIFFUSION_FL2VA)"; subpath="${entry%%|*}"
-    download_diffusion_model "$subpath" "$base" "$H3_CIVITAI_FL2VA_URL" "$model_source"
+  if _workflow_needs "$workflows" t2v i2v && [[ "${H3_MODEL_MISSING[fl2va]}" == "true" ]]; then
+    download_diffusion_model "${H3_MODEL_FILES[fl2va]}" "$base" "$H3_CIVITAI_FL2VA_URL" "$model_source"
   fi
 
-  if [[ "${H3_MODEL_MISSING[ref2va]}" == "true" ]]; then
-    entry="$(_pick_for_tier "$tier" H3_DIFFUSION_REF2VA)"; subpath="${entry%%|*}"
-    download_diffusion_model "$subpath" "$base" "$H3_CIVITAI_REF2VA_URL" "$model_source"
+  if _workflow_needs "$workflows" r2v && [[ "${H3_MODEL_MISSING[ref2va]}" == "true" ]]; then
+    download_diffusion_model "${H3_MODEL_FILES[ref2va]}" "$base" "$H3_CIVITAI_REF2VA_URL" "$model_source"
   fi
 
   # Text Encoder et VAE restent toujours servis par HuggingFace, quel que
-  # soit MODEL_SOURCE (CivitAI ne les propose pas).
+  # soit MODEL_SOURCE (CivitAI ne les propose pas), et sont toujours requis
+  # quels que soient les workflows sélectionnés.
   if [[ "${H3_MODEL_MISSING[text_encoder]}" == "true" ]]; then
-    entry="$(_pick_for_tier "$tier" H3_TEXT_ENCODER)"; subpath="${entry%%|*}"
-    mkdir -p "${base}/$(dirname "$subpath")"
-    download_hf_file "$H3_HF_REPO" "$subpath" "${base}/$(dirname "$subpath")"
+    mkdir -p "${base}/$(dirname "${H3_MODEL_FILES[text_encoder]}")"
+    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[text_encoder]}" "${base}/$(dirname "${H3_MODEL_FILES[text_encoder]}")"
   fi
 
   if [[ "${H3_MODEL_MISSING[video_vae]}" == "true" ]]; then
@@ -499,13 +560,15 @@ download_missing_models() {
 download_h3_models() {
   log_step "Téléchargement des modèles MiniMax H3"
 
-  # Forcé sur le palier "light" (pruned_int8_convrot + nvfp4_awq). Workflows
-  # t2v + i2v + r2v : les trois workflows officiels partagent le même
-  # encodeur de texte et les mêmes VAE, mais t2v/i2v ont besoin du modèle
-  # fl2va tandis que r2v a besoin du modèle ref2va — les deux UNet sont donc
-  # nécessaires simultanément, d'où les trois workflows listés ici.
-  local tier="light"
-  local workflows="t2v,i2v,r2v"
+  # Palier et workflows résolus depuis H3_TIER/--tier= et H3_WORKFLOWS/
+  # --workflows= (config.env, surchargeables en ligne de commande) — seule
+  # source de vérité pour "quel fichier pour quel GPU" et "quels UNet sont
+  # requis". build_h3_model_manifest() peuple H3_MODEL_FILES pour CE palier ;
+  # tout le reste de ce fichier (scan disque, estimation, téléchargement) lit
+  # H3_MODEL_FILES et n'a plus besoin de connaître le palier directement.
+  local tier; tier="$(resolve_h3_tier)"
+  local workflows; workflows="$(resolve_h3_workflows)"
+  build_h3_model_manifest "$tier"
 
   local model_source="${MODEL_SOURCE:-huggingface}"
   case "$model_source" in
@@ -522,35 +585,38 @@ download_h3_models() {
   else
     echo "Selected Model Source : HuggingFace"
   fi
+  log_info "Palier retenu : ${tier} — workflows : ${workflows}"
 
   local base="${INSTALL_DIR}/models"
 
   # --- Étapes 1-3 : scan disque local, réparation, aucun accès réseau ------
   collect_missing_models "$base"
 
-  # --- Cas 1 : tout est déjà installé et valide -----------------------------
-  if ! any_model_missing; then
-    download_missing_models "$base" "$model_source" "$tier"
-    log_ok "Modèles MiniMax H3 déjà installés (palier ${tier}, source ${model_source})."
+  # --- Rien à faire ? download_missing_models() gère elle-même le cas "tout
+  #     est déjà installé" (message + retour rapide) — pas besoin de le
+  #     revérifier ici, un seul endroit décide de ce cas. ------------------
+  if ! any_model_missing "$workflows"; then
+    download_missing_models "$base" "$model_source" "$workflows"
+    log_ok "Modèles MiniMax H3 déjà installés (palier ${tier}, workflows ${workflows}, source ${model_source})."
     return 0
   fi
 
-  # --- Cas 2 : au moins un modèle manque -> estimation espace disque avant
-  #             de contacter le réseau, puis téléchargement ciblé -----------
-  # Estimation basée uniquement sur les modèles marqués manquants (et non
-  # sur l'ensemble du workflow) : si seul le Video VAE manque, on annonce
-  # ~2.7 Go et non ~60 Go.
-  local est_gb; est_gb="$(estimate_missing_download_size_gb "$tier")"
+  # --- Au moins un modèle requis manque -> estimation espace disque avant
+  #     de contacter le réseau, puis téléchargement ciblé -------------------
+  # Estimation basée uniquement sur les modèles manquants ET requis par les
+  # workflows sélectionnés : si seul le Video VAE manque, on annonce
+  # ~2.7 Go et non ~60 Go ; si seul r2v est sélectionné, fl2va n'est jamais
+  # compté même s'il est absent du disque.
+  local est_gb; est_gb="$(estimate_missing_download_size_gb "$tier" "$workflows")"
   local free_gb; free_gb="$(free_disk_gb "$INSTALL_DIR")"
-  log_info "Palier retenu : ${tier} — workflows : ${workflows}"
-  log_info "Espace requis (estimation, modèles manquants uniquement) : ~${est_gb} Go — espace libre : ${free_gb:-inconnu} Go"
+  log_info "Espace requis (estimation, modèles manquants et requis uniquement) : ~${est_gb} Go — espace libre : ${free_gb:-inconnu} Go"
 
   if [[ -n "$free_gb" ]] && awk -v f="$free_gb" -v e="$est_gb" 'BEGIN{exit !(f < e)}'; then
     log_warn "Espace disque possiblement insuffisant (${free_gb} Go libres pour ~${est_gb} Go requis)."
     confirm "Continuer quand même ?" || { log_error "Téléchargement annulé par l'utilisateur."; return 1; }
   fi
 
-  download_missing_models "$base" "$model_source" "$tier" || return 1
+  download_missing_models "$base" "$model_source" "$workflows" || return 1
 
   log_ok "Modèles MiniMax H3 (palier ${tier}, workflows ${workflows}, source ${model_source}) téléchargés."
 }

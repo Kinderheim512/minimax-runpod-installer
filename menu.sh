@@ -19,14 +19,17 @@ while true; do
   echo ""
   read -r -p "  Choix [1-8] : " choice
 
+  # "|| true" sur chaque sous-commande : sous set -e, un install.sh/check.sh/
+  # uninstall.sh qui échoue (ou qu'on annule) tuerait sinon tout le menu au
+  # lieu de revenir simplement à l'invite suivante.
   case "$choice" in
-    1) bash "${PROJECT_ROOT}/install.sh" ;;
-    2) bash "${PROJECT_ROOT}/install.sh" --only-models ;;
-    3) bash "${PROJECT_ROOT}/check.sh" ;;
-    4) bash "${PROJECT_ROOT}/update.sh" ;;
-    5) bash "${PROJECT_ROOT}/launch.sh" ;;
-    6) bash "${PROJECT_ROOT}/launch.sh" --tmux ;;
-    7) bash "${PROJECT_ROOT}/uninstall.sh" ;;
+    1) bash "${PROJECT_ROOT}/install.sh" || true ;;
+    2) bash "${PROJECT_ROOT}/install.sh" --only-models || true ;;
+    3) bash "${PROJECT_ROOT}/check.sh" || true ;;
+    4) bash "${PROJECT_ROOT}/update.sh" || true ;;
+    5) bash "${PROJECT_ROOT}/launch.sh" || true ;;
+    6) bash "${PROJECT_ROOT}/launch.sh" --tmux || true ;;
+    7) bash "${PROJECT_ROOT}/uninstall.sh" || true ;;
     8) echo "Au revoir."; exit 0 ;;
     *) echo "Choix invalide." ;;
   esac
