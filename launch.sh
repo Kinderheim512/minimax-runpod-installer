@@ -1,7 +1,48 @@
 #!/usr/bin/env bash
 # launch.sh — démarre ComfyUI avec les optimisations calculées pour le GPU.
+#
+# Usage :
+#   bash launch.sh          -> lance ComfyUI directement (premier plan, bloquant)
+#   bash launch.sh --tmux   -> lance ComfyUI dans une session tmux persistante
+#                              nommée "minimax" : la crée si elle n'existe pas
+#                              encore (et lance ComfyUI dedans), ou s'y attache
+#                              simplement si elle existe déjà. Ne duplique
+#                              jamais la logique de lancement ci-dessous : le
+#                              mode tmux ne fait qu'appeler ce même script à
+#                              l'intérieur de la session.
 
-if curl -fs http://127.0.0.1:8188 >/dev/null 2>&1; then
+set -Eeuo pipefail
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TMUX_SESSION_NAME="minimax"
+
+launch_in_tmux() {
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "[ERREUR] tmux est introuvable (il devrait pourtant être installé automatiquement)." >&2
+    exit 1
+  fi
+
+  if tmux has-session -t "$TMUX_SESSION_NAME" 2>/dev/null; then
+    echo "[INFO] Session tmux '${TMUX_SESSION_NAME}' déjà existante — attache..."
+    exec tmux attach-session -t "$TMUX_SESSION_NAME"
+  fi
+
+  echo "[INFO] Lancement de ComfyUI dans tmux..."
+  echo "[INFO] Création de la session tmux '${TMUX_SESSION_NAME}'..."
+  # La session relance simplement ce même script (sans --tmux) : c'est lui
+  # qui sait déjà activer le bon venv et détecter une instance déjà en
+  # cours (message "ComfyUI est déjà lancé." ci-dessous). Aucune logique de
+  # lancement n'est dupliquée ici. "; exec bash" garde la session ouverte
+  # après coup (ComfyUI déjà lancé, arrêt, etc.) pour pouvoir s'y attacher.
+  local session_cmd="bash \"${PROJECT_ROOT}/launch.sh\"; exec bash"
+  tmux new-session -d -s "$TMUX_SESSION_NAME" "$session_cmd"
+  exec tmux attach-session -t "$TMUX_SESSION_NAME"
+}
+
+if [[ "${1:-}" == "--tmux" ]]; then
+  launch_in_tmux
+fi
+
+if curl -fs "http://127.0.0.1:8188" >/dev/null 2>&1; then
 
     echo
     echo "[INFO] ComfyUI est déjà lancé."
@@ -10,8 +51,7 @@ if curl -fs http://127.0.0.1:8188 >/dev/null 2>&1; then
     exit 0
 
 fi
-set -Eeuo pipefail
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 LOG_FILE="${PROJECT_ROOT}/logs/launch.log"
 
 # shellcheck disable=SC1091

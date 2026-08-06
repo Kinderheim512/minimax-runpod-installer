@@ -174,16 +174,38 @@ Already downloaded models are never downloaded again.
 RunPod's web terminal can occasionally disconnect while a long-running task (model download, installation, generation...) is still running in the background. Without tmux, a disconnect can look like your work was lost — it wasn't, but there's no way to get back to it.
 
 - `tmux` is installed automatically as part of the standard system dependencies.
-- It is **never** started or used automatically by this installer — no script launches itself inside a tmux session.
-- Using it is entirely optional and up to you.
+- tmux support for launching ComfyUI is now built in — no tmux knowledge and no manual virtual environment activation required.
 
-To create or reattach to a session:
+### Recommended: launch ComfyUI through the menu
+
+```bash
+bash menu.sh
+```
+
+then choose:
+
+```
+6) Lancer ComfyUI (tmux recommandé)
+```
+
+(equivalent to `bash launch.sh --tmux`). This automatically:
+
+- creates a persistent tmux session named `minimax` and launches ComfyUI inside it, if the session doesn't exist yet
+- reattaches to that same session instead, if it already exists — nothing gets relaunched
+- detects if ComfyUI is already running and avoids ever starting a second instance
+- always uses the correct Python virtual environment, the same one the installer configured — you never need to activate it yourself
+
+Detach anytime with `Ctrl+b` then `d`; ComfyUI keeps running in the background. Pick the same menu option again (even from a brand-new terminal after a disconnect) to reattach.
+
+### Manual usage
+
+Launching ComfyUI in tmux is entirely optional — you can still manage a tmux session yourself if you prefer:
 
 ```bash
 tmux new-session -A -s minimax
 ```
 
-`-A` attaches to the `minimax` session if it already exists, or creates it if it doesn't — the same command works whether you're starting fresh or reconnecting after a disconnect. Detach with `Ctrl+b` then `d`; your session (and whatever is running inside it) keeps going in the background.
+`-A` attaches to the `minimax` session if it already exists, or creates it if it doesn't — the same command works whether you're starting fresh or reconnecting after a disconnect.
 
 ---
 

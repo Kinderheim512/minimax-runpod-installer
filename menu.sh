@@ -13,10 +13,11 @@ while true; do
   echo "  3) Vérifier l'installation"
   echo "  4) Mettre à jour"
   echo "  5) Lancer ComfyUI"
-  echo "  6) Désinstaller"
-  echo "  7) Quitter"
+  echo "  6) Lancer ComfyUI (tmux recommandé)"
+  echo "  7) Désinstaller"
+  echo "  8) Quitter"
   echo ""
-  read -r -p "  Choix [1-7] : " choice
+  read -r -p "  Choix [1-8] : " choice
 
   case "$choice" in
     1) bash "${PROJECT_ROOT}/install.sh" ;;
@@ -24,8 +25,9 @@ while true; do
     3) bash "${PROJECT_ROOT}/check.sh" ;;
     4) bash "${PROJECT_ROOT}/update.sh" ;;
     5) bash "${PROJECT_ROOT}/launch.sh" ;;
-    6) bash "${PROJECT_ROOT}/uninstall.sh" ;;
-    7) echo "Au revoir."; exit 0 ;;
+    6) bash "${PROJECT_ROOT}/launch.sh" --tmux ;;
+    7) bash "${PROJECT_ROOT}/uninstall.sh" ;;
+    8) echo "Au revoir."; exit 0 ;;
     *) echo "Choix invalide." ;;
   esac
 done
