@@ -1,176 +1,226 @@
-# Installateur automatique MiniMax H3 pour RunPod + ComfyUI
+# 🚀 MiniMax H3 RunPod Installer
 
-Déploie automatiquement [ComfyUI](https://github.com/comfyanonymous/ComfyUI) et
-[MiniMax H3](https://huggingface.co/Comfy-Org/MiniMax-H3) (modèle
-texte/image/vidéo/audio → vidéo avec audio stéréo natif, poids ouverts publiés
-début août 2026) sur un pod RunPod, en une commande.
+<p align="center">
 
-## ⚠️ À savoir avant de lancer
+**One-command deployment of ComfyUI + MiniMax H3 on RunPod**
 
-**MiniMax H3 est supporté nativement par ComfyUI depuis la version 0.30.0**
-(nœuds `MiniMaxH3ImageToVideo` et `MiniMaxH3ReferenceToVideo` inclus dans le
-cœur du logiciel). **Aucun custom node n'est requis** pour le faire tourner —
-contrairement à beaucoup de modèles vidéo plus anciens. Ce projet installe
-donc ComfyUI-Manager (pour la gestion future de nœuds) et un petit paquet
-optionnel (ComfyUI-VideoHelperSuite) purement pour le confort, mais rien de
-tout cela n'est nécessaire au fonctionnement de H3 en lui-même.
+Automatically installs ComfyUI, MiniMax H3, official workflows, dependencies and optimizes everything for your GPU.
 
-Les poids sont hébergés sur un dépôt Hugging Face **soumis à licence**
-(`minimax-h3-community-license-agreement`). Vous devez :
-1. avoir un compte Hugging Face,
-2. accepter la licence sur https://huggingface.co/Comfy-Org/MiniMax-H3,
-3. fournir un token d'accès (lecture suffit) lors de l'installation.
+</p>
 
-Ce projet n'essaie jamais de contourner cette étape : sans licence acceptée,
-le téléchargement des modèles échoue proprement avec un message explicite.
+<p align="center">
 
-## Installation en une commande
+![Platform](https://img.shields.io/badge/Platform-RunPod-blue)
+![ComfyUI](https://img.shields.io/badge/ComfyUI-0.3+-green)
+![Python](https://img.shields.io/badge/Python-3.11-yellow)
+![CUDA](https://img.shields.io/badge/CUDA-12.8-success)
+![License](https://img.shields.io/github/license/Kinderheim512/minimax-runpod-installer)
+
+</p>
+
+---
+
+# ✨ Features
+
+- 🚀 One-command installation
+- 🎬 Automatic ComfyUI installation
+- ⚡ Automatic CUDA / PyTorch configuration
+- 🤖 Automatic MiniMax H3 installation
+- 📥 Smart model downloader
+- 🔁 Resume interrupted downloads
+- 🧠 Intelligent model validation
+- 🛠 Automatic repair of corrupted models
+- 📦 Automatic installation of official MiniMax H3 workflows
+- 🎨 Automatic LoRA installer *(coming soon)*
+- 🌐 Hugging Face support
+- 🌐 CivitAI support
+- 📈 Automatic GPU optimization
+- 🔄 Safe update system
+- 📋 Installation verification tools
+- 🖥 RunPod optimized
+
+---
+
+# 🎬 Supported Workflows
+
+✅ Text → Video
+
+✅ Image → Video
+
+✅ Reference → Video
+
+All official MiniMax H3 workflows are installed automatically.
+
+---
+
+# 📦 Installed Components
+
+The installer automatically installs:
+
+- ComfyUI
+- ComfyUI Manager
+- VideoHelperSuite
+- PyTorch CUDA
+- Hugging Face CLI
+- hf_transfer
+- hf_xet
+- FFmpeg
+- Git
+- Aria2
+
+---
+
+# 🧠 MiniMax H3 Models
+
+Automatically installs:
+
+### Diffusion
+
+- MiniMax H3 FL2VA INT8 Pruned
+- MiniMax H3 REF2VA INT8 Pruned
+
+### Text Encoder
+
+- Qwen3VL 32B NVFP4 AWQ
+
+### Video VAE
+
+- MiniMax H3 Video VAE FP16
+
+### Audio VAE
+
+- MiniMax H3 Audio VAE FP32
+
+The installer downloads only missing models and can automatically repair corrupted files.
+
+---
+
+# ⚡ Quick Start
+
+Create a fresh RunPod and run:
 
 ```bash
+cd /workspace
+
+git clone https://github.com/Kinderheim512/minimax-runpod-installer.git
+
+cd minimax-runpod-installer
+
+bash bootstrap.sh
+```
+
+The installer automatically:
+
+- Detects your GPU
+- Installs ComfyUI
+- Creates the Python environment
+- Installs PyTorch
+- Downloads MiniMax H3
+- Installs the official workflows
+- Optimizes ComfyUI
+- Starts ComfyUI
+
+No manual configuration required.
+
+---
+
+# 🎨 Installing LoRAs
+
+*(Available in the next release.)*
+
+```bash
+bash install_lora.sh "https://..."
+```
+
+The LoRA is automatically installed into:
+
+```
+ComfyUI/models/loras/
+```
+
+---
+
+# 🔄 Updating
+
+Updating is simple:
+
+```bash
+git pull
+
 bash install.sh
 ```
 
-Le script installe les paquets système, crée un environnement virtuel Python,
-clone/installe ComfyUI et ComfyUI-Manager, prépare l'arborescence de modèles,
-demande votre token Hugging Face si besoin, télécharge les poids MiniMax H3
-adaptés à votre GPU, calcule les meilleurs réglages de lancement, puis
-affiche un résumé.
+Only missing or outdated components are updated.
 
-Options utiles :
+Already downloaded models are never downloaded again.
 
-```bash
-bash install.sh --skip-models          # installe tout sauf les poids (à faire plus tard)
-bash install.sh --only-models          # (re)télécharge uniquement les poids
-bash install.sh --tier=light           # force le palier léger (int8 pruned + nvfp4)
-bash install.sh --workflows=t2v,r2v    # ne prépare que ces workflows
-bash install.sh --yes                  # non interactif
-bash install.sh --force                # réexécute toutes les étapes, même déjà validées
-```
+---
 
-Le script est **idempotent et reprenable** : s'il est interrompu (coupure
-réseau, timeout RunPod...), relancez simplement `bash install.sh` — les
-étapes déjà terminées sont sautées automatiquement (état suivi dans
-`minimax-runpod-installer/.minimax_installer_state`, à côté de `install.sh`,
-pour ne jamais interférer avec le clonage de ComfyUI dans `INSTALL_DIR`).
+# 🖥 Recommended GPUs
 
-## Paliers de poids
+| GPU | Recommended |
+|------|------------|
+| RTX A6000 | ✅ |
+| RTX 6000 Ada | ✅ |
+| L40S | ✅ |
+| A100 80GB | ✅ |
+| H100 | ✅ |
 
-| Palier     | Diffusion (fl2va/ref2va) | Encodeur texte (Qwen3-VL 32B) | ~Go / workflow | GPU visé                     |
-|------------|---------------------------|--------------------------------|----------------|-------------------------------|
-| `light`    | pruned_int8_convrot (21 Go)| nvfp4_awq (15,7 Go)            | ~40 Go         | 8–24 Go VRAM (ex. RTX 3060, avec offload) |
-| `balanced` | int8_convrot (34 Go)       | int8_convrot (27,1 Go)         | ~65 Go         | 24–48 Go VRAM (RTX 4090, A100 40, L40S)   |
-| `max`      | bf16 (66,3 Go)              | bf16 (51,5 Go)                  | ~130 Go        | ≥ 48 Go VRAM (A100 80, H100, H200)        |
+---
 
-Par défaut (`H3_TIER=auto` dans `config.env`), le palier est choisi
-automatiquement d'après la VRAM détectée. Deux VAE (vidéo + audio, quelques
-Go au total) sont toujours téléchargés en plus, quel que soit le palier.
+# 📸 Screenshots
 
-Les workflows T2V et I2V partagent le même modèle de diffusion (`fl2va`) ;
-R2V (référence → vidéo) utilise un jeu de poids différent (`ref2va`). Par
-défaut seuls T2V et I2V sont préparés (`H3_WORKFLOWS="t2v,i2v"` dans
-`config.env`) ; ajoutez `r2v` ou utilisez `all` si vous voulez aussi la
-génération pilotée par références.
+*(Coming soon)*
 
-## Structure du projet
+- Installation
+- ComfyUI
+- Official workflows
+- Generated videos
 
-```
-minimax-runpod-installer/
-├── install.sh       installation complète (une commande)
-├── update.sh         mise à jour ComfyUI / Manager / nœuds / deps
-├── launch.sh          lance ComfyUI avec les optimisations GPU calculées
-├── menu.sh             menu interactif (1-7)
-├── check.sh             vérification sans rien modifier
-├── uninstall.sh           désinstallation propre (avec confirmations)
-├── config.env               configuration centrale
-├── requirements.txt           dépendances Python additionnelles du projet
-├── lib/
-│   ├── utils.sh                logging, erreurs, confirmation, état/reprise
-│   ├── system.sh                 paquets système (git, aria2, ffmpeg...)
-│   ├── gpu.sh                      détection GPU/VRAM/CUDA, choix du palier
-│   ├── python.sh                     venv, dépendances Python
-│   ├── comfyui.sh                      clone/mise à jour de ComfyUI
-│   ├── manager.sh                        ComfyUI-Manager
-│   ├── nodes.sh                            nœuds custom optionnels
-│   ├── huggingface.sh                        login HF, vérif accès licence
-│   ├── download.sh                             téléchargement + vérification
-│   ├── models.sh                                 manifeste des poids H3
-│   ├── optimization.sh                             réglages selon le GPU
-│   └── verify.sh                                     vérifications, résumé
-└── logs/
-    ├── install.log
-    ├── update.log
-    └── download.log (fusionné dans install.log par défaut)
-```
+---
 
-## Menu interactif
+# 📚 Documentation
 
-```bash
-bash menu.sh
-```
+Detailed documentation is available:
 
-```
-1) Installer
-2) Télécharger les modèles
-3) Vérifier l'installation
-4) Mettre à jour
-5) Lancer ComfyUI
-6) Désinstaller
-7) Quitter
-```
+- Installation Guide (English)
+- Installation Guide (French)
+- FAQ
+- Troubleshooting
+- Changelog
 
-## Lancement
+---
 
-```bash
-./launch.sh
-```
+# 🛣 Roadmap
 
-Démarre `python main.py --listen 0.0.0.0 --port 8188` avec les flags calculés
-pour votre GPU (`--highvram`/`--lowvram`/`--reserve-vram`, `--fast` sur
-Ampere/Ada/Hopper, backend d'attention adapté). Sur RunPod, si la variable
-`RUNPOD_POD_ID` est présente, l'URL du proxy HTTP est affichée automatiquement
-(`https://<pod-id>-8188.proxy.runpod.net`) — pensez à exposer le port 8188 en
-HTTP dans les réglages du pod.
+### v1.2
 
-## Vérification
+- Automatic LoRA installer
+- LoRA manager
+- Workflow installer
+- Interactive CLI
+- Backup & restore
+- Model selector
+- Plugin system
 
-```bash
-bash check.sh
-```
+---
 
-Contrôle GPU, CUDA/PyTorch, ComfyUI, ComfyUI-Manager, présence et taille des
-modèles H3, espace disque libre — sans rien modifier.
+# 🤝 Contributing
 
-## Mise à jour
+Pull Requests are welcome.
 
-```bash
-bash update.sh
-```
+If you find a bug or have a feature request, please open an Issue.
 
-Met à jour ComfyUI, ComfyUI-Manager, les nœuds optionnels et les dépendances
-Python. Ne re-télécharge pas les modèles déjà présents et valides.
+---
 
-## Désinstallation
+# 📜 License
 
-```bash
-bash uninstall.sh
-```
+Apache License 2.0
 
-Supprime ComfyUI, le venv, ComfyUI-Manager et les nœuds custom. Demande une
-confirmation séparée avant de supprimer les modèles (potentiellement des
-dizaines de Go). Ne touche jamais aux paquets système installés par
-`lib/system.sh` (git, aria2, ffmpeg...).
+---
 
-## Logs
+# ⭐ Support the project
 
-Chaque script écrit dans `logs/` (`install.log`, `update.log`, `launch.log`,
-`uninstall.log`) avec horodatage implicite par écriture au fil de l'eau —
-consultez-les en cas d'échec, le message d'erreur y renvoie systématiquement.
+If this project saved you time,
 
-## Sources
-
-- ComfyUI : https://github.com/comfyanonymous/ComfyUI
-- ComfyUI-Manager : https://github.com/ltdrdata/ComfyUI-Manager
-- MiniMax H3 (poids officiels repackagés ComfyUI) : https://huggingface.co/Comfy-Org/MiniMax-H3
-- MiniMax H3 (dépôt original MiniMaxAI) : https://huggingface.co/MiniMaxAI/MiniMax-H3
-- Documentation d'usage ComfyUI : https://docs.comfy.org/tutorials/video/minimax/minimax-h3
-- Annonce technique (paliers de quantification, VRAM) : https://blog.comfy.org/p/minimax-h3-day-0-support-in-comfyui
+please consider giving it a ⭐ on GitHub.
