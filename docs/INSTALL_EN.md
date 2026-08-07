@@ -1,6 +1,8 @@
 # Installation Guide
 
-This guide explains how to deploy **ComfyUI + MiniMax H3** on a fresh RunPod.
+This guide walks through deploying **ComfyUI + MiniMax H3** on a fresh
+RunPod, step by step. For the short version, see the main
+[README.md](../README.md#-quick-start).
 
 ---
 
@@ -9,205 +11,193 @@ This guide explains how to deploy **ComfyUI + MiniMax H3** on a fresh RunPod.
 Before starting, make sure you have:
 
 - A RunPod account
-- A Hugging Face account
-- Accepted the MiniMax H3 license
-
-https://huggingface.co/Comfy-Org/MiniMax-H3
-
-You will also need a Hugging Face Access Token with **Read** permission.
+- A Hugging Face account, with the MiniMax H3 license accepted at
+  <https://huggingface.co/Comfy-Org/MiniMax-H3>, and a
+  Hugging Face access token with **Read** permission
 
 ---
 
-# Recommended GPUs
+# GPU and tier selection
 
-| GPU | Status |
-|------|--------|
-| RTX A6000 | ✅ Recommended |
-| RTX 6000 Ada | ✅ Recommended |
-| L40S | ✅ Recommended |
-| A100 80GB | ✅ |
-| H100 | ✅ |
+Any NVIDIA GPU with **8 GB+ VRAM** works. The installer downloads one of
+three MiniMax H3 weight tiers, sized to fit different VRAM budgets:
 
-Minimum recommended VRAM:
+| GPU VRAM | Tier | Notes |
+|---|---|---|
+| 48 GB+ | `max` | Highest quality (BF16 weights). **This is the project default**, regardless of your actual GPU. |
+| 24–47 GB | `balanced` | INT8 ConvRot weights, roughly half the size of `max`. |
+| 8–23 GB | `light` | Pruned INT8 weights, smallest and fastest to download. |
 
-**48 GB**
+Because the default tier (`max`) does not shrink itself to fit a smaller
+GPU, decide up front:
+
+- On a 48 GB+ card, the defaults are fine — just run `bootstrap.sh`.
+- On a smaller card, either pass `--tier=light` / `--tier=balanced`
+  explicitly, or pass `--tier=auto` to have the installer pick a tier from
+  detected VRAM automatically (see [Step 3](#step-3--optional-choose-a-tier-or-workflow-subset)
+  below).
+
+See [README.md § Model tiers](../README.md#-model-tiers-h3_tier) for exact
+file sizes.
 
 ---
 
 # Step 1 — Create a RunPod
 
-Create a new RunPod.
+Create a new pod.
 
 Recommended template:
 
 - PyTorch
-- CUDA 12.x
+- CUDA 12.x (the installer detects and matches whatever CUDA version your
+  pod's driver actually reports — see
+  [FAQ § Which CUDA and PyTorch build gets installed?](../FAQ.md#which-cuda-and-pytorch-build-gets-installed))
 - Ubuntu
 
-Expose port:
-
-8188 (HTTP)
+Expose port `8188` as HTTP.
 
 ---
 
-# Step 2 — Open the terminal
-
-Run:
+# Step 2 — Open the terminal and clone the installer
 
 ```bash
 cd /workspace
-
 git clone https://github.com/Kinderheim512/minimax-runpod-installer.git
-
 cd minimax-runpod-installer
+```
 
+---
+
+# Step 3 — (Optional) choose a tier or workflow subset
+
+Skip this step to use the defaults (`max` tier, all three workflows). To
+customize, either edit `config.env` or pass flags directly:
+
+```bash
+# Auto-pick a tier from detected VRAM instead of the max default
+bash bootstrap.sh --tier=auto
+
+# Or force a specific tier
+bash bootstrap.sh --tier=light
+
+# Only install for Text-to-Video and Image-to-Video (skips REF2VA entirely)
+bash bootstrap.sh --workflows=t2v,i2v
+```
+
+`bootstrap.sh` forwards its arguments to `install.sh` on first run. See
+[README.md § CLI reference](../README.md#-cli-reference) for the full flag
+list.
+
+---
+
+# Step 4 — Run the installer
+
+```bash
 bash bootstrap.sh
 ```
 
----
+This automatically:
 
-# Step 3 — Wait
-
-The installer automatically:
-
-- Detects your GPU
-- Creates a Python virtual environment
-- Installs PyTorch
-- Installs ComfyUI
-- Installs ComfyUI Manager
-- Installs VideoHelperSuite
+- Detects your GPU and picks a matching PyTorch/CUDA build
+- Creates the Python virtual environment
+- Installs ComfyUI, ComfyUI-Manager, and optional custom nodes
+  (VideoHelperSuite, Spectrum MiniMax H3)
 - Creates every required model folder
-- Downloads MiniMax H3
-- Installs the official workflows
-- Optimizes ComfyUI
-- Starts ComfyUI
+- Estimates required disk space, then downloads the MiniMax H3 tier and
+  workflows you selected (or the defaults)
+- Installs the matching official workflows
+- Computes GPU-tuned launch flags
+- Starts ComfyUI **inside a persistent tmux session** — see
+  [TMUX.md](../TMUX.md) for what that means and how to reattach later
 
-No manual configuration is required.
-
----
-
-# Step 4 — Hugging Face
-
-If required, enter your Hugging Face token.
-
-The installer automatically verifies that you accepted the MiniMax H3 license.
+No manual configuration is required beyond what you set in Step 3.
 
 ---
 
-# Step 5 — Open ComfyUI
+# Step 5 — Hugging Face authentication
 
-Open your browser.
+If prompted, enter your Hugging Face access token (or set `HF_TOKEN` as an
+environment variable / RunPod secret beforehand to skip the prompt). The
+installer verifies you have access to the gated MiniMax H3 repository
+before downloading anything, and tells you exactly what to do if the
+license hasn't been accepted yet.
 
-Your RunPod URL looks like:
+---
 
+# Step 6 — Open ComfyUI
+
+Your pod's URL looks like:
+
+```
 https://YOUR-POD-ID-8188.proxy.runpod.net
-
----
-
-# Included Workflows
-
-The installer automatically installs:
-
-- Text to Video
-- Image to Video
-- Reference to Video
-
-No manual import is required.
-
----
-
-# Install a LoRA
-
-Download a LoRA directly:
-
-```bash
-bash install_lora.sh "YOUR_URL"
 ```
 
-Example:
+---
+
+# Included workflows
+
+The installer installs the official workflow files that match your
+`--workflows` selection (all three tasks by default) — see
+[README.md § Workflows](../README.md#-workflows) for the full list of 5
+files and what each contains. No manual import needed; they appear
+directly in ComfyUI.
+
+> If a workflow's model-loader node shows a file that isn't the one you
+> downloaded, that's a known tier-naming mismatch in the official workflow
+> files, not a missing model — see
+> [TROUBLESHOOTING.md](../TROUBLESHOOTING.md#a-workflow-says-a-model-is-missing-even-though-checksh-says-its-installed).
+
+---
+
+# Installing a LoRA
 
 ```bash
 bash install_lora.sh "https://civitai.red/api/download/models/XXXX?fileId=XXXX"
+bash install_lora.sh --list
 ```
 
-The LoRA is automatically installed into:
-
-```
-ComfyUI/models/loras/
-```
+Installed into `ComfyUI/models/loras/`. See
+[README.md § Installing and managing LoRAs](../README.md#-installing-and-managing-loras)
+and [RECOMMENDED_LORAS.md](../RECOMMENDED_LORAS.md).
 
 ---
 
 # Updating
 
-Updating is simple.
-
 ```bash
 git pull
-
 bash install.sh
 ```
 
-The installer downloads only missing files.
-
-Already installed models are skipped automatically.
+Only missing or outdated components are touched. Already-downloaded models
+are never re-downloaded.
 
 ---
 
-# Verify the installation
+# Verifying the installation
 
 ```bash
 bash check.sh
 ```
 
-Checks:
-
-- GPU
-- CUDA
-- PyTorch
-- MiniMax models
-- Disk space
-- Workflows
+Checks GPU, CUDA/PyTorch, the MiniMax H3 models required by your current
+tier/workflow selection, ComfyUI-Manager, Spectrum, and free disk space —
+without changing anything.
 
 ---
 
 # Troubleshooting
 
-## Missing models
+Covered in a single dedicated page so it stays consistent everywhere:
+[TROUBLESHOOTING.md](../TROUBLESHOOTING.md). Common first stops:
 
-Run:
-
-```bash
-bash install.sh
-```
-
-The installer automatically repairs missing models.
-
----
-
-## CUDA Out Of Memory
-
-Reduce:
-
-- Resolution
-- Number of frames
-- Steps
-
-or use a GPU with more VRAM.
-
----
-
-## Hugging Face error
-
-Verify:
-
-- License accepted
-- Token validity
+- CUDA out of memory → reduce resolution/frames/steps, or use a smaller tier
+- Hugging Face errors → verify license acceptance and token validity
+- A workflow complains about a missing model → almost always a tier-naming
+  mismatch, not an actual missing file
 
 ---
 
 # Support
 
-If you enjoy this project,
-
-please leave a ⭐ on GitHub.
+If you enjoy this project, please leave a ⭐ on GitHub.

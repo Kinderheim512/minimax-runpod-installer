@@ -4,16 +4,17 @@
 
 **One-command deployment of ComfyUI + MiniMax H3 on RunPod**
 
-Automatically installs ComfyUI, MiniMax H3, official workflows, dependencies and optimizes everything for your GPU.
+Installs ComfyUI, MiniMax H3, official workflows, and dependencies, and
+tunes everything for the GPU it detects.
 
 </p>
 
 <p align="center">
 
 ![Platform](https://img.shields.io/badge/Platform-RunPod-blue)
-![ComfyUI](https://img.shields.io/badge/ComfyUI-0.3+-green)
-![Python](https://img.shields.io/badge/Python-3.11-yellow)
-![CUDA](https://img.shields.io/badge/CUDA-12.8-success)
+![ComfyUI](https://img.shields.io/badge/ComfyUI-%3E%3D0.30.0-green)
+![Python](https://img.shields.io/badge/Python-3.10%2B-yellow)
+![CUDA](https://img.shields.io/badge/CUDA-auto--detected%20(11.8–13.0)-success)
 ![License](https://img.shields.io/github/license/Kinderheim512/minimax-runpod-installer)
 
 </p>
@@ -22,130 +23,156 @@ Automatically installs ComfyUI, MiniMax H3, official workflows, dependencies and
 
 # ✨ Features
 
-- 🚀 One-command installation
-- 🎬 Automatic ComfyUI installation
-- ⚡ Automatic CUDA / PyTorch configuration
-- 🤖 Automatic MiniMax H3 installation
-- 📥 Smart model downloader
-- 🔁 Resume interrupted downloads
-- 🧠 Intelligent model validation
-- 🛠 Automatic repair of corrupted models
-- 📦 Automatic installation of official MiniMax H3 workflows
-- 🎨 Automatic LoRA installer
-- 🌐 Hugging Face support
-- 🌐 CivitAI support
-- 📈 Automatic GPU optimization
-- 🔄 Safe update system
-- 📋 Installation verification tools
-- 🖥 RunPod optimized
-
----
-
-# 🎬 Supported Workflows
-
-✅ Text → Video
-
-✅ Image → Video
-
-✅ Reference → Video
-
-All official MiniMax H3 workflows are installed automatically.
-
----
-
-# 📦 Installed Components
-
-The installer automatically installs:
-
-- ComfyUI
-- ComfyUI Manager
-- VideoHelperSuite
-- PyTorch CUDA
-- Hugging Face CLI
-- hf_transfer
-- hf_xet
-- FFmpeg
-- Git
-- Aria2
-
----
-
-# 🧠 MiniMax H3 Models
-
-Automatically installs:
-
-### Diffusion
-
-- MiniMax H3 FL2VA INT8 Pruned
-- MiniMax H3 REF2VA INT8 Pruned
-
-### Text Encoder
-
-- Qwen3VL 32B NVFP4 AWQ
-
-### Video VAE
-
-- MiniMax H3 Video VAE FP16
-
-### Audio VAE
-
-- MiniMax H3 Audio VAE FP32
-
-The installer downloads only missing models and can automatically repair corrupted files.
+- 🚀 One-command installation (`bootstrap.sh`)
+- 🎬 Automatic ComfyUI installation, tracking its default branch
+- ⚡ Automatic GPU/CUDA detection and matching PyTorch build install
+- 🧠 Three MiniMax H3 weight tiers, picked to fit your VRAM (or forced)
+- 🎯 Workflow-aware installs — download only what your selected workflows need
+- 📥 Smart model downloader: resume, integrity checks, automatic repair
+- 📏 Disk-space estimated and checked *before* any download starts
+- 📦 Automatic installation of the official MiniMax H3 workflows
+- 🎨 LoRA manager: install, list, and remove from the command line
+- 🌐 Hugging Face and CivitAI as model sources
+- 📈 Automatic GPU-based launch flag tuning (`--highvram`, `--fast`, attention backend, ...)
+- 🖇 Automatic persistent tmux session, survives web-terminal disconnects
+- 🔄 Idempotent update system — safe to re-run any time
+- 📋 Non-destructive verification (`check.sh`)
+- 🖥 RunPod-first, but works on any Linux pod with an NVIDIA GPU
 
 ---
 
 # ⚡ Quick Start
 
-Create a fresh RunPod and run:
+Create a fresh RunPod (PyTorch / CUDA / Ubuntu template, NVIDIA GPU, port
+`8188` exposed as HTTP), open its terminal, and run:
 
 ```bash
 cd /workspace
-
 git clone https://github.com/Kinderheim512/minimax-runpod-installer.git
-
 cd minimax-runpod-installer
-
 bash bootstrap.sh
 ```
 
-The installer automatically:
+This single command:
 
-- Detects your GPU
-- Installs ComfyUI
-- Creates the Python environment
-- Installs PyTorch
-- Downloads MiniMax H3
-- Installs the official workflows
-- Optimizes ComfyUI
-- Starts ComfyUI
+- detects your GPU and picks a matching PyTorch/CUDA build
+- installs ComfyUI, ComfyUI-Manager, and the optional custom nodes
+- creates the Python environment
+- downloads the MiniMax H3 weight tier that fits your GPU (or `max` if you
+  haven't set `H3_TIER` — see [Model tiers](#-model-tiers-h3_tier) below)
+- installs the official workflows
+- computes GPU-tuned launch flags
+- starts ComfyUI **inside a persistent tmux session** (see [TMUX.md](TMUX.md))
 
-No manual configuration required.
+No manual configuration is required for a first run. For anything beyond
+the default (a specific tier, a subset of workflows, skipping model
+downloads, non-interactive runs), see [CLI reference](#-cli-reference)
+below, or the full walkthrough in
+[docs/INSTALL_EN.md](docs/INSTALL_EN.md) / [docs/INSTALL_FR.md](docs/INSTALL_FR.md).
 
 ---
 
-# 🎨 Installing LoRAs
+# 🧠 Model tiers (`H3_TIER`)
+
+MiniMax H3 ships at three quality/size tiers. `install.sh` downloads only
+one tier — the one you select — never all three.
+
+| Tier | Min. VRAM | Diffusion model (FL2VA or REF2VA) | Text encoder | Approx. total\* |
+|---|---|---|---|---|
+| `light` | 8 GB | pruned INT8 ConvRot, ~21 GB | NVFP4 AWQ, ~15.7 GB | ~40 GB |
+| `balanced` | 24 GB | INT8 ConvRot, ~34 GB | INT8 ConvRot, ~27.1 GB | ~64 GB |
+| `max` (default) | 48 GB | BF16, ~66.3 GB | BF16, ~51.5 GB | ~121 GB |
+
+\* One diffusion model (t2v/i2v share FL2VA; r2v uses REF2VA) + text encoder
++ both VAEs (~3 GB, tier-independent). Installing all workflows downloads
+both FL2VA and REF2VA, roughly doubling the diffusion-model portion.
+Exact figures live in `lib/models.sh` and are what `install.sh` uses for
+its own disk-space check — this table is for planning, not authoritative.
+
+**The default is `max`** (set in `config.env`), regardless of the GPU
+detected — it does **not** automatically shrink to fit a smaller card.
+To pick a tier automatically based on detected VRAM instead:
 
 ```bash
-bash install_lora.sh "https://..."
+bash install.sh --tier=auto
 ```
 
-The LoRA is automatically installed into:
+Or force one explicitly:
 
+```bash
+bash install.sh --tier=light
 ```
-ComfyUI/models/loras/
+
+> **Compatibility note:** the official workflow JSON files reference
+> `light`-tier filenames in their model-loader nodes regardless of which
+> tier you actually install. If you use `balanced` or `max`, you'll need to
+> reselect the correct file once in each workflow's loader node the first
+> time you open it. See
+> [TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-workflow-says-a-model-is-missing-even-though-checksh-says-its-installed).
+
+---
+
+# 🎬 Workflows
+
+`install.sh --workflows=` (or `H3_WORKFLOWS` in `config.env`) selects which
+video tasks to install for: `t2v`, `i2v`, `r2v`, any comma-separated
+combination, or `all` (default). Only the diffusion models required by your
+selection are downloaded, and only workflow files whose required models are
+all present get copied into ComfyUI.
+
+All 5 official workflow files under `workflows/` are eligible:
+
+| File | Task |
+|---|---|
+| `video_minimax_h3_t2v.json` | Text → Video |
+| `video_minimax_h3_i2v.json` | Image → Video |
+| `video_minimax_h3_r2v.json` | Reference → Video |
+| `minimaxH3T2VI2VREF2VAdvanced_v15.json` | Combined advanced graph (all three) |
+| `MiniMaxH3_AllInOne.json` | All three tasks in one graph |
+
+They appear in ComfyUI under **Workflows → Browse Templates** (or directly
+in `ComfyUI/user/default/workflows/`) after install — no manual import.
+
+---
+
+# 📦 Installed components
+
+- ComfyUI (default branch, so native MiniMax H3 support is always current)
+- ComfyUI-Manager
+- ComfyUI-VideoHelperSuite
+- Spectrum MiniMax H3 (optional acceleration node, see below)
+- PyTorch + torchvision + torchaudio, matched to your detected CUDA runtime
+- Hugging Face CLI, `hf_transfer`, `hf_xet`
+- System packages: git, git-lfs, wget, curl, aria2, ffmpeg, tmux, unzip,
+  Python 3 + venv/pip, build-essential
+
+---
+
+# 🎨 Installing and managing LoRAs
+
+```bash
+bash install_lora.sh "https://..."        # install (skips if already present)
+bash install_lora.sh --force "https://..." # reinstall
+bash install_lora.sh --list                # list installed LoRAs with sizes
+bash install_lora.sh --remove some.safetensors
 ```
+
+Hugging Face, CivitAI (`civitai.com` / `civitai.red`), and any direct
+`.safetensors` URL are supported. No authentication is needed for public
+files; set `CIVITAI_API_KEY` for restricted CivitAI content. LoRAs land in
+`ComfyUI/models/loras/`. See [RECOMMENDED_LORAS.md](RECOMMENDED_LORAS.md)
+for a tested example (MiniMax H3 Turbo, 4-step sampling).
 
 ---
 
 # ⚡ Spectrum MiniMax H3 (optional)
 
-[Spectrum MiniMax H3](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3) is an optional acceleration node for MiniMax H3.
+[Spectrum MiniMax H3](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3)
+is an optional acceleration node for MiniMax H3.
 
-- Enabled by default
-- No additional Python dependencies
+- Enabled by default, no additional Python dependencies
 - Installs automatically into `custom_nodes/`
-- Can be disabled by setting in `config.env`:
+- Disable in `config.env`:
 
 ```bash
 INSTALL_SPECTRUM=false
@@ -153,115 +180,131 @@ INSTALL_SPECTRUM=false
 
 ---
 
-# 🔄 Updating
+# 🖇 Surviving web-terminal disconnects (tmux)
 
-Updating is simple:
+RunPod's web terminal can disconnect while a long task (model download,
+install, generation) is still running. `bash bootstrap.sh` protects you
+from this automatically: it ends by launching ComfyUI inside a persistent
+`minimax` tmux session, so a dropped connection never kills the process.
+
+To reattach after a disconnect (or from a new terminal):
 
 ```bash
-git pull
-
-bash install.sh
+bash menu.sh   # then choose option 6
+# or directly:
+bash launch.sh --tmux
 ```
 
-Only missing or outdated components are updated.
-
-Already downloaded models are never downloaded again.
+Full details, including how to protect `install.sh` itself and how to
+manage the session manually, are in [TMUX.md](TMUX.md).
 
 ---
 
-# 🖇 Surviving Web Terminal Disconnects (tmux)
-
-RunPod's web terminal can occasionally disconnect while a long-running task (model download, installation, generation...) is still running in the background. Without tmux, a disconnect can look like your work was lost — it wasn't, but there's no way to get back to it.
-
-- `tmux` is installed automatically as part of the standard system dependencies.
-- tmux support for launching ComfyUI is now built in — no tmux knowledge and no manual virtual environment activation required.
-
-### Recommended: launch ComfyUI through the menu
+# 🖥 CLI reference
 
 ```bash
-bash menu.sh
+bash install.sh                       # full install, defaults from config.env
+bash install.sh --skip-models         # install everything except H3 weights
+bash install.sh --only-models         # (re)download weights only
+bash install.sh --tier=light          # force a weight tier
+bash install.sh --tier=auto           # pick a tier from detected VRAM
+bash install.sh --workflows=t2v,r2v   # only install these workflows' models
+bash install.sh --yes                 # non-interactive, answers "yes" everywhere
+bash install.sh --force               # redo every step, ignore prior state
+
+bash update.sh                        # update ComfyUI, nodes, PyTorch, deps
+bash check.sh                         # verify installation, no changes made
+bash launch.sh                        # start ComfyUI in the foreground
+bash launch.sh --tmux                 # start/reattach inside tmux
+bash menu.sh                          # interactive menu for all of the above
+bash uninstall.sh                     # remove ComfyUI (optionally keep models)
+bash install_lora.sh <URL>            # install/list/remove LoRAs, see above
 ```
-
-then choose:
-
-```
-6) Lancer ComfyUI (tmux recommandé)
-```
-
-(equivalent to `bash launch.sh --tmux`). This automatically:
-
-- creates a persistent tmux session named `minimax` and launches ComfyUI inside it, if the session doesn't exist yet
-- reattaches to that same session instead, if it already exists — nothing gets relaunched
-- detects if ComfyUI is already running and avoids ever starting a second instance
-- always uses the correct Python virtual environment, the same one the installer configured — you never need to activate it yourself
-
-Detach anytime with `Ctrl+b` then `d`; ComfyUI keeps running in the background. Pick the same menu option again (even from a brand-new terminal after a disconnect) to reattach.
-
-### Manual usage
-
-Launching ComfyUI in tmux is entirely optional — you can still manage a tmux session yourself if you prefer:
-
-```bash
-tmux new-session -A -s minimax
-```
-
-`-A` attaches to the `minimax` session if it already exists, or creates it if it doesn't — the same command works whether you're starting fresh or reconnecting after a disconnect.
 
 ---
 
-# 🖥 Recommended GPUs
+# 🖥 GPU support
 
-| GPU | Recommended |
-|------|------------|
-| RTX A6000 | ✅ |
-| RTX 6000 Ada | ✅ |
-| L40S | ✅ |
-| A100 80GB | ✅ |
-| H100 | ✅ |
+Any NVIDIA GPU with **8 GB+ VRAM** (`MIN_VRAM_GB` in `config.env`) works,
+at the tier that fits it — see [Model tiers](#-model-tiers-h3_tier).
+
+| VRAM | Tier | Example GPUs |
+|---|---|---|
+| 48 GB+ | `max` | RTX A6000, RTX 6000 Ada, L40S, A100 80GB, H100, H200 |
+| 24–47 GB | `balanced` | RTX 4090, RTX 3090, A40, L40, L4 |
+| 8–23 GB | `light` | RTX 3060 and similar |
+
+GPUs outside this "known" list still work as long as VRAM is sufficient —
+the installer only warns, it doesn't block on an unrecognized card.
 
 ---
 
-# 📸 Screenshots
+# 📁 Project structure
 
-*(Coming soon)*
-
-- Installation
-- ComfyUI
-- Official workflows
-- Generated videos
+```
+.
+├── bootstrap.sh          # one-command entry point: clone/update, install, launch in tmux
+├── install.sh            # full installer (see CLI reference)
+├── update.sh             # update ComfyUI/nodes/PyTorch without touching models
+├── check.sh               # read-only verification
+├── launch.sh              # start ComfyUI (optionally in tmux)
+├── menu.sh                # interactive menu wrapping the scripts above
+├── uninstall.sh           # remove ComfyUI (optionally keep models/)
+├── install_lora.sh        # standalone LoRA install/list/remove
+├── config.env             # central configuration (paths, tiers, sources, ...)
+├── requirements.txt        # project-level Python deps (on top of ComfyUI's own)
+├── lib/
+│   ├── utils.sh            # logging, error handling, step tracking, retries
+│   ├── system.sh           # apt package installation
+│   ├── gpu.sh               # GPU/VRAM/CUDA detection, tier recommendation
+│   ├── python.sh            # venv, PyTorch build selection & install, CUDA checks
+│   ├── comfyui.sh           # clone/update the ComfyUI repo itself
+│   ├── manager.sh           # ComfyUI-Manager install/update
+│   ├── nodes.sh              # optional custom nodes (VideoHelperSuite, Spectrum, ...)
+│   ├── huggingface.sh        # HF auth + gated-repo access check
+│   ├── download.sh           # generic HF file download (aria2/hf-cli, resume, verify)
+│   ├── models.sh             # H3 tier/workflow resolution, manifest, download orchestration
+│   ├── workflows.sh          # copies workflow JSON matching the current selection
+│   ├── optimization.sh       # GPU-tuned ComfyUI launch flags
+│   └── verify.sh             # check.sh backend + install summary
+├── workflows/               # official MiniMax H3 workflow JSON files (see Workflows above)
+├── docs/
+│   ├── INSTALL_EN.md         # detailed step-by-step guide (English)
+│   └── INSTALL_FR.md         # detailed step-by-step guide (French)
+├── TMUX.md
+├── FAQ.md
+├── TROUBLESHOOTING.md
+├── RECOMMENDED_LORAS.md
+└── CHANGELOG.md
+```
 
 ---
 
 # 📚 Documentation
 
-Detailed documentation is available:
-
-- Installation Guide (English)
-- Installation Guide (French)
-- FAQ
-- Troubleshooting
-- Changelog
+- [Installation Guide — English](docs/INSTALL_EN.md)
+- [Guide d'installation — Français](docs/INSTALL_FR.md)
+- [FAQ](FAQ.md)
+- [Troubleshooting](TROUBLESHOOTING.md)
+- [Using tmux with this project](TMUX.md)
+- [Recommended LoRAs](RECOMMENDED_LORAS.md)
+- [Changelog](CHANGELOG.md)
 
 ---
 
 # 🛣 Roadmap
 
-### v1.2
-
-- LoRA manager
-- Workflow installer
-- Interactive CLI
-- Backup & restore
-- Model selector
-- Plugin system
+- Screenshots of the install flow and generated output
+- Model selector inside `menu.sh` (currently CLI/`config.env` only)
+- Backup & restore helper for `models/`
+- Plugin system for optional custom nodes beyond `config.env`'s static list
 
 ---
 
 # 🤝 Contributing
 
-Pull Requests are welcome.
-
-If you find a bug or have a feature request, please open an Issue.
+Pull requests are welcome. If you find a bug or have a feature request,
+please open an issue.
 
 ---
 
@@ -273,6 +316,4 @@ Apache License 2.0
 
 # ⭐ Support the project
 
-If this project saved you time,
-
-please consider giving it a ⭐ on GitHub.
+If this project saved you time, please consider giving it a ⭐ on GitHub.

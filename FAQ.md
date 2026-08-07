@@ -1,262 +1,152 @@
-\# Frequently Asked Questions
+# Frequently Asked Questions
 
+For step-by-step help with a specific error, see
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md) instead — this page only covers
+"how does this work" questions.
 
+---
 
-\---
+## What VRAM do I need?
 
+**8 GB minimum** (`MIN_VRAM_GB` in `config.env`), using the `light` weight
+tier. Recommended tiers by VRAM:
 
+| VRAM | Tier |
+|---|---|
+| 8–23 GB | `light` |
+| 24–47 GB | `balanced` |
+| 48 GB+ | `max` (project default) |
 
-\## Which GPU is recommended?
+See [README.md § Model tiers](README.md#-model-tiers-h3_tier) for exact
+file sizes. Pass `--tier=auto` to `install.sh` to pick automatically from
+detected VRAM instead of using the `max` default.
 
+---
 
+## Does MiniMax H3 require custom nodes?
 
-Recommended:
+No. Native support (`MiniMaxH3ImageToVideo` / `MiniMaxH3ReferenceToVideo`)
+ships in ComfyUI >= 0.30.0, and the installer always tracks ComfyUI's
+default branch. `ComfyUI-VideoHelperSuite` and the optional `Spectrum
+MiniMax H3` acceleration node are installed for convenience, not because
+they're required.
 
+---
 
+## Which workflows are installed?
 
-\- RTX A6000
+By default (`H3_WORKFLOWS=all`), all 5 official workflow files under
+`workflows/`:
 
-\- RTX 6000 Ada
+- `video_minimax_h3_t2v.json` — Text → Video
+- `video_minimax_h3_i2v.json` — Image → Video
+- `video_minimax_h3_r2v.json` — Reference → Video
+- `minimaxH3T2VI2VREF2VAdvanced_v15.json` — combined advanced workflow
+- `MiniMaxH3_AllInOne.json` — all three tasks in one graph
 
-\- L40S
+Pass `--workflows=t2v,i2v` (or any subset) to `install.sh` to only install
+workflows whose required models you actually want — a workflow is skipped
+if it needs a model your selection excludes. See
+[README.md § Workflows](README.md#-workflows) for details.
 
-\- A100
+---
 
-\- H100
+## Can I use CivitAI instead of Hugging Face?
 
+Yes, for the diffusion models only (`MODEL_SOURCE=civitai` in
+`config.env`). CivitAI only hosts the `light`-tier (pruned INT8) diffusion
+weights — the text encoder and both VAEs always come from Hugging Face
+regardless of `MODEL_SOURCE`, and `balanced`/`max` diffusion weights are
+Hugging Face–only.
 
+---
 
-Minimum recommended VRAM:
+## Can I install LoRAs?
 
-
-
-48 GB
-
-
-
-\---
-
-
-
-\## Does MiniMax H3 require custom nodes?
-
-
-
-No.
-
-
-
-MiniMax H3 is natively supported by ComfyUI.
-
-
-
-\---
-
-
-
-\## Which workflows are installed?
-
-
-
-\- Text to Video
-
-\- Image to Video
-
-\- Reference to Video
-
-
-
-\---
-
-
-
-\## Can I use CivitAI?
-
-
-
-Yes.
-
-
-
-The diffusion models can be downloaded from CivitAI.
-
-
-
-\---
-
-
-
-\## Can I install LoRAs?
-
-
-
-Yes.
-
-
+Yes:
 
 ```bash
-
-bash install\_lora.sh URL
-
+bash install_lora.sh "https://..."
+bash install_lora.sh --list
+bash install_lora.sh --remove some_lora.safetensors
 ```
 
+Installed into `ComfyUI/models/loras/`. Hugging Face, CivitAI, and any
+direct `.safetensors` URL are supported; no authentication is required for
+public files (set `CIVITAI_API_KEY` for restricted CivitAI content). See
+[RECOMMENDED_LORAS.md](RECOMMENDED_LORAS.md) for a tested example.
 
+---
 
-\---
-
-
-
-\## Where are LoRAs installed?
-
-
-
-```
-
-ComfyUI/models/loras/
-
-```
-
-
-
-\---
-
-
-
-\## How do I update?
-
-
+## How do I update?
 
 ```bash
-
 git pull
-
-
-
 bash install.sh
-
 ```
 
+Only missing or outdated components are touched; already-downloaded models
+are never re-downloaded.
 
+---
 
-\---
-
-
-
-\## How do I repair missing models?
-
-
+## How do I repair missing or corrupted models?
 
 ```bash
-
-bash install.sh
-
+bash install.sh --only-models
 ```
 
+Corrupted or incomplete files are detected (by size, and by SHA256 if
+configured) and automatically removed and re-downloaded.
 
+---
 
-The installer automatically downloads only missing files.
+## Where are things installed?
 
+- ComfyUI: `${INSTALL_DIR}` (default `/workspace/ComfyUI`)
+- Models: `ComfyUI/models/{diffusion_models,text_encoders,vae,loras,...}`
+- Workflows: `ComfyUI/user/default/workflows/`
+- Logs: `logs/install.log`, `logs/update.log`, `logs/launch.log`
 
+---
 
-\---
+## Which Python version is used?
 
+Whatever `python3` resolves to on the base image, as long as it's >= 3.10
+(`PY_MIN_MAJOR`/`PY_MIN_MINOR` in `lib/python.sh`). Most RunPod PyTorch
+templates ship 3.10–3.12.
 
+---
 
-\## Where are the workflows?
+## Which CUDA and PyTorch build gets installed?
 
+Auto-detected: the installer reads the CUDA runtime reported by
+`nvidia-smi` and picks a matching PyTorch build from a table in
+`lib/python.sh` (currently cu118, cu126, or cu130). You can force a
+specific build with `TORCH_VERSION_OVERRIDE` / `TORCH_CUDA_INDEX_OVERRIDE`
+in `config.env`.
 
+---
 
-```
+## Can I interrupt the installation?
 
-ComfyUI/user/default/workflows/
+Yes. Re-run `bash install.sh` — completed steps are skipped (tracked in
+`.minimax_installer_state`), and model downloads resume rather than
+restart. Use `--force` to redo every step regardless of prior state.
 
-```
+---
 
+## Can I back up my models?
 
+Yes — back up the whole `ComfyUI/models/` folder, or just the subfolders
+you care about (`diffusion_models/`, `text_encoders/`, `vae/`, `loras/`).
+`uninstall.sh` also offers to keep `models/` when removing everything else.
 
-\---
+---
 
+## Does tmux start automatically?
 
-
-\## Which Python version is used?
-
-
-
-Python 3.11
-
-
-
-\---
-
-
-
-\## Can I interrupt the installation?
-
-
-
-Yes.
-
-
-
-Simply launch
-
-
-
-```bash
-
-bash install.sh
-
-```
-
-
-
-again.
-
-
-
-Downloads resume automatically.
-
-
-
-\---
-
-
-
-\## Does the installer download models twice?
-
-
-
-No.
-
-
-
-Only missing or corrupted files are downloaded.
-
-
-
-\---
-
-
-
-\## Can I backup the models?
-
-
-
-Yes.
-
-
-
-Simply save the following folders:
-
-
-
-\- diffusion\_models
-
-\- text\_encoders
-
-\- vae
-
-\- loras
-
-
-
+Yes, if you install via `bootstrap.sh` (the recommended path) — it ends
+with `launch.sh --tmux`, which creates or reattaches to a persistent
+`minimax` tmux session. See [TMUX.md](TMUX.md) for the full picture,
+including how to use it manually.
