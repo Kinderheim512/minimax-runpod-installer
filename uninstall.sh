@@ -5,6 +5,7 @@
 
 set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2034  # lu par lib/utils.sh une fois sourcé (log_*())
 LOG_FILE="${PROJECT_ROOT}/logs/uninstall.log"
 
 for arg in "$@"; do

@@ -408,7 +408,7 @@ model_is_valid() {
 remove_corrupted_model() {
   local path="$1"
   echo "Corrupted or incomplete model detected:"
-  echo "$(basename "$path")"
+  basename "$path"
   rm -f "$path"
 }
 

@@ -36,6 +36,9 @@ log_raw()   { echo "$*" >> "$LOG_FILE"; }
 # ----------------------------------------------------------------------------
 # Gestion d'erreurs
 # ----------------------------------------------------------------------------
+# shellcheck disable=SC2317  # appelée uniquement via `trap '_on_error $LINENO' ERR`
+# (enable_error_trap ci-dessous) : shellcheck ne trace pas les appels via trap,
+# et marque donc tout le corps de la fonction comme "inaccessible".
 _on_error() {
   local exit_code=$?
   local line_no=$1

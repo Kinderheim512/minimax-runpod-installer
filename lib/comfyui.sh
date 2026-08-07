@@ -35,9 +35,11 @@ update_comfyui() {
     log_warn "Lancez 'git stash' manuellement dans ce dossier puis relancez update.sh si vous voulez forcer la mise à jour."
     return 0
   fi
-  retry "$DOWNLOAD_MAX_RETRIES" git -C "$INSTALL_DIR" fetch --tags origin >>"$LOG_FILE" 2>&1
-  git -C "$INSTALL_DIR" checkout "$COMFYUI_BRANCH" >>"$LOG_FILE" 2>&1
-  retry "$DOWNLOAD_MAX_RETRIES" git -C "$INSTALL_DIR" pull --ff-only origin "$COMFYUI_BRANCH" >>"$LOG_FILE" 2>&1
+  {
+    retry "$DOWNLOAD_MAX_RETRIES" git -C "$INSTALL_DIR" fetch --tags origin
+    git -C "$INSTALL_DIR" checkout "$COMFYUI_BRANCH"
+    retry "$DOWNLOAD_MAX_RETRIES" git -C "$INSTALL_DIR" pull --ff-only origin "$COMFYUI_BRANCH"
+  } >>"$LOG_FILE" 2>&1
   log_ok "ComfyUI mis à jour."
 }
 

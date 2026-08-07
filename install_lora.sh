@@ -53,6 +53,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck disable=SC1091
 if [[ -f "${PROJECT_ROOT}/lib/utils.sh" ]]; then
+  # shellcheck disable=SC1091
   source "${PROJECT_ROOT}/lib/utils.sh"
 else
   # Repli minimal si lib/utils.sh est absent, pour que ce script reste autonome.
@@ -174,7 +175,7 @@ determine_lora_filename() {
   local name=""
 
   if [[ "$path_part" == *.safetensors ]]; then
-    echo "$(basename "$path_part")"
+    basename "$path_part"
     return 0
   fi
 
