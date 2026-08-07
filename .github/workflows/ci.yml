@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# Third-party/generated directories never checked in by this project, but
+# excluded defensively in case a local artifact ever gets committed by
+# mistake (ComfyUI/, custom_nodes/, venv/ are created at install time on the
+# target pod, not part of this repo).
+env:
+  PRUNE_DIRS: ".git venv ComfyUI custom_nodes"
+
+jobs:
+  bash-syntax:
+    name: bash -n
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find shell scripts
+        id: find
+        run: |
+          mapfile -t files < <(find . \
+            \( -path './.git' -o -path './venv' -o -path './ComfyUI' -o -path './custom_nodes' \) -prune -o \
+            -type f -name '*.sh' -print | sort)
+          printf '%s\n' "${files[@]}" > /tmp/sh_files.txt
+          echo "count=${#files[@]}" >> "$GITHUB_OUTPUT"
+
+      - name: bash -n on every script
+        run: |
+          status=0
+          while IFS= read -r f; do
+            [[ -z "$f" ]] && continue
+            echo "::group::bash -n $f"
+            if ! bash -n "$f"; then
+              status=1
+            fi
+            echo "::endgroup::"
+          done < /tmp/sh_files.txt
+          exit "$status"
+
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y shellcheck
+
+      - name: Find shell scripts
+        run: |
+          find . \
+            \( -path './.git' -o -path './venv' -o -path './ComfyUI' -o -path './custom_nodes' \) -prune -o \
+            -type f -name '*.sh' -print | sort > /tmp/sh_files.txt
+
+      - name: Run ShellCheck
+        run: |
+          # Fails the job on any warning severity or above. Deliberate,
+          # reviewed exceptions live inline as `# shellcheck disable=SCxxxx`
+          # comments in the scripts themselves, not in this workflow.
+          xargs -a /tmp/sh_files.txt shellcheck
+
+  json-validate:
+    name: Validate workflow JSON
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update -y && sudo apt-get install -y jq
+
+      - name: Find JSON files
+        run: |
+          find . \
+            \( -path './.git' -o -path './venv' -o -path './ComfyUI' -o -path './custom_nodes' \) -prune -o \
+            -type f -name '*.json' -print | sort > /tmp/json_files.txt
+          cat /tmp/json_files.txt
+
+      - name: Validate with jq
+        run: |
+          status=0
+          while IFS= read -r f; do
+            [[ -z "$f" ]] && continue
+            if ! jq empty "$f" >/dev/null 2>&1; then
+              echo "::error file=${f}::invalid JSON"
+              status=1
+            else
+              echo "OK: $f"
+            fi
+          done < /tmp/json_files.txt
+          exit "$status"
