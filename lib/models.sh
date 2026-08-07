@@ -26,8 +26,8 @@ create_model_folders() {
 # H3_DIFFUSION_FL2VA / H3_DIFFUSION_REF2VA / H3_TEXT_ENCODER ne sont jamais
 # référencés par leur nom littéral plus bas dans ce fichier : ils sont passés
 # en chaîne à _pick_for_tier, qui les résout via une nameref (`local -n`).
-# shellcheck ne trace pas cette indirection et les marque donc à tort comme
-# inutilisés (cf. H3_VAE ci-dessous, qui lui est bien détecté car utilisé
+# Cette indirection n'est pas tracée par l'outil de lint, qui les marque donc
+# à tort comme inutilisés (cf. H3_VAE ci-dessous, bien détecté car utilisé
 # directement en "${H3_VAE[@]}").
 # shellcheck disable=SC2034
 H3_DIFFUSION_FL2VA=(
