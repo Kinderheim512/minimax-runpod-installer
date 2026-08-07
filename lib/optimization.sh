@@ -66,6 +66,37 @@ compute_optimization_flags() {
       ;;
   esac
 
+  # --- pinned memory (Dynamic VRAM) selon la RAM réellement allouée -----
+  # Voir le commentaire de COMFY_PINNED_MEMORY dans config.env pour le
+  # contexte complet (SIGKILL cgroup silencieux sur pods RAM-limités).
+  # Garde défensive : compute_optimization_flags() est appelée depuis
+  # plusieurs scripts (install.sh, update.sh) qui appellent tous déjà
+  # detect_gpu() avant — même convention ici, mais si detect_system_ram()
+  # n'a exceptionnellement pas encore tourné (SYSTEM_RAM_LIMIT_GB à 0), on
+  # la déclenche nous-mêmes plutôt que de calculer sur une valeur absente.
+  if (( SYSTEM_RAM_LIMIT_GB == 0 )); then
+    detect_system_ram
+  fi
+
+  local pinned_mode="${COMFY_PINNED_MEMORY:-auto}"
+  case "$pinned_mode" in
+    true)
+      flags+=("--disable-pinned-memory")
+      log_info "COMFY_PINNED_MEMORY=true (forcé) → --disable-pinned-memory."
+      ;;
+    false)
+      log_info "COMFY_PINNED_MEMORY=false (forcé) → pinning mémoire laissé actif (comportement ComfyUI par défaut)."
+      ;;
+    auto|*)
+      if (( SYSTEM_RAM_LIMIT_GB < H3_MIN_RAM_FOR_PINNED_MEMORY_GB )); then
+        flags+=("--disable-pinned-memory")
+        log_warn "COMFY_PINNED_MEMORY=auto, RAM allouée ${SYSTEM_RAM_LIMIT_GB} Go (source: ${SYSTEM_RAM_LIMIT_SOURCE}) < ${H3_MIN_RAM_FOR_PINNED_MEMORY_GB} Go → --disable-pinned-memory (évite un SIGKILL cgroup pendant le chargement des modèles)."
+      else
+        log_info "COMFY_PINNED_MEMORY=auto, RAM allouée ${SYSTEM_RAM_LIMIT_GB} Go (source: ${SYSTEM_RAM_LIMIT_SOURCE}) >= ${H3_MIN_RAM_FOR_PINNED_MEMORY_GB} Go → pinning mémoire laissé actif."
+      fi
+      ;;
+  esac
+
   # --- compute capability -> --fast (accumulation fp16/fp8 rapide) ------
   local cc
   cc="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n1 | tr -d ' ')"
@@ -104,6 +135,7 @@ compute_optimization_flags() {
   {
     echo "# Généré automatiquement par lib/optimization.sh — ne pas éditer à la main."
     echo "# GPU: ${GPU_NAME} (${GPU_VRAM_GB} Go, compute_cap ${cc:-?})"
+    echo "# RAM: ${SYSTEM_RAM_LIMIT_GB} Go alloués (source: ${SYSTEM_RAM_LIMIT_SOURCE}, RAM hôte totale: ${SYSTEM_RAM_TOTAL_GB} Go)"
     printf 'MINIMAX_ENV_VARS=(%s)\n' "$(printf '"%s" ' "${env_vars[@]}")"
     printf 'MINIMAX_LAUNCH_FLAGS=(%s)\n' "$(printf '"%s" ' "${flags[@]}")"
   } > "$out"

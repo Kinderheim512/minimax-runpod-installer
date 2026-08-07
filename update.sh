@@ -47,6 +47,7 @@ install_or_update_manager
 install_optional_nodes
 
 detect_gpu
+detect_system_ram
 compute_optimization_flags
 
 log_ok "Mise à jour terminée."

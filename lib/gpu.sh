@@ -74,6 +74,72 @@ detect_gpu() {
   export GPU_NAME GPU_VRAM_GB GPU_DRIVER GPU_CUDA_VERSION GPU_TIER_RECOMMENDED
 }
 
+SYSTEM_RAM_LIMIT_GB=0
+SYSTEM_RAM_TOTAL_GB=0
+SYSTEM_RAM_LIMIT_SOURCE=""
+
+detect_system_ram() {
+  # detect_system_ram — détecte la RAM réellement disponible pour CE
+  # processus, pas celle de la machine hôte physique.
+  #
+  # Sur RunPod (et plus généralement tout hébergeur à base de conteneurs),
+  # `free -h` et /proc/meminfo à l'intérieur du pod reflètent la RAM totale
+  # de la machine hôte partagée, pas la limite réellement allouée au pod —
+  # qui est imposée séparément par un cgroup. Un pod peut ainsi voir "503 Go
+  # libres" alors que sa limite cgroup réelle est de 50 Go : tout ce qui
+  # dépasse cette limite (ex. la RAM verrouillée/"pinnée" par le chargement
+  # de modèles ComfyUI, cf. compute_optimization_flags()) déclenche un
+  # SIGKILL du noyau (cgroup OOM), sans traceback Python ni erreur CUDA — cas
+  # diagnostiqué et confirmé sur ce projet via /sys/fs/cgroup/memory.events
+  # (compteur oom_kill).
+  #
+  # Ordre de détection : cgroup v2 -> cgroup v1 -> repli sur la RAM totale de
+  # la machine hôte (/proc/meminfo) si aucun cgroup memory n'est actif (hors
+  # conteneur, ou conteneur sans limite imposée).
+  log_step "Détection de la RAM système (limite réelle du pod)"
+
+  local host_kb
+  host_kb="$(awk '/^MemTotal:/{print $2; exit}' /proc/meminfo 2>/dev/null || echo 0)"
+  SYSTEM_RAM_TOTAL_GB=$(( host_kb / 1024 / 1024 ))
+
+  local limit_bytes="" source=""
+
+  if [[ -r /sys/fs/cgroup/memory.max ]]; then
+    # cgroup v2 — une seule valeur, "max" si aucune limite n'est imposée.
+    local raw; raw="$(cat /sys/fs/cgroup/memory.max 2>/dev/null || true)"
+    if [[ "$raw" =~ ^[0-9]+$ ]]; then
+      limit_bytes="$raw"
+      source="cgroup v2"
+    fi
+  elif [[ -r /sys/fs/cgroup/memory/memory.limit_in_bytes ]]; then
+    # cgroup v1 — "illimité" est représenté par une valeur sentinelle proche
+    # de 2^63 (plusieurs millions de To), jamais une vraie limite de pod : on
+    # l'écarte en comparant à la RAM hôte totale plutôt qu'à une constante
+    # arbitraire, ce qui reste correct quelle que soit la taille de la
+    # machine hôte.
+    local raw; raw="$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || true)"
+    if [[ "$raw" =~ ^[0-9]+$ ]]; then
+      local raw_gb=$(( raw / 1024 / 1024 / 1024 ))
+      if (( SYSTEM_RAM_TOTAL_GB == 0 || raw_gb <= SYSTEM_RAM_TOTAL_GB )); then
+        limit_bytes="$raw"
+        source="cgroup v1"
+      fi
+    fi
+  fi
+
+  if [[ -n "$limit_bytes" ]]; then
+    SYSTEM_RAM_LIMIT_GB=$(( limit_bytes / 1024 / 1024 / 1024 ))
+    SYSTEM_RAM_LIMIT_SOURCE="$source"
+    log_info "Limite mémoire ${source} détectée : ${SYSTEM_RAM_LIMIT_GB} Go (RAM totale machine hôte : ${SYSTEM_RAM_TOTAL_GB} Go)."
+  else
+    SYSTEM_RAM_LIMIT_GB="$SYSTEM_RAM_TOTAL_GB"
+    SYSTEM_RAM_LIMIT_SOURCE="hôte (aucun cgroup memory détecté)"
+    log_info "Aucune limite cgroup memory détectée — RAM totale machine hôte utilisée : ${SYSTEM_RAM_LIMIT_GB} Go."
+  fi
+
+  export SYSTEM_RAM_LIMIT_GB SYSTEM_RAM_TOTAL_GB SYSTEM_RAM_LIMIT_SOURCE
+}
+
 check_cuda_stack() {
   log_step "Vérification de la pile CUDA / PyTorch"
 

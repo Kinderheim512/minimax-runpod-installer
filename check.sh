@@ -19,6 +19,7 @@ source "${PROJECT_ROOT}/lib/verify.sh"
 if require_cmd nvidia-smi && nvidia-smi >/dev/null 2>&1; then
   detect_gpu
 fi
+detect_system_ram
 
 exit_code=0
 verify_installation || exit_code=$?
