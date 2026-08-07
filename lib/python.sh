@@ -38,14 +38,32 @@ PY_MIN_MINOR=10
 # jour où il sort), ajoutez UNE ligne ici — rien d'autre à modifier dans le
 # projet, aucun autre fichier ne doit contenir de version PyTorch en dur.
 #
-# Dernière vérification : PyTorch 2.12.0 (dernière stable), qui supporte
-# officiellement CUDA 12.6 / 12.8 / 13.0 (cf. RELEASE.md de pytorch/pytorch
-# et download.pytorch.org). L'entrée cu118 est un filet de sécurité pour les
-# images RunPod plus anciennes dont le pilote n'expose pas CUDA >= 12.6.
+# Dernière vérification : PyTorch 2.12.0 (dernière stable). Depuis cette
+# version, PyTorch a RETIRÉ l'index cu128 de sa matrice de build officielle
+# (cf. notes de version pytorch/pytorch v2.12.0 : "CUDA 12.8 binaries have
+# been removed from the PyTorch binary build matrix... users explicitly
+# pinning the cu128 index URL will need to switch to cu130 or cu126").
+# cu128 est donc un index gelé qui ne recevra plus aucune nouvelle version :
+# épingler un torch_version récent dessus échouera systématiquement.
+# Les pilotes rapportant CUDA 12.8 sont redirigés vers cu126, qui reste
+# maintenu à jour en amont et reste compatible avec un pilote 12.8 (les
+# wheels CUDA sont compatibles avec tout pilote égal ou plus récent que la
+# version pour laquelle ils sont compilés). cu130 n'est PAS une alternative
+# valide ici : un pilote 12.8 est trop ancien pour exécuter un build cu130
+# ("CUDA initialization: The NVIDIA driver on your system is too old").
+# L'entrée cu118 est un filet de sécurité pour les images RunPod plus
+# anciennes dont le pilote n'expose pas CUDA >= 12.6.
+#
+# IMPORTANT pour la maintenance future : ne jamais supposer qu'un seul
+# torch_version est publié identiquement sur tous les index CUDA. PyTorch
+# retire ou ajoute des index par version (cf. RFC "CUDA support matrix" sur
+# pytorch/pytorch à chaque cycle de release) — vérifier RELEASE.md ET les
+# versions réellement listées sur download.pytorch.org/whl/<index>/ avant
+# de faire évoluer une ligne de cette table.
 PYTORCH_BUILD_TABLE=(
     "11.8:2.5.1:cu118"
     "12.6:2.12.0:cu126"
-    "12.8:2.12.0:cu128"
+    "12.8:2.12.0:cu126"
     "13.0:2.12.0:cu130"
 )
 
@@ -206,10 +224,16 @@ sys.exit(0 if ok else 1)
 
     log_info "Installation de PyTorch ${expected} (index ${SELECTED_TORCH_CUDA_INDEX})..."
     log_info "(le PyTorch éventuellement préinstallé dans l'image de base, s'il ne correspond pas exactement, sera remplacé)"
-    retry "$DOWNLOAD_MAX_RETRIES" \
+    if ! retry "$DOWNLOAD_MAX_RETRIES" \
         python -m pip install \
         "torch==${SELECTED_TORCH_VERSION}" torchvision torchaudio \
         --index-url "https://download.pytorch.org/whl/${SELECTED_TORCH_CUDA_INDEX}"
+    then
+        deactivate
+        log_error "Échec de l'installation de PyTorch ${expected} depuis l'index ${SELECTED_TORCH_CUDA_INDEX}."
+        log_error "Si l'erreur pip ci-dessus indique qu'aucune version ne correspond (ex: 'Could not find a version that satisfies...'), l'index ${SELECTED_TORCH_CUDA_INDEX} ne publie probablement plus/pas encore ${SELECTED_TORCH_VERSION} : vérifiez https://download.pytorch.org/whl/${SELECTED_TORCH_CUDA_INDEX}/ et corrigez la ligne correspondante dans PYTORCH_BUILD_TABLE (lib/python.sh)."
+        return 1
+    fi
 
     deactivate
     log_ok "PyTorch ${expected} installé (une seule fois)."
