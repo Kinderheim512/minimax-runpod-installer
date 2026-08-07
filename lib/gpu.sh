@@ -58,12 +58,18 @@ detect_gpu() {
     exit 1
   fi
 
-  # Choix du palier de poids selon la VRAM (voir config.env pour le détail)
-  if   (( GPU_VRAM_GB >= 48 )); then GPU_TIER_RECOMMENDED="max"
-  elif (( GPU_VRAM_GB >= 24 )); then GPU_TIER_RECOMMENDED="balanced"
-  else                                GPU_TIER_RECOMMENDED="light"
+  # Choix du palier de poids selon la VRAM, avec marge de sécurité (seuils
+  # et marge configurables dans config.env : H3_TIER_MIN_VRAM_BALANCED_GB,
+  # H3_TIER_MIN_VRAM_MAX_GB, H3_TIER_VRAM_SAFETY_MARGIN_GB). La marge évite
+  # de recommander un palier dont le pic d'usage réel dépasse la VRAM
+  # disponible sur les cartes tout juste au seuil (ex. RTX A6000 48 Go avec
+  # le palier "max" — voir le commentaire dans config.env).
+  local vram_for_tier=$(( GPU_VRAM_GB - H3_TIER_VRAM_SAFETY_MARGIN_GB ))
+  if   (( vram_for_tier >= H3_TIER_MIN_VRAM_MAX_GB ));      then GPU_TIER_RECOMMENDED="max"
+  elif (( vram_for_tier >= H3_TIER_MIN_VRAM_BALANCED_GB )); then GPU_TIER_RECOMMENDED="balanced"
+  else                                                           GPU_TIER_RECOMMENDED="light"
   fi
-  log_info "Palier de poids H3 recommandé : ${GPU_TIER_RECOMMENDED}"
+  log_info "Palier de poids H3 recommandé : ${GPU_TIER_RECOMMENDED} (VRAM détectée : ${GPU_VRAM_GB} Go, marge de sécurité appliquée : ${H3_TIER_VRAM_SAFETY_MARGIN_GB} Go)"
 
   export GPU_NAME GPU_VRAM_GB GPU_DRIVER GPU_CUDA_VERSION GPU_TIER_RECOMMENDED
 }

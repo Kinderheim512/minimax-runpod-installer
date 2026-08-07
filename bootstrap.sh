@@ -76,6 +76,12 @@ fi
 # --------------------------------------------------------------------------
 # Installation
 # --------------------------------------------------------------------------
+# "$@" est transmis à install.sh et update.sh : c'est la seule façon pour un
+# appel du type `bash bootstrap.sh --tier=balanced` de faire parvenir ses
+# options jusqu'au script qui les parse réellement (install.sh). update.sh
+# ignore silencieusement toute option qu'il ne connaît pas (seul --yes/-y y
+# est reconnu), donc lui transmettre "$@" est sans danger et lui permet de
+# recevoir --yes/-y de la même façon.
 
 if [[ ! -f "$COMFY_DIR/main.py" ]]; then
 
@@ -83,7 +89,7 @@ if [[ ! -f "$COMFY_DIR/main.py" ]]; then
     echo "[INFO] Première installation..."
     echo
 
-    ./install.sh
+    ./install.sh "$@"
 
 else
 
@@ -92,7 +98,7 @@ else
     echo "[INFO] Vérification des mises à jour..."
     echo
 
-    ./update.sh || true
+    ./update.sh "$@" || true
 
 fi
 
