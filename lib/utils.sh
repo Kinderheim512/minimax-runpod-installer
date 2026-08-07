@@ -93,6 +93,72 @@ human_gb() {
   awk -v b="$1" 'BEGIN{printf "%.1f Go", b/1000000000}'
 }
 
+# ----------------------------------------------------------------------------
+# Progression des téléchargements
+# ----------------------------------------------------------------------------
+# DOWNLOAD_FILE_INDEX / DOWNLOAD_FILE_TOTAL sont positionnés par l'appelant
+# (download_missing_models() dans lib/models.sh) avant de lancer une série de
+# téléchargements — ce sont les seuls endroits qui savent combien de fichiers
+# restent à récupérer pour la session en cours. Par défaut (0), announce_download()
+# affiche juste le nom du fichier, sans compteur "i/N".
+DOWNLOAD_FILE_INDEX="${DOWNLOAD_FILE_INDEX:-0}"
+DOWNLOAD_FILE_TOTAL="${DOWNLOAD_FILE_TOTAL:-0}"
+
+# announce_download <nom_de_fichier>
+# Affiche un en-tête "[i/N] nom_de_fichier" avant de lancer un téléchargement
+# et incrémente le compteur global. Le numéro/total de fichier est une
+# information propre à l'installeur (aria2c/hf/curl ne peuvent pas la
+# connaître, chacun ne voit qu'un fichier à la fois) — elle est affichée une
+# fois ici, séparément de la progression native (%, débit, ETA...) que la
+# commande de téléchargement elle-même affiche ensuite via run_with_progress().
+announce_download() {
+  local filename="$1"
+  DOWNLOAD_FILE_INDEX=$(( DOWNLOAD_FILE_INDEX + 1 ))
+  if [[ "$DOWNLOAD_FILE_TOTAL" -gt 0 ]]; then
+    log_step "Téléchargement [${DOWNLOAD_FILE_INDEX}/${DOWNLOAD_FILE_TOTAL}] : ${filename}"
+  else
+    log_step "Téléchargement : ${filename}"
+  fi
+}
+
+# run_with_progress -- <commande...>
+# Exécute une commande en laissant sa progression NATIVE (barre aria2c,
+# barres tqdm/rich de `hf download`, ou table curl) s'afficher en direct dans
+# le terminal, tout en la consignant dans $LOG_FILE — aucun parsing de sortie
+# ici, on se contente de dupliquer le flux avec `tee`.
+#
+# Un sous-processus qui écrit dans un pipe (`cmd | tee ...`) n'est plus vu
+# comme un terminal par ce sous-processus : la plupart des outils de
+# téléchargement retombent alors sur un rendu ligne par ligne au lieu d'une
+# barre qui se redessine en place — toujours lisible (%, taille, débit, ETA
+# restent tous présents), juste moins fluide visuellement. Quand `script`
+# (util-linux, présent par défaut sur les images Ubuntu/RunPod) est
+# disponible, on lui alloue un pseudo-terminal pour retrouver l'affichage en
+# place identique à un lancement interactif direct ; sinon on retombe
+# simplement sur `tee`.
+#
+# Retourne le code de sortie réel de la commande, jamais celui de `tee`.
+run_with_progress() {
+  [[ "${1:-}" == "--" ]] && shift
+  local -a cmd=("$@")
+  local rc
+
+  if require_cmd script; then
+    local quoted; quoted="$(printf '%q ' "${cmd[@]}")"
+    # -q : silencieux sur les messages de `script` lui-même ; -e : renvoie le
+    # code de sortie de la commande exécutée (pas celui de `script`) ; -f :
+    # flush immédiat de chaque écriture, indispensable pour qu'un `\r` qui
+    # redessine une barre de progression s'affiche en direct au lieu de
+    # s'accumuler en mémoire tampon.
+    script -qefc "$quoted" /dev/null 2>&1 | tee -a "$LOG_FILE"
+    rc="${PIPESTATUS[0]}"
+  else
+    "${cmd[@]}" 2>&1 | tee -a "$LOG_FILE"
+    rc="${PIPESTATUS[0]}"
+  fi
+  return "$rc"
+}
+
 free_disk_gb() {
   # espace libre en Go sur le point de montage du chemin donné
   local path="$1"

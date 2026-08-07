@@ -224,7 +224,7 @@ download_civitai_model() {
   local max_retries="${DOWNLOAD_MAX_RETRIES:-5}"
   local attempt=1
 
-  log_info "Téléchargement (CivitAI) : $(basename "$dest")"
+  announce_download "$(basename "$dest")"
   while (( attempt <= max_retries )); do
     if curl -L -C - --fail --retry 3 --retry-delay 2 -o "$dest" "$url"; then
       log_ok "Téléchargé (CivitAI) : $(basename "$dest")"
@@ -536,6 +536,22 @@ download_missing_models() {
       return 1
     fi
   fi
+
+  # Compteur global "[i/N]" affiché par announce_download() (lib/utils.sh) —
+  # calculé une seule fois ici, sur le nombre réel de fichiers qui vont être
+  # téléchargés dans cette série (modèles manquants ET requis par les
+  # workflows sélectionnés, cf. any_model_missing()/H3_MODEL_MISSING plus
+  # haut). Remise à zéro de l'index à chaque appel de download_missing_models()
+  # pour ne pas hériter d'un compteur d'une série précédente (ex. relance
+  # après échec partiel).
+  local dl_total=0
+  _workflow_needs "$workflows" t2v i2v && [[ "${H3_MODEL_MISSING[fl2va]}" == "true" ]] && dl_total=$((dl_total + 1))
+  _workflow_needs "$workflows" r2v && [[ "${H3_MODEL_MISSING[ref2va]}" == "true" ]] && dl_total=$((dl_total + 1))
+  [[ "${H3_MODEL_MISSING[text_encoder]}" == "true" ]] && dl_total=$((dl_total + 1))
+  [[ "${H3_MODEL_MISSING[video_vae]}" == "true" ]] && dl_total=$((dl_total + 1))
+  [[ "${H3_MODEL_MISSING[audio_vae]}" == "true" ]] && dl_total=$((dl_total + 1))
+  DOWNLOAD_FILE_TOTAL="$dl_total"
+  DOWNLOAD_FILE_INDEX=0
 
   if _workflow_needs "$workflows" t2v i2v && [[ "${H3_MODEL_MISSING[fl2va]}" == "true" ]]; then
     download_diffusion_model "${H3_MODEL_FILES[fl2va]}" "$base" "$H3_CIVITAI_FL2VA_URL" "$model_source"

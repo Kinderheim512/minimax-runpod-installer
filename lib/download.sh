@@ -70,9 +70,11 @@ download_hf_file() {
     log_warn "${filename} présent mais invalide/incomplet, nouveau téléchargement."
   fi
 
+  announce_download "$filename"
+
   local attempt=1
   while (( attempt <= DOWNLOAD_MAX_RETRIES )); do
-    log_info "Téléchargement de ${filename} (tentative ${attempt}/${DOWNLOAD_MAX_RETRIES})..."
+    [[ "$attempt" -gt 1 ]] && log_info "Nouvelle tentative pour ${filename} (${attempt}/${DOWNLOAD_MAX_RETRIES})..."
 
     if [[ "$USE_ARIA2" == "true" ]] && require_cmd aria2c; then
       _download_via_aria2 "$repo" "$path" "$dest_dir" && break
@@ -96,33 +98,43 @@ download_hf_file() {
 
 _download_via_hf_cli() {
   local repo="$1" path="$2" dest_dir="$3"
+  local filename; filename="$(basename "$path")"
+  local dest_file="${dest_dir}/${filename}"
   # shellcheck disable=SC1091
   source "${VENV_DIR}/bin/activate"
   export HF_HUB_ENABLE_HF_TRANSFER=1   # legacy accelerator, ignoré (avec avertissement) par les versions récentes de huggingface_hub
   export HF_XET_HIGH_PERFORMANCE=1     # accélérateur Xet actuel
+  # `hf`/`huggingface-cli download` affichent nativement une barre par
+  # fichier (tqdm/rich) avec nom, %, taille téléchargée/totale, débit et ETA
+  # — on ne fait que la laisser passer jusqu'au terminal via
+  # run_with_progress() au lieu de l'avaler dans le log (comportement
+  # précédent), sans réimplémenter de parseur de progression.
+  export HF_HUB_DISABLE_PROGRESS_BARS=0
   detect_hf_cli
   local ok=0
   if [[ "$HF_CLI" == "hf" ]]; then
-    hf download "$repo" "$path" --local-dir "$dest_dir" >>"$LOG_FILE" 2>&1 || return 1
+    run_with_progress -- hf download "$repo" "$path" --local-dir "$dest_dir" || { deactivate; return 1; }
 
     if [[ ! -f "$dest_file" ]]; then
         log_error "Le fichier attendu est introuvable : $dest_file"
+        deactivate
         return 1
     fi
 
     ok=1
 
-elif [[ "$HF_CLI" == "huggingface-cli" ]]; then
-    huggingface-cli download "$repo" "$path" --local-dir "$dest_dir" >>"$LOG_FILE" 2>&1 || return 1
+  elif [[ "$HF_CLI" == "huggingface-cli" ]]; then
+    run_with_progress -- huggingface-cli download "$repo" "$path" --local-dir "$dest_dir" || { deactivate; return 1; }
 
     if [[ ! -f "$dest_file" ]]; then
         log_error "Le fichier attendu est introuvable : $dest_file"
+        deactivate
         return 1
     fi
 
     ok=1
-fi
-    deactivate
+  fi
+  deactivate
   [[ "$ok" == "1" ]]
 }
 
@@ -146,9 +158,16 @@ _download_via_aria2() {
   local header_arg=()
   [[ -n "$token" ]] && header_arg=(--header="Authorization: Bearer ${token}")
 
-  aria2c -x "$ARIA2_CONNECTIONS" -s "$ARIA2_CONNECTIONS" -c \
+  # aria2c affiche nativement, par défaut, une ligne de progression avec %,
+  # taille téléchargée/totale, débit (DL:) et ETA — on se contente de la
+  # laisser remonter jusqu'au terminal via run_with_progress() au lieu de
+  # l'avaler dans le log (comportement précédent). --summary-interval=2
+  # (au lieu de 30) rapproche ces mises à jour d'un affichage en temps réel
+  # dans le cas (courant en pipe) où aria2c retombe sur un rendu ligne par
+  # ligne plutôt qu'un redessin en place — voir run_with_progress().
+  run_with_progress -- aria2c -x "$ARIA2_CONNECTIONS" -s "$ARIA2_CONNECTIONS" -c \
     "${header_arg[@]}" \
     -d "$out_dir" -o "$filename" \
-    --summary-interval=30 --console-log-level=warn \
-    "$url" >>"$LOG_FILE" 2>&1
+    --summary-interval=2 --console-log-level=warn \
+    "$url"
 }
