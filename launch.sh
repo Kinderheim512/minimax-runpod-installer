@@ -72,7 +72,8 @@ MINIMAX_ENV_VARS=()
 MINIMAX_LAUNCH_FLAGS=()
 flags_file="${INSTALL_DIR}/user/.minimax_launch_flags"
 if [[ -f "$flags_file" ]]; then
-  # shellcheck disable=SC1091
+  # shellcheck disable=SC1090,SC1091  # chemin dynamique, généré à l'exécution
+  # par compute_optimization_flags (lib/optimization.sh) : rien à suivre au lint.
   source "$flags_file"
 else
   log_warn "Aucun fichier d'optimisation trouvé — lancement avec les réglages ComfyUI par défaut."

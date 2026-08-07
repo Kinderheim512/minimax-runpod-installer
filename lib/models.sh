@@ -22,16 +22,26 @@ create_model_folders() {
 
 # --- Manifeste des fichiers H3 -----------------------------------------------
 # format : "sous_chemin_dans_le_repo|palier|go_approx"
+#
+# H3_DIFFUSION_FL2VA / H3_DIFFUSION_REF2VA / H3_TEXT_ENCODER ne sont jamais
+# référencés par leur nom littéral plus bas dans ce fichier : ils sont passés
+# en chaîne à _pick_for_tier, qui les résout via une nameref (`local -n`).
+# shellcheck ne trace pas cette indirection et les marque donc à tort comme
+# inutilisés (cf. H3_VAE ci-dessous, qui lui est bien détecté car utilisé
+# directement en "${H3_VAE[@]}").
+# shellcheck disable=SC2034
 H3_DIFFUSION_FL2VA=(
   "diffusion_models/minimax_h3_fl2va_bf16.safetensors|max|66.3"
   "diffusion_models/minimax_h3_fl2va_int8_convrot.safetensors|balanced|34"
   "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors|light|21"
 )
+# shellcheck disable=SC2034  # cf. note ci-dessus sur H3_DIFFUSION_FL2VA
 H3_DIFFUSION_REF2VA=(
   "diffusion_models/minimax_h3_ref2va_bf16.safetensors|max|66.3"
   "diffusion_models/minimax_h3_ref2va_int8_convrot.safetensors|balanced|34"
   "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors|light|21"
 )
+# shellcheck disable=SC2034  # cf. note ci-dessus sur H3_DIFFUSION_FL2VA
 H3_TEXT_ENCODER=(
   "text_encoders/qwen3vl_32b_minimax_h3_bf16.safetensors|max|51.5"
   "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors|balanced|27.1"

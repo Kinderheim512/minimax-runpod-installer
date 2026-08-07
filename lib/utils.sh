@@ -2,6 +2,9 @@
 # lib/utils.sh — logging, gestion d'erreurs, helpers communs.
 # Ce fichier est destiné à être "sourcé", jamais exécuté directement.
 
+# shellcheck disable=SC2317  # `exit 0` semble inatteignable pour shellcheck car
+# il suppose `return 0` toujours réussi ; c'est justement le repli voulu si ce
+# fichier est exécuté directement (hors `source`), où `return` échouerait.
 if [[ -n "${MINIMAX_UTILS_LOADED:-}" ]]; then return 0 2>/dev/null || exit 0; fi
 MINIMAX_UTILS_LOADED=1
 

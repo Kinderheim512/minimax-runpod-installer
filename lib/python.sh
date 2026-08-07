@@ -139,7 +139,11 @@ select_pytorch_build() {
 
     # Alias de compatibilité, au cas où d'autres scripts du projet
     # (check.sh, update.sh, ...) liraient encore TORCH_VERSION/TORCH_CUDA_INDEX.
+    # Non utilisées plus loin dans CE fichier : shellcheck ne fait pas d'analyse
+    # inter-fichiers et les marque donc à tort comme inutilisées.
+    # shellcheck disable=SC2034
     TORCH_VERSION="$SELECTED_TORCH_VERSION"
+    # shellcheck disable=SC2034
     TORCH_CUDA_INDEX="$SELECTED_TORCH_CUDA_INDEX"
 }
 
@@ -178,6 +182,8 @@ setup_python_venv() {
         log_ok "Venv déjà présent."
     fi
 
+    # shellcheck disable=SC1091  # ${VENV_DIR}/bin/activate n'existe pas encore
+    # au moment du lint : il est créé par `venv` juste au-dessus, à l'exécution.
     source "${VENV_DIR}/bin/activate"
     python -m pip install --upgrade pip setuptools wheel
     deactivate
@@ -204,6 +210,8 @@ install_pytorch() {
     log_info "CUDA runtime détecté : ${detected:-inconnu}"
     log_info "Build PyTorch retenu : ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX}"
 
+    # shellcheck disable=SC1091  # cf. note dans setup_python_venv : le venv
+    # est créé au préalable par cette fonction, pas visible au lint statique.
     source "${VENV_DIR}/bin/activate"
 
     local expected="${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX}"
@@ -256,6 +264,7 @@ install_comfyui_requirements() {
 
     install_pytorch || return 1
 
+    # shellcheck disable=SC1091  # cf. note dans setup_python_venv.
     source "${VENV_DIR}/bin/activate"
     retry "$DOWNLOAD_MAX_RETRIES" python -m pip install -r "$req"
     deactivate
@@ -285,6 +294,7 @@ install_extra_requirements() {
         return 0
     fi
 
+    # shellcheck disable=SC1091  # cf. note dans setup_python_venv.
     source "${VENV_DIR}/bin/activate"
     retry "$DOWNLOAD_MAX_RETRIES" python -m pip install -r "$req"
     python -m pip install -U hf_xet
@@ -303,6 +313,7 @@ verify_cuda() {
     local detected
     detected="$(detect_cuda_runtime)"
 
+    # shellcheck disable=SC1091  # cf. note dans setup_python_venv.
     source "${VENV_DIR}/bin/activate"
     CUDA_RUNTIME_DETECTED="${detected:-inconnu}" python << 'EOF'
 import os
