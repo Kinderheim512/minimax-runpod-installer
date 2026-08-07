@@ -104,4 +104,4 @@ echo
 echo "[INFO] Lancement de ComfyUI..."
 echo
 
-exec ./launch.sh
+exec ./launch.sh --tmux

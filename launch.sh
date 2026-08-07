@@ -15,6 +15,26 @@ set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMUX_SESSION_NAME="minimax"
 
+attach_tmux_if_interactive() {
+  # Point d'attache unique pour la session tmux : s'exécute exactement comme
+  # avant quand un vrai terminal est présent (stdin ET stdout), et se
+  # contente d'indiquer comment se rattacher plus tard sinon — au lieu de
+  # laisser échouer un "exec tmux attach-session" sans TTY (cas d'un
+  # bootstrap.sh lancé de façon non interactive : curl | bash, Start Command
+  # RunPod, etc.). ComfyUI, lui, tourne déjà dans la session détachée à ce
+  # stade et n'est pas affecté par ce choix.
+  if [[ -t 0 && -t 1 ]]; then
+    exec tmux attach-session -t "$TMUX_SESSION_NAME"
+  fi
+
+  echo "[INFO] Pas de terminal interactif détecté — la session tmux '${TMUX_SESSION_NAME}' continue de tourner en arrière-plan."
+  echo "[INFO] Pour vous y rattacher plus tard : tmux attach -t ${TMUX_SESSION_NAME}"
+  # ComfyUI tourne déjà dans la session tmux détachée : on doit s'arrêter ici,
+  # sinon le flux repasserait dans launch_in_tmux() puis dans le corps
+  # principal de ce script et lancerait un second ComfyUI hors tmux.
+  exit 0
+}
+
 launch_in_tmux() {
   if ! command -v tmux >/dev/null 2>&1; then
     echo "[ERREUR] tmux est introuvable (il devrait pourtant être installé automatiquement)." >&2
@@ -23,7 +43,7 @@ launch_in_tmux() {
 
   if tmux has-session -t "$TMUX_SESSION_NAME" 2>/dev/null; then
     echo "[INFO] Session tmux '${TMUX_SESSION_NAME}' déjà existante — attache..."
-    exec tmux attach-session -t "$TMUX_SESSION_NAME"
+    attach_tmux_if_interactive
   fi
 
   echo "[INFO] Lancement de ComfyUI dans tmux..."
@@ -35,7 +55,7 @@ launch_in_tmux() {
   # après coup (ComfyUI déjà lancé, arrêt, etc.) pour pouvoir s'y attacher.
   local session_cmd="bash \"${PROJECT_ROOT}/launch.sh\"; exec bash"
   tmux new-session -d -s "$TMUX_SESSION_NAME" "$session_cmd"
-  exec tmux attach-session -t "$TMUX_SESSION_NAME"
+  attach_tmux_if_interactive
 }
 
 if [[ "${1:-}" == "--tmux" ]]; then
