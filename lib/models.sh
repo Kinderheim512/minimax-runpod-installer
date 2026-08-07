@@ -441,7 +441,7 @@ collect_missing_models() {
     label="${H3_MODEL_LABELS[$key]}"
     # $path est déjà le sous-chemin relatif au dépôt HF (identique à
     # H3_MODEL_FILES), donc réutilisable tel quel pour un éventuel fetch.
-    expected_sha256="$(get_expected_sha256 "$key" "$path")"
+    expected_sha256="$(get_expected_sha256 "$key" "$path" || true)"
 
     if model_is_valid "$full_path" "$min_bytes" "$expected_sha256"; then
       echo "✓ ${label}"

@@ -61,21 +61,41 @@ verify_installation() {
   fi
 
   # --- Modèles H3 : recherche récursive, peu importe le sous-dossier réel ---
+  # Vérification consciente des workflows sélectionnés (resolve_h3_workflows,
+  # même fonction que build_h3_model_manifest()/download_h3_models() —
+  # seule source de vérité pour "quel workflow requiert quel modèle") :
+  # FL2VA n'est exigé que si t2v/i2v est sélectionné, REF2VA que si r2v
+  # l'est. Un modèle non requis par les workflows actifs n'est ni vérifié
+  # ni signalé manquant.
   local base="${INSTALL_DIR}/models"
+  local workflows; workflows="$(resolve_h3_workflows 2>/dev/null || echo "${H3_WORKFLOWS:-t2v,i2v,r2v}")"
 
-  local _diffusion_files=()
+  local _fl2va_files=() _ref2va_files=()
   if [[ -d "$base" ]]; then
-    mapfile -t _diffusion_files < <(find "$base" -type f \
-      \( -iname "minimax_h3_fl2va_*.safetensors" -o -iname "minimax_h3_ref2va_*.safetensors" \) \
-      2>/dev/null)
+    mapfile -t _fl2va_files < <(find "$base" -type f -iname "minimax_h3_fl2va_*.safetensors" 2>/dev/null)
+    mapfile -t _ref2va_files < <(find "$base" -type f -iname "minimax_h3_ref2va_*.safetensors" 2>/dev/null)
   fi
-  if (( ${#_diffusion_files[@]} > 0 )); then
-    _v_ok "Au moins un modèle de diffusion MiniMax H3 présent (${#_diffusion_files[@]})."
-    for f in "${_diffusion_files[@]}"; do
-      log_info "   - ${f#"$base"/} ($(du -h "$f" 2>/dev/null | cut -f1))"
-    done
-  else
-    _v_warn "Aucun modèle de diffusion MiniMax H3 trouvé — lancez : bash install.sh --only-models"
+
+  if _workflow_needs "$workflows" t2v i2v; then
+    if (( ${#_fl2va_files[@]} > 0 )); then
+      _v_ok "Modèle de diffusion FL2VA présent (requis par les workflows t2v/i2v)."
+      for f in "${_fl2va_files[@]}"; do
+        log_info "   - ${f#"$base"/} ($(du -h "$f" 2>/dev/null | cut -f1))"
+      done
+    else
+      _v_fail "Modèle de diffusion FL2VA manquant (requis par les workflows t2v/i2v sélectionnés) — lancez : bash install.sh --only-models"
+    fi
+  fi
+
+  if _workflow_needs "$workflows" r2v; then
+    if (( ${#_ref2va_files[@]} > 0 )); then
+      _v_ok "Modèle de diffusion REF2VA présent (requis par le workflow r2v)."
+      for f in "${_ref2va_files[@]}"; do
+        log_info "   - ${f#"$base"/} ($(du -h "$f" 2>/dev/null | cut -f1))"
+      done
+    else
+      _v_fail "Modèle de diffusion REF2VA manquant (requis par le workflow r2v sélectionné) — lancez : bash install.sh --only-models"
+    fi
   fi
 
   local _text_encoder_files=()

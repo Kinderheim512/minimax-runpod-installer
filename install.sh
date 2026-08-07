@@ -112,18 +112,25 @@ run_step "model_folders"      create_model_folders        "$FORCE"
 if [[ "$SKIP_MODELS" == "false" ]]; then
   run_step "hf_login" hf_login "$FORCE"
   if ! step_done "h3_models" || [[ "$FORCE" == "true" ]]; then
-FREE=$(df -BG /workspace | awk 'NR==2 {gsub("G","",$4); print $4}')
+    # Estimation dynamique de l'espace requis : mêmes fonctions que celles
+    # utilisées à l'intérieur de download_h3_models() (lib/models.sh), donc
+    # une seule source de vérité pour "combien d'espace il faut" — plus de
+    # valeur figée (l'ancien seuil de 140 Go ignorait le palier H3_TIER et
+    # les workflows H3_WORKFLOWS sélectionnés).
+    H3_PREFLIGHT_TIER="$(resolve_h3_tier)"
+    H3_PREFLIGHT_WORKFLOWS="$(resolve_h3_workflows)"
+    build_h3_model_manifest "$H3_PREFLIGHT_TIER"
+    collect_missing_models "${INSTALL_DIR}/models"
+    H3_PREFLIGHT_EST_GB="$(estimate_missing_download_size_gb "$H3_PREFLIGHT_TIER" "$H3_PREFLIGHT_WORKFLOWS")"
+    H3_PREFLIGHT_FREE_GB="$(free_disk_gb "$INSTALL_DIR")"
 
-if (( FREE < 140 )); then
+    if [[ -n "$H3_PREFLIGHT_FREE_GB" ]] && awk -v f="$H3_PREFLIGHT_FREE_GB" -v e="$H3_PREFLIGHT_EST_GB" 'BEGIN{exit !(f < e)}'; then
+      log_error "Pas assez d'espace disque."
+      log_error "Requis (estimation, palier ${H3_PREFLIGHT_TIER}, workflows ${H3_PREFLIGHT_WORKFLOWS}) : ~${H3_PREFLIGHT_EST_GB} Go — libre : ${H3_PREFLIGHT_FREE_GB} Go."
+      exit 1
+    fi
 
-log_error "Pas assez d'espace disque."
-
-log_error "140 Go minimum."
-
-exit 1
-
-fi    
-if download_h3_models; then
+    if download_h3_models; then
       mark_step_done "h3_models"
     else
       log_warn "Téléchargement des modèles incomplet — relancez plus tard : bash install.sh --only-models"
