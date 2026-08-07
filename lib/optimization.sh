@@ -18,16 +18,53 @@ compute_optimization_flags() {
   env_vars+=("HF_XET_HIGH_PERFORMANCE=1")
 
   # --- gestion mémoire selon la VRAM -------------------------------------
-  if   (( GPU_VRAM_GB >= 48 )); then
-    flags+=("--highvram")
-    log_info "VRAM >= 48 Go → --highvram (tout gardé sur GPU, débit maximal)."
-  elif (( GPU_VRAM_GB >= 24 )); then
-    flags+=("--reserve-vram" "2")
-    log_info "VRAM 24-48 Go → gestion normale + --reserve-vram 2."
-  else
-    flags+=("--lowvram" "--reserve-vram" "1")
-    log_info "VRAM < 24 Go → --lowvram --reserve-vram 1 (offloading actif, comme documenté par l'équipe ComfyUI pour H3 sur RTX 3060)."
-  fi
+  # --highvram désactive tout l'offloading CPU<->GPU de ComfyUI (modèles,
+  # text encoder, VAE gardés en VRAM en permanence). Sur un GPU tout juste
+  # à 48 Go (RTX A6000, RTX 6000 Ada...), le pic réel (poids + activations +
+  # overhead allocateur CUDA) dépasse régulièrement les 48 Go nominaux et
+  # provoque un CUDA OOM systématique sur les workflows H3 Reference-to-
+  # Video — --highvram est donc la cause la plus probable des OOM observés
+  # sur cette classe de carte. On applique ici la même marge de sécurité que
+  # pour le palier de poids H3 (H3_TIER_VRAM_SAFETY_MARGIN_GB, cf. lib/
+  # gpu.sh) plutôt que le seuil brut, et on garde un contrôle explicite via
+  # COMFY_HIGHVRAM dans config.env :
+  #   - true  : force --highvram, quelle que soit la VRAM détectée.
+  #   - false : force la gestion normale (pas de --highvram), quelle que
+  #             soit la VRAM détectée.
+  #   - auto  (défaut) : décide selon la VRAM détectée moins la marge de
+  #             sécurité — n'active --highvram que sur les GPU qui ont une
+  #             marge réelle au-dessus de 48 Go (A100/H100/H200...), pas sur
+  #             les cartes tout juste à 48 Go.
+  local highvram_mode="${COMFY_HIGHVRAM:-auto}"
+  local vram_for_highvram=$(( GPU_VRAM_GB - H3_TIER_VRAM_SAFETY_MARGIN_GB ))
+
+  case "$highvram_mode" in
+    true)
+      flags+=("--highvram")
+      log_info "COMFY_HIGHVRAM=true (forcé) → --highvram (tout gardé sur GPU)."
+      ;;
+    false)
+      if (( GPU_VRAM_GB >= 24 )); then
+        flags+=("--reserve-vram" "2")
+        log_info "COMFY_HIGHVRAM=false (forcé) → gestion normale + --reserve-vram 2 (pas de --highvram)."
+      else
+        flags+=("--lowvram" "--reserve-vram" "1")
+        log_info "COMFY_HIGHVRAM=false (forcé), VRAM < 24 Go → --lowvram --reserve-vram 1."
+      fi
+      ;;
+    auto|*)
+      if (( vram_for_highvram >= 48 )); then
+        flags+=("--highvram")
+        log_info "COMFY_HIGHVRAM=auto, VRAM ${GPU_VRAM_GB} Go (marge de sécurité ${H3_TIER_VRAM_SAFETY_MARGIN_GB} Go appliquée) >= 48 Go → --highvram."
+      elif (( GPU_VRAM_GB >= 24 )); then
+        flags+=("--reserve-vram" "2")
+        log_info "COMFY_HIGHVRAM=auto, VRAM ${GPU_VRAM_GB} Go (marge de sécurité appliquée) < 48 Go → gestion normale + --reserve-vram 2 (pas de --highvram)."
+      else
+        flags+=("--lowvram" "--reserve-vram" "1")
+        log_info "COMFY_HIGHVRAM=auto, VRAM < 24 Go → --lowvram --reserve-vram 1 (offloading actif, comme documenté par l'équipe ComfyUI pour H3 sur RTX 3060)."
+      fi
+      ;;
+  esac
 
   # --- compute capability -> --fast (accumulation fp16/fp8 rapide) ------
   local cc

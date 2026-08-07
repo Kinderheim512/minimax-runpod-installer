@@ -31,6 +31,14 @@ see [README.md § Model tiers](README.md#-model-tiers-h3_tier). Re-run:
 bash install.sh --tier=light --only-models
 ```
 
+If you're on a 48 GB card (RTX A6000, RTX 6000 Ada, L40S...), OOMs on H3
+Reference-to-Video are usually caused by `--highvram`, which keeps every
+model in VRAM permanently instead of offloading. `COMFY_HIGHVRAM=auto`
+(default, `config.env`) already avoids `--highvram` on these cards — if you
+previously forced it with `COMFY_HIGHVRAM=true`, set it back to `auto` or
+`false` and re-run `bash install.sh` (or `update.sh`) to regenerate the
+launch flags.
+
 Or use a GPU with more VRAM.
 
 ---
