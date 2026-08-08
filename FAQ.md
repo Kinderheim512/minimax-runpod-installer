@@ -27,7 +27,8 @@ detected VRAM instead of using the `max` default.
 
 No. Native support (`MiniMaxH3ImageToVideo` / `MiniMaxH3ReferenceToVideo`)
 ships in ComfyUI >= 0.30.0, and the installer always tracks ComfyUI's
-default branch. `ComfyUI-VideoHelperSuite` and the optional `Spectrum
+default branch. `ComfyUI-VideoHelperSuite`, `rgthree-comfy`,
+`ComfyUI-KJNodes`, `ComfyUI-SolAttn_triton`, and the optional `Spectrum
 MiniMax H3` acceleration node are installed for convenience, not because
 they're required.
 
@@ -54,10 +55,14 @@ if it needs a model your selection excludes. See
 ## Can I use CivitAI instead of Hugging Face?
 
 Yes, for the diffusion models only (`MODEL_SOURCE=civitai` in
-`config.env`). CivitAI only hosts the `light`-tier (pruned INT8) diffusion
-weights — the text encoder and both VAEs always come from Hugging Face
-regardless of `MODEL_SOURCE`, and `balanced`/`max` diffusion weights are
-Hugging Face–only.
+`config.env`), and **only with `--tier=balanced`**. CivitAI only hosts the
+pruned INT8 ConvRot diffusion weights, which is the `balanced` tier since
+`light` switched to INT4Q (Hugging Face–only, see
+[README.md § Model tiers](README.md#-model-tiers-h3_tier)). The text
+encoder and both VAEs always come from Hugging Face regardless of
+`MODEL_SOURCE`, and `light`/`max` diffusion weights are Hugging Face–only.
+Selecting `MODEL_SOURCE=civitai` with `--tier=light` or `--tier=max` fails
+fast with an explicit error instead of downloading the wrong file.
 
 ---
 

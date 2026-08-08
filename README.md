@@ -79,9 +79,20 @@ one tier — the one you select — never all three.
 
 | Tier | Min. VRAM | Diffusion model (FL2VA or REF2VA) | Text encoder | Approx. total\* |
 |---|---|---|---|---|
-| `light` | 8 GB | pruned INT8 ConvRot, ~21 GB | NVFP4 AWQ, ~15.7 GB | ~40 GB |
-| `balanced` | 24 GB | INT8 ConvRot, ~34 GB | INT8 ConvRot, ~27.1 GB | ~64 GB |
+| `light` | 8 GB | INT4Q mixed INT4/INT8 ConvRot, ~18.5 GB | NVFP4 AWQ, ~15.7 GB | ~37 GB |
+| `balanced` | 24 GB | pruned INT8 ConvRot, ~21 GB | NVFP4 AWQ, ~15.7 GB | ~40 GB |
 | `max` (default) | 48 GB | BF16, ~66.3 GB | BF16, ~51.5 GB | ~121 GB |
+
+`light`'s diffusion weights come from a separate, community-maintained
+Hugging Face repo (`tsolful/Minimax_H3_INT4MixedConvRot`, see
+`H3_HF_REPO_INT4` in `config.env`) rather than the official `Comfy-Org`
+repo used by the other two tiers — the installer accepts each model's
+license independently, so installing `light` after already accepting the
+`balanced`/`max` license (or vice versa) may prompt for a second license
+acceptance the first time. INT4Q was chosen over the smaller/faster INT4BQ
+variant specifically for visual quality (INT4Q keeps ~73-75% of layers at
+INT8 precision vs ~39-47% for INT4BQ) — see `lib/models.sh` for the full
+reasoning.
 
 \* One diffusion model (t2v/i2v share FL2VA; r2v uses REF2VA) + text encoder
 + both VAEs (~3 GB, tier-independent). Installing all workflows downloads
@@ -103,11 +114,13 @@ Or force one explicitly:
 bash install.sh --tier=light
 ```
 
-> **Compatibility note:** the official workflow JSON files reference
-> `light`-tier filenames in their model-loader nodes regardless of which
-> tier you actually install. If you use `balanced` or `max`, you'll need to
-> reselect the correct file once in each workflow's loader node the first
-> time you open it. See
+> **Compatibility note:** the official workflow JSON files reference the
+> pruned INT8 ConvRot filenames in their model-loader nodes, which is now
+> the `balanced`-tier filenames (it used to be `light`'s, before `light`
+> switched to INT4Q — see [Model tiers](#-model-tiers-h3_tier) above), and
+> that regardless of which tier you actually install. If you use `light` or
+> `max`, you'll need to reselect the correct file once in each workflow's
+> loader node the first time you open it. See
 > [TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-workflow-says-a-model-is-missing-even-though-checksh-says-its-installed).
 
 ---

@@ -10,6 +10,55 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🧬 H3 weight tiers modernized, multi-repo model architecture
+
+- **`light`** now uses the **INT4Q** mixed INT4/INT8 ConvRot quantization
+  (`tsolful/Minimax_H3_INT4MixedConvRot` on Hugging Face) instead of the
+  previous pruned INT8 ConvRot weights. INT4Q was chosen over the smaller
+  INT4BQ variant on quality grounds: INT4Q keeps ~73-75% of layers at INT8
+  precision (vs ~39-47% for INT4BQ), for a size difference of only ~2.6 GB —
+  not enough to justify the larger quality gap for a project that prioritizes
+  visual fidelity over disk footprint. `light` remains meaningfully smaller
+  than `balanced` (~18.5 GB vs ~21 GB diffusion weights per checkpoint).
+- **`balanced`** now uses the **pruned INT8 ConvRot** diffusion weights
+  (previously `light`'s weights, ~21 GB per checkpoint — replaces the older,
+  larger non-pruned INT8 ConvRot weights, ~34 GB) and the **NVFP4 AWQ** text
+  encoder (~15.7 GB — previously `light`-only, replaces the older INT8
+  ConvRot text encoder, ~27.1 GB, no longer referenced by any tier). This is
+  the new community-standard combination for this tier.
+- **`max`** is unchanged (BF16).
+- Two accelerators evaluated and deliberately **not** integrated: AsymW4A8
+  (depends on an unmerged comfy-kitchen PR and mandatory custom nodes — goes
+  against this project's "official tools only" philosophy) and BlockCache
+  (Spectrum / EasyCache / F1B0 — the community hasn't converged on one yet;
+  revisit later).
+- **Model manifest is now multi-repo**: each entry in
+  `H3_DIFFUSION_FL2VA`/`H3_DIFFUSION_REF2VA`/`H3_TEXT_ENCODER`/`H3_VAE`
+  (`lib/models.sh`) now carries its own Hugging Face repo instead of assuming
+  a single global `H3_HF_REPO`. `build_h3_model_manifest()` populates a new
+  `H3_MODEL_REPO[key]` alongside the existing `H3_MODEL_FILES[key]`. Adding a
+  future third-party repo needs only a new manifest entry, no code changes
+  elsewhere. New `H3_HF_REPO_INT4` in `config.env` (default
+  `tsolful/Minimax_H3_INT4MixedConvRot`) holds the `light`-tier repo.
+- **License/gated-access check is now generic**: `hf_check_h3_access()`
+  (hardcoded to a single repo) is replaced by `hf_check_repo_access(repo)` +
+  `hf_check_required_access(repo1 [repo2 ...])` (`lib/huggingface.sh`), and
+  new `h3_required_repos()` (`lib/models.sh`) derives exactly which repos
+  need checking from the models actually missing *and* required by the
+  current tier/workflow selection — so a `light`-tier install checks both
+  Hugging Face repos, while `balanced`/`max` only ever check one.
+- **`MODEL_SOURCE=civitai` now guarded to `--tier=balanced`**: CivitAI only
+  ever hosted the pruned INT8 ConvRot weights, which is now the `balanced`
+  tier's diffusion weights, not `light`'s (INT4Q is Hugging Face–only).
+  Selecting CivitAI with any other tier now fails fast with a clear error
+  instead of silently downloading the wrong file under the wrong tier's
+  name — this mismatch wasn't guarded against before this change.
+- New optional custom nodes installed by default: `rgthree-comfy` and
+  `ComfyUI-KJNodes` (both have a `requirements.txt`, installed like
+  `ComfyUI-VideoHelperSuite`), and `ComfyUI-SolAttn_triton` (no Python
+  dependencies of its own — relies on the project's existing PyTorch/Triton
+  install, same as Spectrum).
+
 ### 🧠 H3 tiers and workflow-aware installation
 
 - Three weight tiers per GPU class — `light` (8 GB+), `balanced` (24 GB+),

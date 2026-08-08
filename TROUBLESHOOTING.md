@@ -65,11 +65,13 @@ that's your setup, set `COMFY_SMART_MEMORY=false` and re-run
 
 This is almost always a **tier mismatch**, not a missing file. The official
 MiniMax H3 workflow JSON files ship with their diffusion/text-encoder loader
-nodes pre-set to the `light` tier filenames
+nodes pre-set to the pruned INT8 ConvRot filenames
 (`minimax_h3_fl2va_pruned_int8_convrot.safetensors`,
 `minimax_h3_ref2va_pruned_int8_convrot.safetensors`,
-`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`). If you installed with
-`H3_TIER=balanced` or `H3_TIER=max` (the project default is `max`), those
+`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`) — this is the `balanced`
+tier since `light` switched to INT4Q (see
+[README.md § Model tiers](README.md#-model-tiers-h3_tier)). If you installed
+with `H3_TIER=light` or `H3_TIER=max` (the project default is `max`), those
 exact filenames were never downloaded — different ones were.
 
 Fix: open the workflow in ComfyUI and, in the model-loader node(s), pick the
@@ -216,8 +218,10 @@ Verify:
   an authentication failure and `429` as a rate limit — both are non-retried
   on purpose, so re-running immediately won't help for those two cases.
 
-Note: CivitAI only hosts the `light`-tier (pruned INT8) diffusion weights
-for MiniMax H3 — `balanced` and `max` are only available via Hugging Face.
+Note: CivitAI only hosts the pruned INT8 ConvRot diffusion weights for
+MiniMax H3, which is the `balanced` tier — `light` (INT4Q) and `max` are
+only available via Hugging Face. `MODEL_SOURCE=civitai` with a tier other
+than `balanced` now fails immediately with an explicit error.
 
 ---
 

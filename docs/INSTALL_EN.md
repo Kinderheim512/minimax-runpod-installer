@@ -25,8 +25,8 @@ three MiniMax H3 weight tiers, sized to fit different VRAM budgets:
 | GPU VRAM | Tier | Notes |
 |---|---|---|
 | 48 GB+ | `max` | Highest quality (BF16 weights). **This is the project default**, regardless of your actual GPU. |
-| 24–47 GB | `balanced` | INT8 ConvRot weights, roughly half the size of `max`. |
-| 8–23 GB | `light` | Pruned INT8 weights, smallest and fastest to download. |
+| 24–47 GB | `balanced` | Pruned INT8 ConvRot weights, roughly a third the size of `max`. |
+| 8–23 GB | `light` | INT4Q mixed INT4/INT8 weights (separate Hugging Face repo), smallest and fastest to download. |
 
 Because the default tier (`max`) does not shrink itself to fit a smaller
 GPU, decide up front:

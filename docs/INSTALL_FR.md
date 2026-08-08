@@ -26,8 +26,8 @@ la VRAM disponible :
 | VRAM du GPU | Palier | Remarques |
 |---|---|---|
 | 48 Go+ | `max` | Qualité maximale (poids BF16). **C'est le palier par défaut du projet**, quel que soit votre GPU réel. |
-| 24-47 Go | `balanced` | Poids INT8 ConvRot, environ deux fois plus légers que `max`. |
-| 8-23 Go | `light` | Poids INT8 pruned, les plus légers et les plus rapides à télécharger. |
+| 24-47 Go | `balanced` | Poids INT8 ConvRot pruned, environ trois fois plus légers que `max`. |
+| 8-23 Go | `light` | Poids INT4Q mixtes INT4/INT8 (dépôt Hugging Face séparé), les plus légers et les plus rapides à télécharger. |
 
 Le palier par défaut (`max`) ne s'adapte pas automatiquement à un GPU plus
 modeste — décidez donc en amont :

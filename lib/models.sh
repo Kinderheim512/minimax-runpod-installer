@@ -21,7 +21,37 @@ create_model_folders() {
 }
 
 # --- Manifeste des fichiers H3 -----------------------------------------------
-# format : "sous_chemin_dans_le_repo|palier|go_approx"
+# format : "repo|sous_chemin_dans_le_repo|palier|go_approx"
+#
+# Champ "repo" ajouté (architecture multi-dépôts) : chaque modèle porte son
+# propre dépôt HuggingFace source au lieu de supposer un unique H3_HF_REPO
+# global. Permet d'ajouter un futur dépôt tiers sans toucher au reste du
+# projet — il suffit d'une nouvelle entrée de manifeste. Deux dépôts utilisés
+# aujourd'hui (voir config.env) :
+#   - H3_HF_REPO      (Comfy-Org/MiniMax-H3)      : max, balanced, VAE, text
+#                                                    encoders
+#   - H3_HF_REPO_INT4 (tsolful/Minimax_H3_INT4MixedConvRot) : palier light
+#                                                    (INT4Q, voir décision
+#                                                    ci-dessous)
+#
+# Historique des paliers (voir CHANGELOG.md pour le détail des décisions) :
+#   - light    : passé de "pruned INT8 ConvRot" à "pruned INT4Q" (dépôt
+#                tiers). INT4Q retenu plutôt qu'INT4BQ malgré une taille
+#                légèrement supérieure (~18.5 Go vs ~15.9 Go) : INT4Q garde
+#                ~73-75% des couches en INT8 contre ~39-47% pour INT4BQ,
+#                donc une fidélité visuelle nettement plus proche du palier
+#                balanced — critère explicitement prioritaire sur la taille.
+#                Noms de fichiers en majuscules (INT4Q/INT4BQ) volontairement
+#                conservés tels quels : ce sont les noms exacts publiés par
+#                le dépôt tiers, pas une convention du projet.
+#   - balanced : passé de "int8_convrot" (poids non pruned, ~34 Go +
+#                text encoder int8_convrot ~27.1 Go) à "pruned_int8_convrot"
+#                (~21 Go, anciennement utilisé par "light") + text encoder
+#                nvfp4_awq (~15.7 Go, anciennement utilisé uniquement par
+#                "light") — nouveau standard communauté adopté tel quel.
+#                L'ancien text encoder qwen3vl_32b_minimax_h3_int8_convrot
+#                n'est donc plus référencé par aucun palier.
+#   - max      : inchangé (BF16).
 #
 # H3_DIFFUSION_FL2VA / H3_DIFFUSION_REF2VA / H3_TEXT_ENCODER ne sont jamais
 # référencés par leur nom littéral plus bas dans ce fichier : ils sont passés
@@ -31,34 +61,38 @@ create_model_folders() {
 # directement en "${H3_VAE[@]}").
 # shellcheck disable=SC2034
 H3_DIFFUSION_FL2VA=(
-  "diffusion_models/minimax_h3_fl2va_bf16.safetensors|max|66.3"
-  "diffusion_models/minimax_h3_fl2va_int8_convrot.safetensors|balanced|34"
-  "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors|light|21"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_fl2va_bf16.safetensors|max|66.3"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors|balanced|21"
+  "${H3_HF_REPO_INT4}|diffusion_models/minimax_h3_fl2va_pruned_INT4Q.safetensors|light|18.5"
 )
 # shellcheck disable=SC2034  # cf. note ci-dessus sur H3_DIFFUSION_FL2VA
 H3_DIFFUSION_REF2VA=(
-  "diffusion_models/minimax_h3_ref2va_bf16.safetensors|max|66.3"
-  "diffusion_models/minimax_h3_ref2va_int8_convrot.safetensors|balanced|34"
-  "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors|light|21"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_ref2va_bf16.safetensors|max|66.3"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors|balanced|21"
+  "${H3_HF_REPO_INT4}|diffusion_models/minimax_h3_ref2va_pruned_INT4Q.safetensors|light|18.4"
 )
 # shellcheck disable=SC2034  # cf. note ci-dessus sur H3_DIFFUSION_FL2VA
 H3_TEXT_ENCODER=(
-  "text_encoders/qwen3vl_32b_minimax_h3_bf16.safetensors|max|51.5"
-  "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors|balanced|27.1"
-  "text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors|light|15.7"
+  "${H3_HF_REPO}|text_encoders/qwen3vl_32b_minimax_h3_bf16.safetensors|max|51.5"
+  "${H3_HF_REPO}|text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors|balanced|15.7"
+  "${H3_HF_REPO}|text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors|light|15.7"
 )
+# H3_VAE porte désormais son repo par entrée ("repo|sous_chemin"), comme les
+# autres manifestes — tier-indépendant (une seule entrée par composant,
+# jamais résolue via _pick_for_tier).
 H3_VAE=(
-  "vae/minimax_h3_video_vae_fp16.safetensors"
-  "vae/minimax_h3_audio_vae_fp32.safetensors"
+  "${H3_HF_REPO}|vae/minimax_h3_video_vae_fp16.safetensors"
+  "${H3_HF_REPO}|vae/minimax_h3_audio_vae_fp32.safetensors"
 )
 
 _pick_for_tier() {
-  # _pick_for_tier <tier> <array_name> -> écho le sous-chemin correspondant
+  # _pick_for_tier <tier> <array_name> -> écho "repo|subpath|size" sur stdout
   local tier="$1"; shift
   local -n arr="$1"
+  local entry repo subpath t size
   for entry in "${arr[@]}"; do
-    IFS='|' read -r subpath t size <<< "$entry"
-    if [[ "$t" == "$tier" ]]; then echo "$subpath|$size"; return 0; fi
+    IFS='|' read -r repo subpath t size <<< "$entry"
+    if [[ "$t" == "$tier" ]]; then echo "$repo|$subpath|$size"; return 0; fi
   done
   return 1
 }
@@ -126,28 +160,43 @@ _workflow_needs() {
 }
 
 # build_h3_model_manifest <tier>
-# Point d'entrée UNIQUE qui peuple H3_MODEL_FILES pour le palier donné, à
-# partir du manifeste H3_DIFFUSION_FL2VA / H3_DIFFUSION_REF2VA /
-# H3_TEXT_ENCODER / H3_VAE (seule source de vérité pour les chemins et
-# tailles). À appeler avant collect_missing_models()/download_missing_models()
-# — tout le reste du fichier lit H3_MODEL_FILES, plus aucune fonction ne
+# Point d'entrée UNIQUE qui peuple H3_MODEL_FILES (sous-chemin) ET
+# H3_MODEL_REPO (dépôt HuggingFace source) pour le palier donné, à partir du
+# manifeste H3_DIFFUSION_FL2VA / H3_DIFFUSION_REF2VA / H3_TEXT_ENCODER /
+# H3_VAE (seule source de vérité pour dépôts, chemins et tailles). À appeler
+# avant collect_missing_models()/download_missing_models() — tout le reste
+# du fichier lit H3_MODEL_FILES/H3_MODEL_REPO, plus aucune fonction ne
 # rappelle _pick_for_tier() séparément pour fl2va/ref2va/text_encoder.
+#
+# Deux tableaux associatifs parallèles (plutôt qu'un seul encodé
+# "repo::subpath") : chaque appelant existant qui lit H3_MODEL_FILES[key]
+# pour un sous-chemin (basename, dirname, comparaison avec un JSON de
+# workflow — voir lib/workflows.sh) continue de fonctionner sans changement ;
+# seuls les appelants qui ont besoin du dépôt lisent H3_MODEL_REPO[key] en
+# plus, à l'endroit précis où c'est nécessaire.
 declare -A H3_MODEL_FILES=()
+declare -A H3_MODEL_REPO=()
 build_h3_model_manifest() {
   local tier="$1"
-  local entry
+  local entry repo subpath size
 
   entry="$(_pick_for_tier "$tier" H3_DIFFUSION_FL2VA)"
-  H3_MODEL_FILES[fl2va]="${entry%%|*}"
+  IFS='|' read -r repo subpath size <<< "$entry"
+  H3_MODEL_REPO[fl2va]="$repo"; H3_MODEL_FILES[fl2va]="$subpath"
+
   entry="$(_pick_for_tier "$tier" H3_DIFFUSION_REF2VA)"
-  H3_MODEL_FILES[ref2va]="${entry%%|*}"
+  IFS='|' read -r repo subpath size <<< "$entry"
+  H3_MODEL_REPO[ref2va]="$repo"; H3_MODEL_FILES[ref2va]="$subpath"
+
   entry="$(_pick_for_tier "$tier" H3_TEXT_ENCODER)"
-  H3_MODEL_FILES[text_encoder]="${entry%%|*}"
+  IFS='|' read -r repo subpath size <<< "$entry"
+  H3_MODEL_REPO[text_encoder]="$repo"; H3_MODEL_FILES[text_encoder]="$subpath"
 
   for entry in "${H3_VAE[@]}"; do
-    case "$entry" in
-      *video_vae*) H3_MODEL_FILES[video_vae]="$entry" ;;
-      *audio_vae*) H3_MODEL_FILES[audio_vae]="$entry" ;;
+    IFS='|' read -r repo subpath <<< "$entry"
+    case "$subpath" in
+      *video_vae*) H3_MODEL_REPO[video_vae]="$repo"; H3_MODEL_FILES[video_vae]="$subpath" ;;
+      *audio_vae*) H3_MODEL_REPO[audio_vae]="$repo"; H3_MODEL_FILES[audio_vae]="$subpath" ;;
     esac
   done
 }
@@ -240,16 +289,20 @@ download_civitai_model() {
 }
 
 # --- Dispatcher source pour les modèles de diffusion -------------------------
-# download_diffusion_model <hf_subpath> <base_dir> <civitai_url> <source>
+# download_diffusion_model <repo> <hf_subpath> <base_dir> <civitai_url> <source>
 # Route vers HuggingFace (comportement historique, inchangé) ou CivitAI selon
-# MODEL_SOURCE. Le nom de fichier final est toujours identique quel que soit
-# la source (dérivé du sous-chemin HuggingFace), donc aucun autre script
-# (workflows, verify, etc.) n'a besoin de savoir d'où vient le fichier.
+# MODEL_SOURCE. <repo> vient de H3_MODEL_REPO[key] (résolu pour le palier
+# actif par build_h3_model_manifest()) — plus de dépendance à H3_HF_REPO en
+# dur ici, cf. architecture multi-dépôts. Le nom de fichier final est
+# toujours identique quel que soit la source (dérivé du sous-chemin
+# HuggingFace), donc aucun autre script (workflows, verify, etc.) n'a besoin
+# de savoir d'où vient le fichier.
 download_diffusion_model() {
-  local hf_subpath="$1"
-  local base="$2"
-  local civitai_url="$3"
-  local source="$4"
+  local repo="$1"
+  local hf_subpath="$2"
+  local base="$3"
+  local civitai_url="$4"
+  local source="$5"
 
   if [[ "$source" == "civitai" ]]; then
     local filename; filename="$(basename "$hf_subpath")"
@@ -263,7 +316,7 @@ download_diffusion_model() {
     # mkdir -p reste utile en amont : garantit le sous-dossier même si l'outil
     # HF ne le crée pas lui-même.
     mkdir -p "${base}/$(dirname "$hf_subpath")"
-    download_hf_file "$H3_HF_REPO" "$hf_subpath" "$base"
+    download_hf_file "$repo" "$hf_subpath" "$base"
   fi
 }
 
@@ -354,11 +407,14 @@ fetch_hf_sha256() {
   echo "$sha"
 }
 
-# get_expected_sha256 <key> <hf_subpath> -> SHA256 attendu sur stdout, ou
-# rien (et code 1) si aucun n'est disponible. Voir priorité ci-dessus.
+# get_expected_sha256 <key> <repo> <hf_subpath> -> SHA256 attendu sur stdout,
+# ou rien (et code 1) si aucun n'est disponible. Voir priorité ci-dessus.
+# <repo> vient de H3_MODEL_REPO[key] côté appelant (architecture
+# multi-dépôts) — plus de dépendance à H3_HF_REPO en dur ici.
 get_expected_sha256() {
   local key="$1"
-  local hf_subpath="$2"
+  local repo="$2"
+  local hf_subpath="$3"
 
   if [[ -n "${MODEL_SHA256[$key]:-}" ]]; then
     echo "${MODEL_SHA256[$key]}"
@@ -366,7 +422,7 @@ get_expected_sha256() {
   fi
 
   if [[ "$H3_VERIFY_SHA256_ONLINE" == "true" ]]; then
-    fetch_hf_sha256 "$H3_HF_REPO" "$hf_subpath"
+    fetch_hf_sha256 "$repo" "$hf_subpath"
     return $?
   fi
 
@@ -443,7 +499,10 @@ collect_missing_models() {
     label="${H3_MODEL_LABELS[$key]}"
     # $path est déjà le sous-chemin relatif au dépôt HF (identique à
     # H3_MODEL_FILES), donc réutilisable tel quel pour un éventuel fetch.
-    expected_sha256="$(get_expected_sha256 "$key" "$path" || true)"
+    # H3_MODEL_REPO[$key] fournit le dépôt correspondant (architecture
+    # multi-dépôts) — résolu par build_h3_model_manifest() pour le palier
+    # actif, appelée avant collect_missing_models().
+    expected_sha256="$(get_expected_sha256 "$key" "${H3_MODEL_REPO[$key]}" "$path" || true)"
 
     if model_is_valid "$full_path" "$min_bytes" "$expected_sha256"; then
       echo "✓ ${label}"
@@ -472,6 +531,30 @@ any_model_missing() {
     [[ "${H3_MODEL_MISSING[$key]:-true}" == "true" ]] && return 0
   done
   return 1
+}
+
+# h3_required_repos <workflows_csv> -> liste dédoublonnée (une par ligne, via
+# echo "${arr[*]}") des dépôts HuggingFace réellement nécessaires : modèles
+# manquants (H3_MODEL_MISSING) ET requis par les workflows sélectionnés
+# (fl2va pour t2v/i2v, ref2va pour r2v — text encoder et VAE toujours
+# requis). Seule fonction qui décide "quels dépôts contacter" pour la
+# vérification de licence — hf_check_required_access() (lib/huggingface.sh)
+# n'a plus besoin de connaître H3_HF_REPO/H3_HF_REPO_INT4 individuellement.
+h3_required_repos() {
+  local workflows="$1"
+  local -A seen=()
+  local -a repos=()
+  local key repo
+
+  for key in "${H3_MODEL_KEYS[@]}"; do
+    [[ "$key" == "fl2va" ]] && ! _workflow_needs "$workflows" t2v i2v && continue
+    [[ "$key" == "ref2va" ]] && ! _workflow_needs "$workflows" r2v && continue
+    [[ "${H3_MODEL_MISSING[$key]:-true}" == "true" ]] || continue
+    repo="${H3_MODEL_REPO[$key]:-}"
+    [[ -n "$repo" && -z "${seen[$repo]:-}" ]] && { seen[$repo]=1; repos+=("$repo"); }
+  done
+
+  echo "${repos[*]}"
 }
 
 # need_hf_download <model_source> <workflows_csv>
@@ -509,8 +592,8 @@ need_civitai_download() {
 
 # download_missing_models <base_dir> <model_source> <workflows_csv>
 # Ne télécharge que les modèles marqués manquants dans H3_MODEL_MISSING ET
-# requis par les workflows sélectionnés. N'appelle hf_check_h3_access() que
-# si need_hf_download() est vrai, et ne lance jamais curl (CivitAI) si les
+# requis par les workflows sélectionnés. N'appelle hf_check_required_access()
+# que si need_hf_download() est vrai, et ne lance jamais curl (CivitAI) si les
 # modèles de diffusion sont déjà valides ou pas requis.
 # Les chemins téléchargés viennent uniquement de H3_MODEL_FILES (déjà résolu
 # pour le palier actif par build_h3_model_manifest()) — aucun second appel à
@@ -532,9 +615,12 @@ download_missing_models() {
   fi
 
   if need_hf_download "$model_source" "$workflows"; then
-    if ! hf_check_h3_access; then
-      log_error "Téléchargement des modèles annulé : accès au dépôt non confirmé."
-      log_error "Acceptez la licence puis relancez : bash install.sh --only-models"
+    local -a required_repos=()
+    # shellcheck disable=SC2207
+    required_repos=($(h3_required_repos "$workflows"))
+    if ! hf_check_required_access "${required_repos[@]}"; then
+      log_error "Téléchargement des modèles annulé : accès à au moins un dépôt non confirmé."
+      log_error "Acceptez la licence sur le(s) dépôt(s) concerné(s) puis relancez : bash install.sh --only-models"
       return 1
     fi
   fi
@@ -558,32 +644,35 @@ download_missing_models() {
   export DOWNLOAD_FILE_INDEX=0
 
   if _workflow_needs "$workflows" t2v i2v && [[ "${H3_MODEL_MISSING[fl2va]}" == "true" ]]; then
-    download_diffusion_model "${H3_MODEL_FILES[fl2va]}" "$base" "$H3_CIVITAI_FL2VA_URL" "$model_source"
+    download_diffusion_model "${H3_MODEL_REPO[fl2va]}" "${H3_MODEL_FILES[fl2va]}" "$base" "$H3_CIVITAI_FL2VA_URL" "$model_source"
   fi
 
   if _workflow_needs "$workflows" r2v && [[ "${H3_MODEL_MISSING[ref2va]}" == "true" ]]; then
-    download_diffusion_model "${H3_MODEL_FILES[ref2va]}" "$base" "$H3_CIVITAI_REF2VA_URL" "$model_source"
+    download_diffusion_model "${H3_MODEL_REPO[ref2va]}" "${H3_MODEL_FILES[ref2va]}" "$base" "$H3_CIVITAI_REF2VA_URL" "$model_source"
   fi
 
   # Text Encoder et VAE restent toujours servis par HuggingFace, quel que
   # soit MODEL_SOURCE (CivitAI ne les propose pas), et sont toujours requis
-  # quels que soient les workflows sélectionnés.
+  # quels que soient les workflows sélectionnés. Repo résolu individuellement
+  # par clé (H3_MODEL_REPO) plutôt que le H3_HF_REPO global — les trois
+  # viennent aujourd'hui du même dépôt Comfy-Org, mais rien ici ne le suppose
+  # plus en dur.
   # download_hf_file() reçoit ici la racine models/ (voir download_diffusion_model()
   # ci-dessus) : `hf download --local-dir` reconstruit lui-même le sous-dossier
   # (text_encoders/, vae/...), mkdir -p le garantit en amont par sécurité.
   if [[ "${H3_MODEL_MISSING[text_encoder]}" == "true" ]]; then
     mkdir -p "${base}/$(dirname "${H3_MODEL_FILES[text_encoder]}")"
-    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[text_encoder]}" "$base"
+    download_hf_file "${H3_MODEL_REPO[text_encoder]}" "${H3_MODEL_FILES[text_encoder]}" "$base"
   fi
 
   if [[ "${H3_MODEL_MISSING[video_vae]}" == "true" ]]; then
     mkdir -p "${base}/$(dirname "${H3_MODEL_FILES[video_vae]}")"
-    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[video_vae]}" "$base"
+    download_hf_file "${H3_MODEL_REPO[video_vae]}" "${H3_MODEL_FILES[video_vae]}" "$base"
   fi
 
   if [[ "${H3_MODEL_MISSING[audio_vae]}" == "true" ]]; then
     mkdir -p "${base}/$(dirname "${H3_MODEL_FILES[audio_vae]}")"
-    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[audio_vae]}" "$base"
+    download_hf_file "${H3_MODEL_REPO[audio_vae]}" "${H3_MODEL_FILES[audio_vae]}" "$base"
   fi
 
   echo "------------------------------------------------"
@@ -611,6 +700,20 @@ download_h3_models() {
       model_source="huggingface"
       ;;
   esac
+
+  # CivitAI n'héberge que les poids "pruned INT8 ConvRot" — depuis
+  # l'introduction du palier light en INT4Q (dépôt tiers HuggingFace, voir
+  # H3_HF_REPO_INT4 dans config.env), ces poids correspondent au palier
+  # "balanced", plus à "light". Refus explicite plutôt qu'un mauvais fichier
+  # téléchargé sous le mauvais nom : ce n'était pas vérifié avant (le code
+  # supposait implicitement que CivitAI == palier light).
+  if [[ "$model_source" == "civitai" && "$tier" != "balanced" ]]; then
+    log_error "MODEL_SOURCE=civitai n'est disponible que pour --tier=balanced."
+    log_error "CivitAI héberge uniquement les poids pruned INT8 ConvRot (palier balanced) —"
+    log_error "le palier '${tier}' n'y est pas disponible. Utilisez --tier=balanced avec CivitAI,"
+    log_error "ou MODEL_SOURCE=huggingface (défaut) pour '${tier}'."
+    return 1
+  fi
 
   echo "------------------------------------------------"
   if [[ "$model_source" == "civitai" ]]; then
