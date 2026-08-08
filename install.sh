@@ -106,7 +106,6 @@ fi
 run_step "comfyui_cloned"     clone_or_update_comfyui     "$FORCE"
 run_step "python_venv"        setup_python_venv          "$FORCE"
 run_step "comfyui_requirements" install_comfyui_requirements "$FORCE"
-install_comfy_kitchen_pep585_shim
 install_extra_requirements
 run_step "manager_installed"  install_or_update_manager   "$FORCE"
 run_step "optional_nodes"     install_optional_nodes      "$FORCE"

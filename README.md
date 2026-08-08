@@ -169,32 +169,6 @@ is currently pointing. Leave it empty to keep tracking the branch as before.
 
 ---
 
-# 🩹 comfy_kitchen / PyTorch compatibility shim (temporary)
-
-`master` ComfyUI pins `comfy-kitchen` by exact version and bumps it often.
-Some recent versions crash ComfyUI on startup with:
-
-```
-ValueError: infer_schema(func): Parameter kernel_size has unsupported type
-list[int]. The valid types are: dict_keys([... typing.List[int] ...])
-```
-
-This is `torch.library.custom_op` schema inference not recognizing PEP 585
-generics (`list[int]`) — only `typing.List[int]` — see
-[pytorch/pytorch#146594](https://github.com/pytorch/pytorch/issues/146594).
-The installer works around this automatically by dropping
-[`patches/sitecustomize.py`](patches/sitecustomize.py) into the venv's
-`site-packages` right after installing ComfyUI's Python dependencies — it
-patches nothing on disk in torch/comfy_kitchen/ComfyUI, only completes the
-type table in memory at Python startup. Controlled by `config.env`:
-
-```bash
-COMFY_KITCHEN_PEP585_SHIM=auto   # default: installed
-COMFY_KITCHEN_PEP585_SHIM=false  # disable once fixed upstream
-```
-
----
-
 # 🎨 Installing and managing LoRAs
 
 ```bash

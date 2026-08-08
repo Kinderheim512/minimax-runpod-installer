@@ -83,21 +83,6 @@ Changes since `v1.1.0`, not yet tagged.
   (open `huggingface_hub`/`xet-core` bugs, not specific to this
   installer).
 
-### 🩹 comfy_kitchen / PyTorch PEP585 shim (temporary)
-
-- `patches/sitecustomize.py` + `install_comfy_kitchen_pep585_shim()` (new,
-  `lib/python.sh`), deployed into the venv's `site-packages` right after
-  `install_comfyui_requirements`, controlled by `COMFY_KITCHEN_PEP585_SHIM`
-  (`auto`/`true`/`false` in `config.env`, `auto` = installed by default).
-  Works around a ComfyUI `master` regression where some `comfy_kitchen`
-  eager-backend kernels annotate parameters as `list[int]` (PEP 585), a form
-  `torch.library.custom_op`'s schema inference doesn't recognize (only
-  `typing.List[int]`), crashing ComfyUI on import
-  (`comfy.utils` → `comfy.memory_management` → `comfy.quant_ops` →
-  `comfy_kitchen`). See `patches/sitecustomize.py` for the exact upstream
-  tickets tracked and removal instructions — modifies neither torch,
-  `comfy_kitchen`, nor ComfyUI itself; safe to disable once fixed upstream.
-
 ### 🔒 Reproducibility
 
 - Optional `COMFYUI_COMMIT` in `config.env`: when set, `install.sh` /
