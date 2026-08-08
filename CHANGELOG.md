@@ -56,6 +56,33 @@ Changes since `v1.1.0`, not yet tagged.
 - Downloaded files are checked to actually be `.safetensors` (not an HTML
   error/login page saved under that name) before being accepted.
 
+### 📥 Downloads
+
+- Hugging Face downloads now go exclusively through `hf download` /
+  `huggingface-cli download` (native Xet protocol). The aria2c path and its
+  fallback-to-`hf`-on-failure have been removed: aria2c only ever followed
+  the `resolve/main/...` redirect to Hugging Face's legacy LFS bridge, a
+  single presigned URL with a short (~1h) expiry — usually fine, but prone
+  to random `403`s near the end of very large (tens of GB) downloads, with
+  a confusing mid-transfer switch to a second progress bar. `hf download`
+  avoids this entirely: the Xet protocol fetches large files as many
+  short-lived presigned URLs (one per ~64 MB block), requested throughout
+  the transfer instead of once upfront.
+- `USE_ARIA2` / `ARIA2_CONNECTIONS` removed from `config.env` (no longer
+  used). `aria2c` remains installed at the system level
+  (`lib/system.sh`) but is no longer wired into any download path.
+  CivitAI, LoRA, and other direct-URL downloads are unaffected — they
+  already used `curl` exclusively.
+- `HF_HUB_ENABLE_HF_TRANSFER` and the `hf_transfer` dependency removed
+  (`config.env`, `lib/download.sh`, `lib/optimization.sh`,
+  `requirements.txt`): deprecated and a silent no-op now that `hf_xet` is
+  installed by default (`huggingface_hub>=0.32.0`) — all transfers already
+  go through the Xet protocol, governed by `HF_XET_HIGH_PERFORMANCE`.
+- Known upstream limitation documented in `TROUBLESHOOTING.md`: `hf
+  download` resume on very large interrupted files is currently unreliable
+  (open `huggingface_hub`/`xet-core` bugs, not specific to this
+  installer).
+
 ### 🛠 Reliability / maintenance
 
 - Optional SHA256 verification for MiniMax H3 models (`MODEL_SHA256` in

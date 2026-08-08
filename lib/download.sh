@@ -2,16 +2,20 @@
 # lib/download.sh — téléchargement générique depuis Hugging Face, avec reprise,
 # vérification de taille, et somme SHA256 optionnelle.
 #
-# Deux chemins possibles :
-#   1) `hf download` / `huggingface-cli download` (par défaut) — gère
-#      l'authentification, le cache, la reprise et l'intégrité nativement.
-#   2) aria2c en téléchargement multi-connexions sur l'URL resolve/ signée par
-#      le token de l'utilisateur (USE_ARIA2=true) — plus rapide sur gros
-#      fichiers, reprise via `-c`. Retombe sur (1) en cas d'échec.
+# Utilise exclusivement `hf download` / `huggingface-cli download` : ces
+# outils parlent nativement le protocole Xet (API de reconstruction CAS +
+# URLs présignées par bloc de ~64 Mo, renouvelées au fil du téléchargement)
+# plutôt qu'une URL unique obtenue une fois puis réutilisée jusqu'au bout.
+# C'est ce qui les rend fiables sur les très gros fichiers (dizaines de Go) :
+# aria2c a été retiré de ce chemin car il ne fait que suivre la redirection
+# HTTP de `resolve/main/...`, ce qui bascule sur le pont LFS legacy avec une
+# URL présignée à durée de vie courte (~1h) — suffisant pour la majorité du
+# transfert, mais pouvant expirer en toute fin de téléchargement sur un gros
+# fichier, d'où des 403 aléatoires vers 90-95%. Voir CHANGELOG.md.
 #
-# Dans les deux cas, la licence du dépôt doit déjà avoir été acceptée par
-# l'utilisateur sur huggingface.co — voir lib/huggingface.sh. Rien ici ne
-# contourne un accès gated : un token sans accès obtient un 401/403, point.
+# La licence du dépôt doit déjà avoir été acceptée par l'utilisateur sur
+# huggingface.co — voir lib/huggingface.sh. Rien ici ne contourne un accès
+# gated : un token sans accès obtient un 401/403, point.
 
 remote_content_length() {
   # remote_content_length <repo> <path_dans_repo>
@@ -76,11 +80,6 @@ download_hf_file() {
   while (( attempt <= DOWNLOAD_MAX_RETRIES )); do
     [[ "$attempt" -gt 1 ]] && log_info "Nouvelle tentative pour ${filename} (${attempt}/${DOWNLOAD_MAX_RETRIES})..."
 
-    if [[ "$USE_ARIA2" == "true" ]] && require_cmd aria2c; then
-      _download_via_aria2 "$repo" "$path" "$dest_dir" && break
-      log_warn "aria2c a échoué, repli sur ${HF_CLI:-hf}."
-    fi
-
     _download_via_hf_cli "$repo" "$path" "$dest_dir" && break
 
     ((attempt++))
@@ -102,7 +101,6 @@ _download_via_hf_cli() {
   local dest_file="${dest_dir}/${filename}"
   # shellcheck disable=SC1091
   source "${VENV_DIR}/bin/activate"
-  export HF_HUB_ENABLE_HF_TRANSFER=1   # legacy accelerator, ignoré (avec avertissement) par les versions récentes de huggingface_hub
   export HF_XET_HIGH_PERFORMANCE=1     # accélérateur Xet actuel
   # `hf`/`huggingface-cli download` affichent nativement une barre par
   # fichier (tqdm/rich) avec nom, %, taille téléchargée/totale, débit et ETA
@@ -136,38 +134,4 @@ _download_via_hf_cli() {
   fi
   deactivate
   [[ "$ok" == "1" ]]
-}
-
-_download_via_aria2() {
-  local repo="$1" path="$2" dest_dir="$3"
-  local filename; filename="$(basename "$path")"
-  local url="https://huggingface.co/${repo}/resolve/main/${path}"
-  local sub_dir; sub_dir="$(dirname "$path")"
-  local out_dir="$dest_dir"
-  [[ "$sub_dir" != "." ]] && out_dir="${dest_dir}"
-  mkdir -p "$out_dir"
-
-  local token="${HF_TOKEN}"
-  if [[ -z "$token" ]]; then
-    # shellcheck disable=SC1091
-    source "${VENV_DIR}/bin/activate"
-    token="$(python -c 'from huggingface_hub import HfFolder; print(HfFolder.get_token() or "")' 2>/dev/null)"
-    deactivate
-  fi
-
-  local header_arg=()
-  [[ -n "$token" ]] && header_arg=(--header="Authorization: Bearer ${token}")
-
-  # aria2c affiche nativement, par défaut, une ligne de progression avec %,
-  # taille téléchargée/totale, débit (DL:) et ETA — on se contente de la
-  # laisser remonter jusqu'au terminal via run_with_progress() au lieu de
-  # l'avaler dans le log (comportement précédent). --summary-interval=2
-  # (au lieu de 30) rapproche ces mises à jour d'un affichage en temps réel
-  # dans le cas (courant en pipe) où aria2c retombe sur un rendu ligne par
-  # ligne plutôt qu'un redessin en place — voir run_with_progress().
-  run_with_progress -- aria2c -x "$ARIA2_CONNECTIONS" -s "$ARIA2_CONNECTIONS" -c \
-    "${header_arg[@]}" \
-    -d "$out_dir" -o "$filename" \
-    --summary-interval=2 --console-log-level=warn \
-    "$url"
 }

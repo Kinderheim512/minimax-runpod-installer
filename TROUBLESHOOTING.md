@@ -109,6 +109,19 @@ native resume) and files are validated by size (and SHA256 if configured in
 terminal disconnects are the recurring cause — `bootstrap.sh` already runs
 everything inside a persistent tmux session by default.
 
+**Known upstream issue (Hugging Face downloads only):** `hf download`
+resume is currently unreliable on very large interrupted files — as of this
+writing there's an open, unresolved bug in `huggingface_hub` where
+re-running after an interruption can restart from near the beginning
+instead of resuming
+([huggingface_hub#4196](https://github.com/huggingface/huggingface_hub/issues/4196),
+related: [xet-core#321](https://github.com/huggingface/xet-core/issues/321)).
+This comes from the `hf`/`huggingface_hub` tooling itself, not from this
+installer — re-running `bash install.sh --only-models` is still the correct
+recovery step, just be aware it may re-download more than expected on a
+large (tens-of-GB) Text Encoder/VAE file rather than a quick top-up.
+CivitAI/LoRA downloads (`curl -C -`) are not affected by this.
+
 ---
 
 ## LoRA not visible in ComfyUI

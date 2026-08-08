@@ -300,7 +300,7 @@ install_extra_requirements() {
     python -m pip install -U hf_xet
     deactivate
 
-    log_ok "Dépendances additionnelles (Hugging Face CLI, hf_transfer, hf_xet...) installées."
+    log_ok "Dépendances additionnelles (Hugging Face CLI, hf_xet...) installées."
 }
 
 ################################################################################

@@ -14,7 +14,6 @@ compute_optimization_flags() {
   local env_vars=()
 
   env_vars+=("PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True")
-  env_vars+=("HF_HUB_ENABLE_HF_TRANSFER=1")
   env_vars+=("HF_XET_HIGH_PERFORMANCE=1")
 
   # --- gestion mémoire selon la VRAM -------------------------------------

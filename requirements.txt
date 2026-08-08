@@ -6,5 +6,4 @@
 # choisie par ComfyUI lui-même.
 
 huggingface_hub>=0.26.0
-hf_transfer>=0.1.6
 packaging>=23.0

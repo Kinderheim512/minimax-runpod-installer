@@ -142,7 +142,7 @@ in `ComfyUI/user/default/workflows/`) after install — no manual import.
 - ComfyUI-VideoHelperSuite
 - Spectrum MiniMax H3 (optional acceleration node, see below)
 - PyTorch + torchvision + torchaudio, matched to your detected CUDA runtime
-- Hugging Face CLI, `hf_transfer`, `hf_xet`
+- Hugging Face CLI, `hf_xet`
 - System packages: git, git-lfs, wget, curl, aria2, ffmpeg, tmux, unzip,
   Python 3 + venv/pip, build-essential
 
@@ -262,7 +262,7 @@ the installer only warns, it doesn't block on an unrecognized card.
 │   ├── manager.sh           # ComfyUI-Manager install/update
 │   ├── nodes.sh              # optional custom nodes (VideoHelperSuite, Spectrum, ...)
 │   ├── huggingface.sh        # HF auth + gated-repo access check
-│   ├── download.sh           # generic HF file download (aria2/hf-cli, resume, verify)
+│   ├── download.sh           # generic HF file download (hf-cli, resume, verify)
 │   ├── models.sh             # H3 tier/workflow resolution, manifest, download orchestration
 │   ├── workflows.sh          # copies workflow JSON matching the current selection
 │   ├── optimization.sh       # GPU-tuned ComfyUI launch flags
