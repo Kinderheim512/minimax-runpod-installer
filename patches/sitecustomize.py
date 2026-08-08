@@ -31,14 +31,52 @@
 #   rm "$(source venv/bin/activate && python -c \
 #     'import sysconfig; print(sysconfig.get_paths()["purelib"])')/sitecustomize.py"
 
+# ------------------------------------------------------------------------
+# BLOC DE DIAGNOSTIC TEMPORAIRE — instrumentation, ne PAS retirer tant que
+# l'hypothèse "le shim s'exécute mais n'a aucun effet" n'est pas tranchée.
+# Écrit à la fois sur stderr ET dans un fichier à chemin fixe
+# (/tmp/comfy_kitchen_pep585_shim_debug.log), au cas où le stderr de
+# ComfyUI serait redirigé/filtré ailleurs avant d'arriver à l'écran.
+# ------------------------------------------------------------------------
+import sys as _sys
+
+_DEBUG_LOG_PATH = "/tmp/comfy_kitchen_pep585_shim_debug.log"
+
+
+def _debug(msg):
+    line = f"[comfy_kitchen_pep585_shim] {msg}"
+    try:
+        print(line, file=_sys.stderr, flush=True)
+    except Exception:
+        pass
+    try:
+        with open(_DEBUG_LOG_PATH, "a") as _f:
+            _f.write(line + "\n")
+    except Exception:
+        pass
+
+
+_debug(f"=== shim: sitecustomize.py démarre (pid={__import__('os').getpid()}) ===")
+_debug(f"sys.executable = {_sys.executable}")
+_debug(f"__file__       = {__file__}")
+
 try:
     import typing
     from types import GenericAlias
 
+    _debug("import torch._library.infer_schema ...")
     import torch._library.infer_schema as _infer_schema
 
+    _debug(f"torch.__version__ = {__import__('torch').__version__}")
+
     _SUPPORTED = _infer_schema.SUPPORTED_PARAM_TYPES
+    _debug(f"SUPPORTED_PARAM_TYPES: id={id(_SUPPORTED)}, {len(_SUPPORTED)} entrées avant patch")
+
+    _target = list[int]
+    _debug(f"list[int] présent AVANT patch ? {_target in _SUPPORTED}")
+
     _bridged = 0
+    _added_keys = []
 
     for _typing_key, _schema_str in list(_SUPPORTED.items()):
         _origin = typing.get_origin(_typing_key)
@@ -49,6 +87,11 @@ try:
                 if _builtin_key not in _SUPPORTED:
                     _SUPPORTED[_builtin_key] = _schema_str
                     _bridged += 1
+                    _added_keys.append(str(_builtin_key))
+
+    _debug(f"alias PEP585 ajoutés : {_bridged} -> {_added_keys}")
+    _debug(f"list[int] présent APRÈS patch ? {_target in _SUPPORTED}")
+    _debug(f"SUPPORTED_PARAM_TYPES: id={id(_SUPPORTED)} (doit être identique à avant), {len(_SUPPORTED)} entrées après patch")
 
     if _bridged:
         import logging
@@ -61,7 +104,13 @@ try:
             _bridged,
         )
 
+    _debug("=== shim: fin d'exécution sans exception ===")
+
 except Exception:
+    import traceback
+
+    _debug("=== shim: EXCEPTION pendant l'exécution du patch ===")
+    _debug(traceback.format_exc())
     # Ne jamais faire échouer le démarrage de Python à cause de ce correctif
     # best-effort : si torch n'est pas encore importable à ce stade, ou si sa
     # structure interne a changé entre versions, on laisse simplement passer.
