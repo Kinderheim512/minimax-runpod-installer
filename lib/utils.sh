@@ -101,8 +101,14 @@ human_gb() {
 # téléchargements — ce sont les seuls endroits qui savent combien de fichiers
 # restent à récupérer pour la session en cours. Par défaut (0), announce_download()
 # affiche juste le nom du fichier, sans compteur "i/N".
-DOWNLOAD_FILE_INDEX="${DOWNLOAD_FILE_INDEX:-0}"
-DOWNLOAD_FILE_TOTAL="${DOWNLOAD_FILE_TOTAL:-0}"
+# Exportées ici et dans lib/models.sh : tous les lib/*.sh sont sourcés dans le
+# même process (install.sh), donc l'export n'est pas nécessaire pour un
+# sous-processus — mais c'est le signal que ShellCheck reconnaît pour une
+# variable assignée dans un fichier et lue dans un autre (SC2034 : "Verify
+# use (or export if used externally)"), ce qui évite un disable=SC2034 alors
+# que l'usage est réel.
+export DOWNLOAD_FILE_INDEX="${DOWNLOAD_FILE_INDEX:-0}"
+export DOWNLOAD_FILE_TOTAL="${DOWNLOAD_FILE_TOTAL:-0}"
 
 # announce_download <nom_de_fichier>
 # Affiche un en-tête "[i/N] nom_de_fichier" avant de lancer un téléchargement

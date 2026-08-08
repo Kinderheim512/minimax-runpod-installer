@@ -58,10 +58,19 @@ verify_local_file() {
 }
 
 download_hf_file() {
-  # download_hf_file <repo> <path_dans_repo> <dossier_destination>
+  # download_hf_file <repo> <path_dans_repo> <dossier_racine_destination>
+  # <dossier_racine_destination> doit être la racine sous laquelle `hf
+  # download`/`huggingface-cli download --local-dir` reconstruit lui-même le
+  # sous-chemin du dépôt (ex. models/, pas models/diffusion_models/) : ces
+  # outils répliquent le chemin relatif complet du dépôt sous --local-dir
+  # (documenté : "the file structure from the repo will be replicated in
+  # this location"). Contrat différent de l'ancien téléchargement aria2c, qui
+  # écrivait vers un fichier fixe dest_dir/filename sans reconstruire aucune
+  # arborescence lui-même — d'où un double sous-dossier si l'appelant fournit
+  # déjà le dossier final. Voir CHANGELOG.md.
   local repo="$1" path="$2" dest_dir="$3"
   local filename; filename="$(basename "$path")"
-  local dest_file="${dest_dir}/${filename}"
+  local dest_file="${dest_dir}/${path}"
 
   mkdir -p "$dest_dir"
 
@@ -98,7 +107,7 @@ download_hf_file() {
 _download_via_hf_cli() {
   local repo="$1" path="$2" dest_dir="$3"
   local filename; filename="$(basename "$path")"
-  local dest_file="${dest_dir}/${filename}"
+  local dest_file="${dest_dir}/${path}"
   # shellcheck disable=SC1091
   source "${VENV_DIR}/bin/activate"
   export HF_XET_HIGH_PERFORMANCE=1     # accélérateur Xet actuel

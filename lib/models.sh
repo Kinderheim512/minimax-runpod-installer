@@ -255,13 +255,15 @@ download_diffusion_model() {
     local filename; filename="$(basename "$hf_subpath")"
     download_civitai_model "$civitai_url" "${base}/diffusion_models/${filename}"
   else
-    # download_hf_file() écrit le fichier dans <dest_dir>/$(basename subpath) :
-    # elle ne recrée PAS elle-même l'arborescence du dépôt HF (diffusion_models/,
-    # text_encoders/, vae/...). C'est à l'appelant de fournir le sous-dossier
-    # final, sous peine de tout aplatir dans models/ (bug corrigé ici).
-    local dest_subdir; dest_subdir="$(dirname "$hf_subpath")"
-    mkdir -p "${base}/${dest_subdir}"
-    download_hf_file "$H3_HF_REPO" "$hf_subpath" "${base}/${dest_subdir}"
+    # download_hf_file() délègue à `hf download --local-dir`, qui reconstruit
+    # lui-même le sous-chemin complet du dépôt (diffusion_models/, text_encoders/,
+    # vae/...) sous le dossier racine fourni — donc c'est bien la racine
+    # models/ qu'il faut passer ici, pas le sous-dossier final (sous peine de
+    # double dossier diffusion_models/diffusion_models/, bug corrigé ici).
+    # mkdir -p reste utile en amont : garantit le sous-dossier même si l'outil
+    # HF ne le crée pas lui-même.
+    mkdir -p "${base}/$(dirname "$hf_subpath")"
+    download_hf_file "$H3_HF_REPO" "$hf_subpath" "$base"
   fi
 }
 
@@ -550,8 +552,10 @@ download_missing_models() {
   [[ "${H3_MODEL_MISSING[text_encoder]}" == "true" ]] && dl_total=$((dl_total + 1))
   [[ "${H3_MODEL_MISSING[video_vae]}" == "true" ]] && dl_total=$((dl_total + 1))
   [[ "${H3_MODEL_MISSING[audio_vae]}" == "true" ]] && dl_total=$((dl_total + 1))
-  DOWNLOAD_FILE_TOTAL="$dl_total"
-  DOWNLOAD_FILE_INDEX=0
+  # Exportées : lues par announce_download() dans lib/utils.sh, pas dans ce
+  # fichier — voir le commentaire sur leur déclaration dans lib/utils.sh.
+  export DOWNLOAD_FILE_TOTAL="$dl_total"
+  export DOWNLOAD_FILE_INDEX=0
 
   if _workflow_needs "$workflows" t2v i2v && [[ "${H3_MODEL_MISSING[fl2va]}" == "true" ]]; then
     download_diffusion_model "${H3_MODEL_FILES[fl2va]}" "$base" "$H3_CIVITAI_FL2VA_URL" "$model_source"
@@ -564,19 +568,22 @@ download_missing_models() {
   # Text Encoder et VAE restent toujours servis par HuggingFace, quel que
   # soit MODEL_SOURCE (CivitAI ne les propose pas), et sont toujours requis
   # quels que soient les workflows sélectionnés.
+  # download_hf_file() reçoit ici la racine models/ (voir download_diffusion_model()
+  # ci-dessus) : `hf download --local-dir` reconstruit lui-même le sous-dossier
+  # (text_encoders/, vae/...), mkdir -p le garantit en amont par sécurité.
   if [[ "${H3_MODEL_MISSING[text_encoder]}" == "true" ]]; then
     mkdir -p "${base}/$(dirname "${H3_MODEL_FILES[text_encoder]}")"
-    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[text_encoder]}" "${base}/$(dirname "${H3_MODEL_FILES[text_encoder]}")"
+    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[text_encoder]}" "$base"
   fi
 
   if [[ "${H3_MODEL_MISSING[video_vae]}" == "true" ]]; then
     mkdir -p "${base}/$(dirname "${H3_MODEL_FILES[video_vae]}")"
-    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[video_vae]}" "${base}/$(dirname "${H3_MODEL_FILES[video_vae]}")"
+    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[video_vae]}" "$base"
   fi
 
   if [[ "${H3_MODEL_MISSING[audio_vae]}" == "true" ]]; then
     mkdir -p "${base}/$(dirname "${H3_MODEL_FILES[audio_vae]}")"
-    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[audio_vae]}" "${base}/$(dirname "${H3_MODEL_FILES[audio_vae]}")"
+    download_hf_file "$H3_HF_REPO" "${H3_MODEL_FILES[audio_vae]}" "$base"
   fi
 
   echo "------------------------------------------------"
