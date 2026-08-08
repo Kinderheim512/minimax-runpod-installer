@@ -24,7 +24,43 @@ clone_or_update_comfyui() {
     log_ok "ComfyUI cloné."
   fi
 
+  pin_comfyui_commit
+
   print_comfyui_version
+}
+
+# Épinglage optionnel sur un commit précis (COMFYUI_COMMIT dans config.env).
+# No-op si la variable est vide : comportement par défaut inchangé (on reste
+# sur le dernier commit de ${COMFYUI_BRANCH}, cf. clone_or_update_comfyui /
+# update_comfyui ci-dessus). Appelé juste après le clone ou la mise à jour,
+# donc après que ${COMFYUI_BRANCH} a déjà été mis à jour le cas échéant.
+pin_comfyui_commit() {
+  [[ -n "${COMFYUI_COMMIT:-}" ]] || return 0
+
+  log_step "Épinglage de ComfyUI au commit ${COMFYUI_COMMIT}"
+
+  local dirty
+  dirty="$(git -C "$INSTALL_DIR" status --porcelain 2>/dev/null || true)"
+  if [[ -n "$dirty" ]]; then
+    log_warn "Des modifications locales existent dans ${INSTALL_DIR} — checkout du commit épinglé sauté pour ne rien écraser."
+    log_warn "Lancez 'git stash' manuellement dans ce dossier puis relancez install.sh si vous voulez forcer le checkout."
+    return 0
+  fi
+
+  # Le commit demandé peut ne pas encore être présent localement (clone peu
+  # profond, ou commit plus récent que le dernier fetch) : on le récupère
+  # explicitement avant le checkout plutôt que de supposer qu'il y est déjà.
+  if ! retry "$DOWNLOAD_MAX_RETRIES" git -C "$INSTALL_DIR" fetch origin "$COMFYUI_COMMIT" >>"$LOG_FILE" 2>&1; then
+    log_warn "Échec du fetch explicite du commit ${COMFYUI_COMMIT} — tentative de checkout direct (peut-être déjà présent localement)."
+  fi
+
+  if ! git -C "$INSTALL_DIR" checkout "$COMFYUI_COMMIT" >>"$LOG_FILE" 2>&1; then
+    log_error "Impossible de checkout le commit ComfyUI épinglé (${COMFYUI_COMMIT})."
+    log_error "Vérifiez qu'il existe bien sur ${COMFYUI_REPO} et qu'il est orthographié correctement."
+    exit 1
+  fi
+
+  log_ok "ComfyUI épinglé au commit ${COMFYUI_COMMIT} (COMFYUI_COMMIT dans config.env)."
 }
 
 update_comfyui() {

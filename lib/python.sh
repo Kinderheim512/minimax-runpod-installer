@@ -282,6 +282,46 @@ install_comfyui_requirements() {
 }
 
 ################################################################################
+# Shim de compatibilité PEP585 (comfy_kitchen / torch.library.infer_schema)
+# — voir COMFY_KITCHEN_PEP585_SHIM dans config.env et patches/sitecustomize.py
+# pour le détail. Déployé après install_comfyui_requirements (torch + venv
+# prêts), avant tout lancement de ComfyUI. Simple copie de fichier,
+# volontairement non idempotente via run_step : réévaluée à chaque appel pour
+# refléter immédiatement un changement de COMFY_KITCHEN_PEP585_SHIM.
+################################################################################
+
+install_comfy_kitchen_pep585_shim() {
+    case "${COMFY_KITCHEN_PEP585_SHIM:-auto}" in
+        false|off|no)
+            log_info "Shim PEP585 comfy_kitchen désactivé (COMFY_KITCHEN_PEP585_SHIM=${COMFY_KITCHEN_PEP585_SHIM})."
+            return 0
+            ;;
+    esac
+
+    log_step "Shim de compatibilité PEP585 (comfy_kitchen / torch.library.infer_schema)"
+
+    local shim_src="${PROJECT_ROOT}/patches/sitecustomize.py"
+    if [[ ! -f "$shim_src" ]]; then
+        log_warn "patches/sitecustomize.py introuvable — shim sauté."
+        return 0
+    fi
+
+    # shellcheck disable=SC1091  # cf. note dans setup_python_venv.
+    source "${VENV_DIR}/bin/activate"
+    local site_dir
+    site_dir="$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])' 2>/dev/null)"
+    deactivate
+
+    if [[ -z "$site_dir" || ! -d "$site_dir" ]]; then
+        log_warn "Impossible de déterminer le site-packages du venv — shim sauté."
+        return 0
+    fi
+
+    cp "$shim_src" "${site_dir}/sitecustomize.py"
+    log_ok "Shim PEP585 installé dans ${site_dir}/sitecustomize.py (COMFY_KITCHEN_PEP585_SHIM=${COMFY_KITCHEN_PEP585_SHIM:-auto})."
+}
+
+################################################################################
 # Dépendances additionnelles du projet (inchangé)
 ################################################################################
 
