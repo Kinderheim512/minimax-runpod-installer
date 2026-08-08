@@ -96,6 +96,41 @@ compute_optimization_flags() {
       ;;
   esac
 
+  # Empirical optimization.
+  #
+  # During extensive RunPod testing (RTX A6000 48 GB + >500 GB system RAM),
+  # enabling --disable-smart-memory significantly improved the stability of
+  # long MiniMax H3 generations (up to 15 s at 1920x1088) — see CHANGELOG.md
+  # for the full test results.
+  #
+  # This is not an official ComfyUI recommendation and should be
+  # re-evaluated as ComfyUI/comfy-kitchen memory management evolves.
+  #
+  # --- smart memory (cache VRAM spéculatif) selon la RAM réellement -----
+  # allouée. Choix empirique basé sur les tests MiniMax H3 de ce projet, pas
+  # une règle générale de gestion mémoire ComfyUI — s'applique à tout le
+  # process ComfyUI, pas seulement à H3. Voir le commentaire de
+  # COMFY_SMART_MEMORY dans config.env pour le contexte complet et le
+  # contre-exemple RAM-contrainte à ne pas généraliser.
+  local smart_memory_mode="${COMFY_SMART_MEMORY:-auto}"
+  case "$smart_memory_mode" in
+    true)
+      flags+=("--disable-smart-memory")
+      log_info "COMFY_SMART_MEMORY=true (forcé) → --disable-smart-memory."
+      ;;
+    false)
+      log_info "COMFY_SMART_MEMORY=false (forcé) → cache VRAM spéculatif laissé actif (comportement ComfyUI par défaut)."
+      ;;
+    auto|*)
+      if (( SYSTEM_RAM_LIMIT_GB >= H3_MIN_RAM_FOR_SMART_MEMORY_GB )); then
+        flags+=("--disable-smart-memory")
+        log_info "COMFY_SMART_MEMORY=auto, RAM allouée ${SYSTEM_RAM_LIMIT_GB} Go (source: ${SYSTEM_RAM_LIMIT_SOURCE}) >= ${H3_MIN_RAM_FOR_SMART_MEMORY_GB} Go → --disable-smart-memory (choix empirique basé sur les tests MiniMax H3, cf. config.env)."
+      else
+        log_info "COMFY_SMART_MEMORY=auto, RAM allouée ${SYSTEM_RAM_LIMIT_GB} Go (source: ${SYSTEM_RAM_LIMIT_SOURCE}) < ${H3_MIN_RAM_FOR_SMART_MEMORY_GB} Go → cache VRAM spéculatif laissé actif (RAM elle-même contrainte, cf. config.env)."
+      fi
+      ;;
+  esac
+
   # --- compute capability -> --fast (accumulation fp16/fp8 rapide) ------
   local cc
   cc="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n1 | tr -d ' ')"

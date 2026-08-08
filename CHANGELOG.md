@@ -27,6 +27,35 @@ Changes since `v1.1.0`, not yet tagged.
   copied into ComfyUI if every model it references is required by the
   current `H3_WORKFLOWS` selection.
 
+### 🧊 VRAM stability on 48 GB cards (`--disable-smart-memory`)
+
+- `--disable-smart-memory` is now part of the default launch flags on pods
+  with ample host RAM, via the new `COMFY_SMART_MEMORY` (`auto`/`true`/
+  `false`, `config.env`, default `auto`). ComfyUI's speculative VRAM cache
+  ("smart memory") was leaving too little headroom on 48 GB cards (RTX
+  A6000, RTX 6000 Ada...) running H3, causing OOMs that were not reliably
+  reproducible — the same generation could succeed once and fail the next
+  time at identical settings, in either the sampler or the VAE decode step.
+  This is an **empirical choice, not a general ComfyUI memory-management
+  rule**: on the tests run for this project (RTX A6000, 48 GB, RunPod,
+  500+ GB host RAM), it eliminated these OOMs up to 15 s / 2.0 MP, against
+  frequent, irreproducible failures without it — validated specifically
+  for the MiniMax H3 pipeline, not for ComfyUI workflows/models in general.
+  It's a `main.py` launch flag, so it applies to the whole ComfyUI process,
+  not just H3 — if you load other models/workflows in the same instance,
+  this flag applies to them too, untested by us for those cases. Re-check
+  if a future ComfyUI release changes its memory-management behavior.
+  `auto` only enables it on pods that already meet
+  `H3_MIN_RAM_FOR_SMART_MEMORY_GB` (80 GB by default — a dedicated
+  threshold, same default value as `COMFY_PINNED_MEMORY`'s today but
+  independent, since the two guard against different failure modes and may
+  need to diverge) — **this flag is not universally beneficial**: on a
+  host where RAM itself is the constrained resource (well under 32 GB), the
+  extra forced offload to RAM can make things worse instead of better (see
+  `TROUBLESHOOTING.md`). Set `COMFY_SMART_MEMORY=false` to disable outright,
+  e.g. once a future ComfyUI/`comfy-kitchen` release makes this workaround
+  unnecessary.
+
 ### ⚡ PyTorch / CUDA
 
 - PyTorch build (version + CUDA index) is now auto-detected from the CUDA

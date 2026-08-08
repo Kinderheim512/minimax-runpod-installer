@@ -33,7 +33,7 @@ tunes everything for the GPU it detects.
 - 📦 Automatic installation of the official MiniMax H3 workflows
 - 🎨 LoRA manager: install, list, and remove from the command line
 - 🌐 Hugging Face and CivitAI as model sources
-- 📈 Automatic GPU-based launch flag tuning (`--highvram`, `--fast`, attention backend, ...)
+- 📈 Automatic GPU-based launch flag tuning (`--highvram`, `--disable-smart-memory`, `--fast`, attention backend, ...)
 - 🖇 Automatic persistent tmux session, survives web-terminal disconnects
 - 🔄 Idempotent update system — safe to re-run any time
 - 📋 Non-destructive verification (`check.sh`)

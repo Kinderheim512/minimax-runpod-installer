@@ -41,6 +41,24 @@ launch flags.
 
 Or use a GPU with more VRAM.
 
+If OOMs happen unpredictably — the same generation succeeding once and
+failing the next time at the same resolution/duration — this is usually
+ComfyUI's speculative VRAM cache ("smart memory") leaving too little
+headroom on a card that's right at the 48 GB line, not a real memory leak.
+`COMFY_SMART_MEMORY=auto` (default, `config.env`) already adds
+`--disable-smart-memory` on pods with enough host RAM
+(`H3_MIN_RAM_FOR_SMART_MEMORY_GB`, 80 GB by default) — an **empirical
+choice validated for the MiniMax H3 pipeline specifically**, based on
+tests on an RTX A6000 (48 GB) that removed these OOMs up to 15 s / 2.0 MP,
+not a general ComfyUI memory-management rule. It's a `main.py` launch
+flag, so it applies to the whole ComfyUI process, not just H3 — if you run
+other models/workflows in the same instance, it applies to them too,
+untested by us for those cases. **This flag is not universally safe**: on
+a host where RAM itself is the constrained resource (well under 32 GB),
+forcing extra offload to RAM can make things worse instead of better — if
+that's your setup, set `COMFY_SMART_MEMORY=false` and re-run
+`bash install.sh` (or `update.sh`) to regenerate the launch flags.
+
 ---
 
 ## A workflow says a model is missing, even though `check.sh` says it's installed
