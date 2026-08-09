@@ -304,6 +304,191 @@ install_extra_requirements() {
 }
 
 ################################################################################
+# SageAttention — compilation depuis les sources (aucun wheel officiel ne
+# couvre toutes les combinaisons torch/CUDA, cf. config.env pour le contexte
+# complet). Idempotente comme install_pytorch() : si le module s'importe déjà
+# dans le venv, on ne recompile rien. Best-effort et non bloquant : un échec
+# ici ne doit jamais interrompre install.sh (les nœuds KJNodes qui en
+# dépendent basculent simplement sur un chemin d'attention plus lent/plus
+# gourmand en VRAM si le module est absent).
+################################################################################
+
+install_sageattention() {
+  log_step "SageAttention (accélération / réduction VRAM des nœuds H3)"
+
+  local mode="${SAGE_ATTENTION:-auto}"
+  if [[ "$mode" == "false" ]]; then
+    log_info "SAGE_ATTENTION=false — installation sautée."
+    return 0
+  fi
+
+  # shellcheck disable=SC1091  # cf. note dans setup_python_venv.
+  source "${VENV_DIR}/bin/activate"
+
+  if python -c "import sageattention" 2>/dev/null; then
+    log_ok "SageAttention déjà installé et importable — pas de recompilation."
+    deactivate
+    return 0
+  fi
+
+  local cc=""
+  cc="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n1 | tr -d ' ')"
+
+  if [[ "$mode" == "auto" ]]; then
+    if [[ -z "$cc" ]] || ! awk -v c="$cc" -v m="$SAGEATTENTION_MIN_COMPUTE_CAP" 'BEGIN{exit !(c+0 >= m+0)}'; then
+      log_info "SAGE_ATTENTION=auto, compute capability ${cc:-inconnue} < ${SAGEATTENTION_MIN_COMPUTE_CAP} (ou non détectée) — installation sautée."
+      log_info "Forcez avec SAGE_ATTENTION=true dans config.env si vous voulez tenter quand même."
+      deactivate
+      return 0
+    fi
+    log_info "SAGE_ATTENTION=auto, compute capability ${cc} >= ${SAGEATTENTION_MIN_COMPUTE_CAP} — tentative d'installation."
+  else
+    log_info "SAGE_ATTENTION=true (forcé) — tentative d'installation (compute capability détectée : ${cc:-inconnue})."
+  fi
+
+  # --- compilateur CUDA (nvcc) --------------------------------------------
+  # Le nvcc de l'image de base peut viser un CUDA plus ancien que le runtime
+  # réellement détecté (ex: image livrée avec un toolkit 12.4 alors que le
+  # pilote/torch tournent en 13.0) : on installe le paquet cuda-toolkit
+  # correspondant au runtime détecté plutôt que de faire confiance à un nvcc
+  # préexistant qui pourrait produire des kernels incompatibles.
+  local detected_cuda; detected_cuda="$(detect_cuda_runtime)"
+  if [[ -n "$detected_cuda" ]] && require_cmd apt-get; then
+    local toolkit_pkg="cuda-toolkit-${detected_cuda/./-}"
+    if ! dpkg -s "$toolkit_pkg" >/dev/null 2>&1; then
+      log_info "Paquet ${toolkit_pkg} absent — installation (peut prendre plusieurs minutes, ~3-4 Go)."
+      local sudo_cmd=""
+      [[ "$(id -u)" -ne 0 ]] && require_cmd sudo && sudo_cmd="sudo"
+      if ! $sudo_cmd apt-get update -y >>"$LOG_FILE" 2>&1; then
+        log_warn "apt-get update a échoué — on tente quand même l'installation du toolkit CUDA."
+      fi
+      if ! retry "$DOWNLOAD_MAX_RETRIES" $sudo_cmd apt-get install -y "$toolkit_pkg" >>"$LOG_FILE" 2>&1; then
+        # Repli : certaines versions mineures (ex: 12.7) ne publient pas de
+        # paquet cuda-toolkit-<major>-<minor> dédié — le paquet majeur seul
+        # (ex: cuda-toolkit-12) pointe alors vers la dernière mineure connue
+        # de cette branche, suffisant pour nvcc/cudart-dev.
+        local major_pkg="cuda-toolkit-${detected_cuda%%.*}"
+        log_warn "${toolkit_pkg} indisponible — repli sur ${major_pkg}."
+        if ! retry "$DOWNLOAD_MAX_RETRIES" $sudo_cmd apt-get install -y "$major_pkg" >>"$LOG_FILE" 2>&1; then
+          log_warn "Échec d'installation de ${toolkit_pkg} et ${major_pkg} — SageAttention sera sauté cette fois (consultez ${LOG_FILE})."
+          log_warn "H3 restera fonctionnel sans SageAttention, juste plus lent / plus gourmand en VRAM."
+          deactivate
+          return 0
+        fi
+        log_ok "${major_pkg} installé (repli)."
+      else
+        log_ok "${toolkit_pkg} installé."
+      fi
+    fi
+    export PATH="/usr/local/cuda/bin:${PATH}"
+    export CUDA_HOME="/usr/local/cuda"
+  else
+    log_warn "Runtime CUDA non détecté ou apt-get indisponible — on tente la compilation avec le nvcc déjà présent (si aucun, elle échouera proprement)."
+  fi
+
+  if ! require_cmd nvcc; then
+    log_warn "nvcc introuvable après tentative d'installation du toolkit — SageAttention sauté (consultez ${LOG_FILE})."
+    deactivate
+    return 0
+  fi
+
+  # --- Triton (dépendance de compilation/exécution) -----------------------
+  # Jamais de `pip install triton` non versionné : le wheel torch installé
+  # (cf. PYTORCH_BUILD_TABLE) déclare dans ses propres métadonnées une
+  # contrainte de version précise sur Triton, et une version différente
+  # installée par-dessus risquerait de casser des opérations déjà compilées
+  # contre le Triton attendu par torch. On ne touche donc à Triton que s'il
+  # est absent du venv, et uniquement avec la contrainte exacte que torch
+  # lui-même déclare requérir (lue dynamiquement dans ses métadonnées, pas
+  # figée en dur ici — reste correcte quel que soit le build torch retenu
+  # par PYTORCH_BUILD_TABLE, cu118 comme cu130).
+  if python -c "import triton" 2>/dev/null; then
+    log_ok "Triton déjà présent et importable ($(python -c 'import triton; print(triton.__version__)' 2>/dev/null)) — pas de réinstallation."
+  else
+    local triton_req=""
+    triton_req="$(python - <<'PYEOF'
+from importlib.metadata import requires, PackageNotFoundError
+try:
+    reqs = requires("torch") or []
+except PackageNotFoundError:
+    reqs = []
+for r in reqs:
+    if r.split(";")[0].strip().lower().startswith("triton"):
+        print(r.split(";")[0].strip())
+        break
+PYEOF
+)"
+    if [[ -n "$triton_req" ]]; then
+      log_info "Triton absent — installation de la contrainte exacte requise par torch : ${triton_req}"
+      if ! python -m pip install --quiet "$triton_req" >>"$LOG_FILE" 2>&1; then
+        log_warn "Échec d'installation de ${triton_req} — la compilation de SageAttention risque d'échouer (non bloquant, consultez ${LOG_FILE})."
+      fi
+    else
+      log_warn "Impossible de déterminer la contrainte Triton requise par torch dans ses métadonnées — Triton non installé (jamais d'installation non versionnée, cf. commentaire ci-dessus). La compilation de SageAttention risque d'échouer sans Triton."
+    fi
+  fi
+
+  # --- clone / mise à jour dans un cache persistant ------------------------
+  # mkdir peut échouer (permissions, disque) : ne doit pas faire sortir
+  # install.sh entier sous `set -e`, seulement sauter cette étape (cf.
+  # commentaire d'en-tête de la fonction : best-effort, non bloquant).
+  if ! mkdir -p "$(dirname "$SAGEATTENTION_CACHE_DIR")" 2>>"$LOG_FILE"; then
+    log_warn "Impossible de créer $(dirname "$SAGEATTENTION_CACHE_DIR") — SageAttention sauté (consultez ${LOG_FILE})."
+    deactivate
+    return 0
+  fi
+  if [[ -d "${SAGEATTENTION_CACHE_DIR}/.git" ]]; then
+    if [[ "${SAGEATTENTION_UPDATE:-false}" == "true" ]]; then
+      log_info "Cache SageAttention existant — mise à jour demandée (SAGEATTENTION_UPDATE=true, git pull)."
+      git -C "$SAGEATTENTION_CACHE_DIR" pull --ff-only >>"$LOG_FILE" 2>&1 || \
+        log_warn "git pull a échoué sur le cache existant — on compile la version déjà présente."
+    else
+      log_info "Cache SageAttention existant — compilation de la version déjà clonée (pas de mise à jour automatique ; SAGEATTENTION_UPDATE=true dans config.env pour en forcer une)."
+    fi
+  else
+    log_info "Clonage de SageAttention (${SAGEATTENTION_REPO})..."
+    if ! retry "$DOWNLOAD_MAX_RETRIES" git clone "$SAGEATTENTION_REPO" "$SAGEATTENTION_CACHE_DIR" >>"$LOG_FILE" 2>&1; then
+      log_warn "Échec du clonage de SageAttention — installation sautée (consultez ${LOG_FILE})."
+      deactivate
+      return 0
+    fi
+  fi
+
+  # --- compilation ----------------------------------------------------------
+  # IMPORTANT : le sous-shell est combiné à l'assignation de build_rc en une
+  # seule liste OR ("(...) || build_rc=$?"). Un sous-shell exécuté comme
+  # instruction isolée propage son échec à `set -e` du shell appelant (donc
+  # ferait sortir tout install.sh) ; placé comme premier membre d'une liste
+  # OR, son échec est exempté (seul l'échec du DERNIER membre compte pour
+  # errexit — ici une simple affectation, qui ne peut pas échouer).
+  log_info "Compilation de SageAttention (10-20 min selon le pod, MAX_JOBS=${SAGEATTENTION_BUILD_JOBS})..."
+  local build_rc=0
+  (
+    cd "$SAGEATTENTION_CACHE_DIR" || exit 1
+    export EXT_PARALLEL=4
+    export NVCC_APPEND_FLAGS="--threads 8"
+    export MAX_JOBS="$SAGEATTENTION_BUILD_JOBS"
+    pip install -e . --no-build-isolation
+  ) >>"$LOG_FILE" 2>&1 || build_rc=$?
+
+  if [[ "$build_rc" -ne 0 ]]; then
+    log_warn "Échec de compilation de SageAttention (code ${build_rc}) — installation sautée (consultez ${LOG_FILE} pour le détail)."
+    log_warn "H3 restera fonctionnel sans SageAttention, juste plus lent / plus gourmand en VRAM."
+    deactivate
+    return 0
+  fi
+
+  if python -c "import sageattention" 2>/dev/null; then
+    log_ok "SageAttention compilé et importable."
+  else
+    log_warn "Compilation terminée sans erreur mais le module ne s'importe pas — installation considérée en échec (consultez ${LOG_FILE})."
+  fi
+
+  deactivate
+  return 0
+}
+
+################################################################################
 # Vérification CUDA
 ################################################################################
 

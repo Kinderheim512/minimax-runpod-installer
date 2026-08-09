@@ -1,0 +1,2531 @@
+{
+  "id": "b1e6c2a4-h3r2v-4f3a-9c1d-official-h3-workflow",
+  "revision": 0,
+  "last_node_id": 52,
+  "last_link_id": 43,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MarkdownNote",
+      "pos": [
+        -4700,
+        -760
+      ],
+      "size": [
+        1600,
+        520
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "📘 README — MiniMax H3 REF2V — Workflow officiel",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## MiniMax H3 — REF2V (Reference-to-Video) — Workflow officiel du projet\n\n**Ordre de lecture du graphe (gauche → droite) :**\n`A. Configuration` → `B. Chargement modèles` → `C. LoRA` → `D. Accélérations` → `E. Références` → `F. Conditionnement` → `G. Sampling` → `H. Décodage` → `I. Export`\n\n**Comment piloter les groupes bascule-un-clic :**\n- Les nœuds *Fast Groups Bypasser / Muter (rgthree)* ci-dessous listent automatiquement tous les groupes de couleur correspondante dès que le graphe est ouvert dans ComfyUI — aucune configuration manuelle requise.\n- **Bypass** = le groupe devient un fil transparent (le MODEL/CLIP traverse sans modification) → utilisé pour C2 (LoRA CLIP) et D2/D3 (EasyCache / Spectrum), qui sont chaînés en série sur le MODEL.\n- **Mute** = le groupe ne s'exécute pas du tout → utilisé pour C3 (branche Turbo LoRA), qui est une branche parallèle non chaînée.\n\n**Matériel de référence :** RTX A6000 48 Go (SM86/Ampere) — ComfyUI 0.31.\n\nVoir la note \"📦 Modèles requis\" (groupe A) pour les chemins exacts des 4 fichiers de poids nécessaires."
+      ],
+      "color": "#4a4a4a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 2,
+      "type": "Fast Groups Bypasser (rgthree)",
+      "pos": [
+        -3000,
+        -760
+      ],
+      "size": [
+        900,
+        260
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🎚️ BYPASS — D. Accélérations (D1 actif / D2·D3 en réserve)",
+      "properties": {
+        "Node name for S&R": "Fast Groups Bypasser (rgthree)",
+        "matchTitle": "^D"
+      },
+      "widgets_values": [],
+      "color": "#4a4a4a",
+      "bgcolor": "#333"
+    },
+    {
+      "id": 3,
+      "type": "Fast Groups Bypasser (rgthree)",
+      "pos": [
+        -2000,
+        -760
+      ],
+      "size": [
+        780,
+        170
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🎚️ BYPASS — C2. LoRA CLIP (réservé, vide par défaut)",
+      "properties": {
+        "Node name for S&R": "Fast Groups Bypasser (rgthree)",
+        "matchTitle": "^C2\\."
+      },
+      "widgets_values": [],
+      "color": "#4a4a4a",
+      "bgcolor": "#333"
+    },
+    {
+      "id": 4,
+      "type": "Fast Groups Bypasser (rgthree)",
+      "pos": [
+        -1100,
+        -760
+      ],
+      "size": [
+        780,
+        170
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🎚️ MUTE — C3. Branche Turbo LoRA (désactivée par défaut)",
+      "properties": {
+        "Node name for S&R": "Fast Groups Muter (rgthree)",
+        "matchTitle": "^C3\\."
+      },
+      "widgets_values": [],
+      "color": "#4a4a4a",
+      "bgcolor": "#333"
+    },
+    {
+      "id": 5,
+      "type": "MarkdownNote",
+      "pos": [
+        -4700,
+        0
+      ],
+      "size": [
+        560,
+        760
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "📦 Modèles requis",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## Modèles requis (4 fichiers)\n\n**diffusion_models/**\n`minimax_h3_ref2va_pruned_int8_convrot.safetensors`\n\n**text_encoders/**\n`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`\n\n**vae/**\n`minimax_h3_video_vae_fp16.safetensors`\n`minimax_h3_audio_vae_fp32.safetensors`\n\nSource : 🤗 Comfy-Org/MiniMax-H3\n\n## Extensions requises\n- ComfyUI core ≥ 0.30 (nœuds MiniMax H3 natifs)\n- ComfyUI-KJNodes (Kijai) — Patch Sage Attention KJ + Mem-Eff Sage Attention Patch H3\n- rgthree-comfy — LoRA, bascules, reroutes\n- ComfyUI-Spectrum-MiniMax-H3 (xmarre) — groupe D3 uniquement, désactivé par défaut\n- ComfyUI-VideoHelperSuite — ingestion vidéo de référence (groupe E) + preview optionnel (groupe I)\n- `sageattention` (lib Python) installée dans l'environnement ComfyUI"
+      ],
+      "color": "#3f789e",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 6,
+      "type": "PrimitiveFloat",
+      "pos": [
+        -4100,
+        0
+      ],
+      "size": [
+        320,
+        90
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "FLOAT",
+          "type": "FLOAT",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "title": "⏱️ Durée (secondes)",
+      "properties": {
+        "Node name for S&R": "PrimitiveFloat"
+      },
+      "widgets_values": [
+        5
+      ],
+      "color": "#3f789e",
+      "bgcolor": "#245"
+    },
+    {
+      "id": 7,
+      "type": "ResolutionSelector",
+      "pos": [
+        -4100,
+        130
+      ],
+      "size": [
+        320,
+        170
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "width",
+          "type": "INT",
+          "links": [
+            24
+          ]
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": [
+            25
+          ]
+        }
+      ],
+      "title": "📐 Résolution (Size)",
+      "properties": {
+        "Node name for S&R": "ResolutionSelector"
+      },
+      "widgets_values": [
+        "16:9 (Widescreen)",
+        0.4,
+        32
+      ],
+      "color": "#3f789e",
+      "bgcolor": "#245"
+    },
+    {
+      "id": 8,
+      "type": "ComfyMathExpression",
+      "pos": [
+        -4100,
+        340
+      ],
+      "size": [
+        320,
+        80
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "values.a",
+          "type": "FLOAT,INT,BOOLEAN",
+          "link": 1
+        },
+        {
+          "name": "values.b",
+          "type": "FLOAT,INT,BOOLEAN",
+          "link": null,
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "FLOAT",
+          "type": "FLOAT",
+          "links": []
+        },
+        {
+          "name": "INT",
+          "type": "INT",
+          "links": [
+            26
+          ]
+        },
+        {
+          "name": "BOOLEAN",
+          "type": "BOOLEAN",
+          "links": []
+        }
+      ],
+      "title": "🔢 Durée → length (frames, grille 17k+5)",
+      "properties": {
+        "Node name for S&R": "ComfyMathExpression"
+      },
+      "widgets_values": [
+        "max(5, round(a * 24)) + (5 - (max(5, round(a * 24)) % 17)) % 17"
+      ],
+      "color": "#3f789e",
+      "bgcolor": "#245"
+    },
+    {
+      "id": 9,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        -4100,
+        460
+      ],
+      "size": [
+        320,
+        420
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            23
+          ]
+        }
+      ],
+      "title": "📝 Prompt (texte + tags de référence)",
+      "properties": {
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "Style cinématographique, ambiance nocturne. Utiliser <Picture 1> pour l'identité du personnage et <Picture 2> pour le style visuel.\n\nCUT 1 : ...\n"
+      ],
+      "color": "#3f789e",
+      "bgcolor": "#245"
+    },
+    {
+      "id": 10,
+      "type": "MarkdownNote",
+      "pos": [
+        -3740,
+        0
+      ],
+      "size": [
+        420,
+        460
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "📎 Règle de tagging (important)",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## Règle de tagging des références\n\nLes tags dans le prompt doivent respecter :\n1. **L'ordre de connexion** des références au groupe E, pas l'ordre où vous les citez dans le texte.\n2. **La numérotation par type**, 1-based :\n   - Images → `<Picture 1>`, `<Picture 2>`, ... (max 9)\n   - Vidéos → `<Video 1>`, `<Video 2>`, ... (max 3)\n   - Audios → `<Audio 1>`, `<Audio 2>`, ... (max 3, y compris la piste audio d'une vidéo de référence)\n\nDonnez un **rôle explicite** à chaque référence dans le prompt : identité / style / mouvement / caméra / voix — c'est ce qui permet à H3 de bien dissocier les références entre elles."
+      ],
+      "color": "#3f789e",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 11,
+      "type": "UNETLoader",
+      "pos": [
+        -3260,
+        0
+      ],
+      "size": [
+        680,
+        90
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "title": "🧠 Diffusion Model — MiniMax H3 Ref2VA (pruned int8 convrot)",
+      "properties": {
+        "Node name for S&R": "UNETLoader"
+      },
+      "widgets_values": [
+        "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "default"
+      ],
+      "color": "#1c5d3b",
+      "bgcolor": "#153"
+    },
+    {
+      "id": 12,
+      "type": "CLIPLoader",
+      "pos": [
+        -3260,
+        130
+      ],
+      "size": [
+        680,
+        120
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "title": "🔤 Text Encoder — Qwen3-VL 32B (nvfp4 awq)",
+      "properties": {
+        "Node name for S&R": "CLIPLoader"
+      },
+      "widgets_values": [
+        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "minimax",
+        "default"
+      ],
+      "color": "#1c5d3b",
+      "bgcolor": "#153"
+    },
+    {
+      "id": 13,
+      "type": "VAELoader",
+      "pos": [
+        -3260,
+        290
+      ],
+      "size": [
+        680,
+        70
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            15,
+            36
+          ]
+        }
+      ],
+      "title": "🎞️ VAE Vidéo (fp16)",
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "minimax_h3_video_vae_fp16.safetensors"
+      ],
+      "color": "#1c5d3b",
+      "bgcolor": "#153"
+    },
+    {
+      "id": 14,
+      "type": "VAELoader",
+      "pos": [
+        -3260,
+        400
+      ],
+      "size": [
+        680,
+        70
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            16,
+            38
+          ]
+        }
+      ],
+      "title": "🔊 VAE Audio (fp32)",
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "minimax_h3_audio_vae_fp32.safetensors"
+      ],
+      "color": "#1c5d3b",
+      "bgcolor": "#153"
+    },
+    {
+      "id": 15,
+      "type": "Power Lora Loader (rgthree)",
+      "pos": [
+        -2440,
+        0
+      ],
+      "size": [
+        560,
+        160
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 2
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            4
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            5
+          ]
+        }
+      ],
+      "title": "🎨 C1. LoRA Stack — style / personnage (0 active par défaut)",
+      "properties": {
+        "Node name for S&R": "Power Lora Loader (rgthree)"
+      },
+      "widgets_values": [],
+      "color": "#8a6d1f",
+      "bgcolor": "#553"
+    },
+    {
+      "id": 16,
+      "type": "MarkdownNote",
+      "pos": [
+        -2440,
+        200
+      ],
+      "size": [
+        560,
+        260
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🎨 Stack LoRA — mode d'emploi",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "**Zéro LoRA (par défaut)** = passthrough transparent, aucun câblage à toucher.\n\n**Ajouter une ou plusieurs LoRA** : clic sur « + Add Lora » dans le nœud — chaque ligne a son propre interrupteur on/off intégré.\n\n**Tester plusieurs LoRA** : ajoutez-les toutes dans ce même nœud et basculez les interrupteurs individuellement.\n\nAucune LoRA connue à ce jour ne cible spécifiquement le CLIP Qwen3-VL de H3 — le CLIP traverse ce nœud sans modification tant qu'aucune n'est ajoutée."
+      ],
+      "color": "#8a6d1f",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 17,
+      "type": "Power Lora Loader (rgthree)",
+      "pos": [
+        -1820,
+        0
+      ],
+      "size": [
+        520,
+        160
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 4
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 5
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            6
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            13
+          ]
+        }
+      ],
+      "title": "🔤 C2. LoRA CLIP — réservé (bypass par défaut)",
+      "properties": {
+        "Node name for S&R": "Power Lora Loader (rgthree)"
+      },
+      "widgets_values": [],
+      "color": "#8a6d1f",
+      "bgcolor": "#553"
+    },
+    {
+      "id": 18,
+      "type": "MarkdownNote",
+      "pos": [
+        -1820,
+        200
+      ],
+      "size": [
+        520,
+        200
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🔤 Réserve CLIP — pourquoi c'est là",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "Nœud câblé mais **bypassé par défaut** (fil transparent MODEL+CLIP).\n\nPrêt à recevoir une future LoRA text-encoder Qwen3-VL/H3 sans reconstruire le graphe : réactivez simplement ce groupe via le bypasser « BYPASS — C2 » (pilotage, en haut) et ajoutez la LoRA quand elle existera."
+      ],
+      "color": "#8a6d1f",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 19,
+      "type": "LoraLoaderModelOnly",
+      "pos": [
+        -1180,
+        0
+      ],
+      "size": [
+        520,
+        100
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            7
+          ]
+        }
+      ],
+      "title": "⚡ C3. Turbo LoRA — v4_step600 pruned, force 1.0 (ACTIF, + Sage Attention)",
+      "properties": {
+        "Node name for S&R": "LoraLoaderModelOnly"
+      },
+      "widgets_values": [
+        "minimax_h3_turbo_v4_step600_pruned_comfyui.safetensors",
+        1.0
+      ],
+      "color": "#7a3b8a",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 20,
+      "type": "Reroute (rgthree)",
+      "pos": [
+        -1180,
+        140
+      ],
+      "size": [
+        260,
+        60
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "",
+          "type": "MODEL",
+          "link": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "MODEL",
+          "links": [
+            8
+          ]
+        }
+      ],
+      "title": "⚡ Reroute MODEL (C3 → D1a)",
+      "properties": {
+        "Node name for S&R": "Reroute (rgthree)"
+      },
+      "widgets_values": [],
+      "color": "#7a3b8a",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 21,
+      "type": "MarkdownNote",
+      "pos": [
+        -1180,
+        220
+      ],
+      "size": [
+        520,
+        480
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "⚡ Branche Turbo LoRA — LIRE avant activation",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## Architecturalement à part — ne pas juste \"activer\"\n\nLa LoRA Turbo MiniMax H3 (few-step) n'est **pas un simple patch de poids** : elle nécessite un sampler dédié, remplaçant `KSamplerSelect`/`BasicScheduler`/`SamplerCustomAdvanced` du groupe G, car la vidéo et l'audio tournent sur deux échelles de bruit différentes (shift≈12 vidéo, shift≈3 audio). Un sampler standard \"sur-avance\" l'audio à faible step count → signal cassé.\n\n**Ce que ce nœud générique `LoraLoaderModelOnly` fait ici :** un point de branchement neutre, prêt à recevoir le fichier LoRA Turbo une fois choisi — **pas** un sampler Turbo dédié : je n'ai pas trouvé de nom de nœud de sampler Turbo suffisamment stable/standardisé pour l'écrire en dur sans risquer un import cassé (écosystème encore fragmenté à ce jour, plusieurs conversions concurrentes).\n\n**Avant d'activer cette branche :**\n1. Choisissez la conversion LoRA compatible avec le checkpoint **pruned** (`minimax_h3_ref2va_pruned_int8_convrot`) — privilégiez une conversion pensée spécifiquement pour les checkpoints pruned plutôt qu'un fichier LoRA brut, la compatibilité pruned n'étant pas garantie universellement.\n2. Installez le nœud de sampler Turbo dédié fourni par cette conversion et câblez-le en **remplacement** du groupe G (Sampling), pas en complément.\n3. Testez vous-même avant production — des erreurs de forme non bloquantes sur certaines couches ont été rapportées par la communauté sur cette combinaison checkpoint pruned + LoRA Turbo.\n\nCette branche reste **MUTE (désactivée)** par défaut et n'interfère avec rien du chemin principal."
+      ],
+      "color": "#7a3b8a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 22,
+      "type": "PathchSageAttentionKJ",
+      "pos": [
+        -2440,
+        560
+      ],
+      "size": [
+        560,
+        110
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 8
+        },
+        {
+          "name": "allow_compile",
+          "type": "BOOLEAN",
+          "link": null,
+          "widget": {
+            "name": "allow_compile"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            9
+          ]
+        }
+      ],
+      "title": "⚙️ D1. Patch Sage Attention KJ (ACTIF — combiné avec Turbo)",
+      "properties": {
+        "Node name for S&R": "PathchSageAttentionKJ"
+      },
+      "widgets_values": [
+        "sageattn_qk_int8_pv_fp16_cuda",
+        false
+      ],
+      "color": "#7a3b8a",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 23,
+      "type": "MiniMaxH3MemoryEfficientSageAttentionPatch",
+      "pos": [
+        -2440,
+        700
+      ],
+      "size": [
+        560,
+        80
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 9
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            10
+          ]
+        }
+      ],
+      "title": "💾 D1. Mem-Eff Sage Attention Patch H3 (ACTIF — combiné avec Turbo)",
+      "properties": {
+        "Node name for S&R": "MiniMaxH3MemoryEfficientSageAttentionPatch"
+      },
+      "widgets_values": [],
+      "color": "#7a3b8a",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 24,
+      "type": "MarkdownNote",
+      "pos": [
+        -2440,
+        810
+      ],
+      "size": [
+        560,
+        220
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "⚙️ D1 — pourquoi ce chemin par défaut",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "Seule combinaison **confirmée indépendamment** comme bénéfique sur Ampere/SM86 (gain ~15-20 %, source : retours communautaires croisés avec la doc Kijai).\n\nLes deux patches ne sont **pas substituables** : Sage Attention accélère, le patch Mem-Eff réduit le pic VRAM (utile surtout en haute résolution / `ref_image_size=max`, qui garde les tokens de référence actifs tout le sampling). Kijai recommande explicitement les deux ensemble."
+      ],
+      "color": "#7a3b8a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 25,
+      "type": "EasyCache",
+      "pos": [
+        -1820,
+        560
+      ],
+      "size": [
+        520,
+        110
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 10
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            11
+          ]
+        }
+      ],
+      "title": "🗄️ D2. EasyCache natif (bypass par défaut — à tester)",
+      "properties": {
+        "Node name for S&R": "EasyCache"
+      },
+      "widgets_values": [
+        0.2,
+        0.15,
+        0.95,
+        false
+      ],
+      "color": "#7a3b8a",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 26,
+      "type": "SpectrumApplyMiniMaxH3",
+      "pos": [
+        -1820,
+        700
+      ],
+      "size": [
+        520,
+        110
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            12
+          ]
+        }
+      ],
+      "title": "🌈 D3. Spectrum (expérimental — bypass par défaut)",
+      "properties": {
+        "Node name for S&R": "SpectrumApplyMiniMaxH3"
+      },
+      "widgets_values": [],
+      "color": "#7a3b8a",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 27,
+      "type": "MarkdownNote",
+      "pos": [
+        -1820,
+        830
+      ],
+      "size": [
+        520,
+        260
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🗄️🌈 D2/D3 — avant d'activer",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "**EasyCache** : gain généralement plus net que Spectrum sur les clips > 100 frames selon les retours communautaires — le meilleur candidat pour un premier test A/B.\n\n**Spectrum** : accélérateur *approximatif* (l'auteur le dit lui-même) — la trajectoire de débruitage change même à seed/prompt/sampler identiques, avec un risque de dégradation sur mouvements rapides/brefs. Retours contradictoires (×1.15 à ×0.5 selon les utilisateurs).\n\n**Mutuellement exclusifs entre eux** — n'activez qu'un seul des deux à la fois. Comparez la qualité sur votre propre contenu avant production, jamais en réglage par défaut aveugle."
+      ],
+      "color": "#7a3b8a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 28,
+      "type": "MarkdownNote",
+      "pos": [
+        -1180,
+        560
+      ],
+      "size": [
+        520,
+        380
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🚫 D4. SolAttn — non installé, à dessein",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## Groupe réservé, pas de nœud câblé\n\nTrois/quatre implémentations concurrentes existent (kijai/ComfyUI-SolAttn_triton, sumeetprashant/ComfyUI-SolAttn, Saganaki22/ComfyUI-sol-attn, KingGore/ComfyUI_sol-attn_Blackwell) — **aucune ne déclare le support SM86/Ampere**, la doc de sumeetprashant liste explicitement SM86 comme \"non testé\" (dépendance aux descripteurs TMA, fonctionnalité Hopper/Blackwell).\n\nRisque réel : pas de casse matérielle, mais un résultat **silencieusement dégradé** sans avertissement, faute de validation sur cette architecture.\n\n**Je n'ai volontairement câblé aucun nœud ici** plutôt que de deviner un `class_type` non vérifié qui casserait l'import. Quand vous passerez sur une carte Ada/Blackwell (ou qu'un retour communautaire confirmera SM86), installez le fork de votre choix et insérez-le ici, en série après D3, avec le même bypass par défaut."
+      ],
+      "color": "#7a3b8a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 29,
+      "type": "Reroute (rgthree)",
+      "pos": [
+        -560,
+        640
+      ],
+      "size": [
+        280,
+        60
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "",
+          "type": "MODEL",
+          "link": 12
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "MODEL",
+          "links": [
+            27,
+            28
+          ]
+        }
+      ],
+      "title": "→ MODEL (post-LoRA + post-accélération) vers G. Sampling",
+      "properties": {
+        "Node name for S&R": "Reroute (rgthree)"
+      },
+      "widgets_values": [],
+      "color": "#7a3b8a",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 30,
+      "type": "Reroute (rgthree)",
+      "pos": [
+        -1180,
+        100
+      ],
+      "size": [
+        280,
+        60
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "",
+          "type": "CLIP",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "CLIP",
+          "links": [
+            14
+          ]
+        }
+      ],
+      "title": "→ CLIP (post-LoRA) vers F. Conditionnement",
+      "properties": {
+        "Node name for S&R": "Reroute (rgthree)"
+      },
+      "widgets_values": [],
+      "color": "#8a6d1f",
+      "bgcolor": "#553"
+    },
+    {
+      "id": 31,
+      "type": "LoadImage",
+      "pos": [
+        -4100,
+        1020
+      ],
+      "size": [
+        300,
+        320
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            17
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "title": "🖼️ Référence Image 1",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "reference_identity.png",
+        "image"
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#633"
+    },
+    {
+      "id": 32,
+      "type": "LoadImage",
+      "pos": [
+        -3760,
+        1020
+      ],
+      "size": [
+        300,
+        320
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            18
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "title": "🖼️ Référence Image 2",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "reference_style.png",
+        "image"
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#633"
+    },
+    {
+      "id": 33,
+      "type": "LoadImage",
+      "pos": [
+        -3420,
+        1020
+      ],
+      "size": [
+        300,
+        320
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            19
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "title": "🖼️ Référence Image 3",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "reference_extra.png",
+        "image"
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#633"
+    },
+    {
+      "id": 34,
+      "type": "MarkdownNote",
+      "pos": [
+        -4100,
+        1360
+      ],
+      "size": [
+        620,
+        200
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🖼️ Extensibilité — jusqu'à 9 images",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "3 `LoadImage` câblées ici (identité / style / libre) pour démarrer.\n\nLe nœud `MiniMaxH3ReferenceToVideo` (groupe F) expose **9 emplacements** `ref_image_0` … `ref_image_8` en entrées optionnelles — pour en ajouter, glissez simplement une nouvelle `LoadImage` sur un emplacement libre du nœud, **aucun recâblage** des emplacements existants n'est nécessaire."
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 35,
+      "type": "VHS_LoadVideo",
+      "pos": [
+        -3060,
+        1020
+      ],
+      "size": [
+        320,
+        300
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            20
+          ]
+        },
+        {
+          "name": "frame_count",
+          "type": "INT",
+          "links": []
+        },
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            21
+          ]
+        },
+        {
+          "name": "video_info",
+          "type": "VHS_VIDEOINFO",
+          "links": []
+        }
+      ],
+      "title": "🎥 Référence Vidéo 1 (VHS)",
+      "properties": {
+        "Node name for S&R": "VHS_LoadVideo"
+      },
+      "widgets_values": [
+        "reference_motion.mp4",
+        24,
+        "Disabled",
+        512,
+        512,
+        0,
+        0,
+        1
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#633"
+    },
+    {
+      "id": 36,
+      "type": "MarkdownNote",
+      "pos": [
+        -3060,
+        1340
+      ],
+      "size": [
+        320,
+        220
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🎥 Extensibilité — jusqu'à 3 vidéos",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "`VHS_LoadVideo` plutôt qu'un loader natif basique : `force_rate` (aligné 24 fps), `frame_load_cap` et redimensionnement permettent d'homogénéiser des clips hétérogènes avant envoi à H3.\n\nPour une 2ᵉ/3ᵉ référence vidéo, dupliquez ce nœud et branchez-le sur `ref_video_1` / `ref_video_2` (+ `ref_video_audio_1` / `_2` si la vidéo a une bande-son à conserver)."
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 37,
+      "type": "LoadAudio",
+      "pos": [
+        -2700,
+        1020
+      ],
+      "size": [
+        300,
+        100
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            22
+          ]
+        }
+      ],
+      "title": "🎙️ Référence Audio 1 (voix/musique)",
+      "properties": {
+        "Node name for S&R": "LoadAudio"
+      },
+      "widgets_values": [
+        "reference_voice.mp3",
+        "input"
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#633"
+    },
+    {
+      "id": 38,
+      "type": "MarkdownNote",
+      "pos": [
+        -2700,
+        1150
+      ],
+      "size": [
+        300,
+        260
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "📎 Règle de rôle des références",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "Donnez un **rôle explicite** à chaque référence dans le prompt (identité / style / mouvement / caméra / voix) et respectez strictement l'**ordre de connexion** pour que la numérotation `<Picture i>` / `<Video k>` / `<Audio j>` corresponde — bonne pratique documentée par Comfy-Org."
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 39,
+      "type": "MiniMaxH3ReferenceToVideo",
+      "pos": [
+        -560,
+        1020
+      ],
+      "size": [
+        460,
+        600
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 14
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 15
+        },
+        {
+          "name": "audio_vae",
+          "type": "VAE",
+          "link": 16
+        },
+        {
+          "name": "ref_images.ref_image_0",
+          "type": "IMAGE",
+          "link": 17,
+          "shape": 7
+        },
+        {
+          "name": "ref_images.ref_image_1",
+          "type": "IMAGE",
+          "link": 18,
+          "shape": 7
+        },
+        {
+          "name": "ref_images.ref_image_2",
+          "type": "IMAGE",
+          "link": 19,
+          "shape": 7
+        },
+        {
+          "name": "ref_videos.ref_video_0",
+          "type": "IMAGE",
+          "link": 20,
+          "shape": 7
+        },
+        {
+          "name": "ref_video_audios.ref_video_audio_0",
+          "type": "AUDIO",
+          "link": 21,
+          "shape": 7
+        },
+        {
+          "name": "ref_audios.ref_audio_0",
+          "type": "AUDIO",
+          "link": 22,
+          "shape": 7
+        },
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "link": 23,
+          "widget": {
+            "name": "prompt"
+          }
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "link": 24,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": 25,
+          "widget": {
+            "name": "height"
+          }
+        },
+        {
+          "name": "length",
+          "type": "INT",
+          "link": 26,
+          "widget": {
+            "name": "length"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "links": [
+            29
+          ]
+        },
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            34
+          ]
+        }
+      ],
+      "title": "🎬 MiniMax H3 — Reference to Video (ref2va)",
+      "properties": {
+        "Node name for S&R": "MiniMaxH3ReferenceToVideo"
+      },
+      "widgets_values": [
+        "",
+        1344,
+        768,
+        124,
+        "match"
+      ],
+      "color": "#2b6d6d",
+      "bgcolor": "#266"
+    },
+    {
+      "id": 40,
+      "type": "MarkdownNote",
+      "pos": [
+        -560,
+        1640
+      ],
+      "size": [
+        460,
+        220
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🎬 ref_image_size — compromis vitesse/fidélité",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "`match` (par défaut) : références réduites à la résolution de sortie — plus rapide.\n\n`max` : jusqu'à 2048 px de côté court conservé — meilleure fidélité d'identité, mais nettement plus lent (les tokens de référence restent actifs à chaque step de sampling)."
+      ],
+      "color": "#2b6d6d",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 41,
+      "type": "KSamplerSelect",
+      "pos": [
+        -40,
+        640
+      ],
+      "size": [
+        340,
+        70
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            32
+          ]
+        }
+      ],
+      "title": "🎯 Sampler — res_multistep",
+      "properties": {
+        "Node name for S&R": "KSamplerSelect"
+      },
+      "widgets_values": [
+        "res_multistep"
+      ],
+      "color": "#4a4a8a",
+      "bgcolor": "#337"
+    },
+    {
+      "id": 42,
+      "type": "BasicScheduler",
+      "pos": [
+        -40,
+        750
+      ],
+      "size": [
+        340,
+        130
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 27
+        }
+      ],
+      "outputs": [
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            33
+          ]
+        }
+      ],
+      "title": "📈 Scheduler — simple, 8 steps (Turbo)",
+      "properties": {
+        "Node name for S&R": "BasicScheduler"
+      },
+      "widgets_values": [
+        "simple",
+        8,
+        1
+      ],
+      "color": "#4a4a8a",
+      "bgcolor": "#337"
+    },
+    {
+      "id": 43,
+      "type": "RandomNoise",
+      "pos": [
+        -40,
+        1020
+      ],
+      "size": [
+        340,
+        90
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            30
+          ]
+        }
+      ],
+      "title": "🎲 Seed",
+      "properties": {
+        "Node name for S&R": "RandomNoise"
+      },
+      "widgets_values": [
+        157368968253448,
+        "randomize"
+      ],
+      "color": "#4a4a8a",
+      "bgcolor": "#337"
+    },
+    {
+      "id": 44,
+      "type": "BasicGuider",
+      "pos": [
+        -40,
+        1140
+      ],
+      "size": [
+        340,
+        70
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 28
+        },
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 29
+        }
+      ],
+      "outputs": [
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            31
+          ]
+        }
+      ],
+      "title": "🧭 Guider",
+      "properties": {
+        "Node name for S&R": "BasicGuider"
+      },
+      "widgets_values": [],
+      "color": "#4a4a8a",
+      "bgcolor": "#337"
+    },
+    {
+      "id": 45,
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        370,
+        900
+      ],
+      "size": [
+        280,
+        160
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 30
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 31
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 32
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 33
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 34
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "LATENT",
+          "links": [
+            35,
+            37
+          ]
+        },
+        {
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": []
+        }
+      ],
+      "title": "▶️ Sampler Custom Advanced (exécution)",
+      "properties": {
+        "Node name for S&R": "SamplerCustomAdvanced"
+      },
+      "widgets_values": [],
+      "color": "#4a4a8a",
+      "bgcolor": "#337"
+    },
+    {
+      "id": 46,
+      "type": "MarkdownNote",
+      "pos": [
+        -40,
+        1230
+      ],
+      "size": [
+        340,
+        260
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🎯 Sampling — recommandations",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "Base large documentée : `res_multistep` + scheduler `simple`, 20 steps. Dégradation notable < 15 steps, gain modeste > 25 steps.\n\n⚠️ **Ne pas utiliser `LCM` + scheduler `Beta`** en réglage par défaut : retour communautaire confirmé — casse complètement l'audio (bruit/sifflement), malgré la promesse de vitesse."
+      ],
+      "color": "#4a4a8a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 47,
+      "type": "VAEDecode",
+      "pos": [
+        730,
+        900
+      ],
+      "size": [
+        260,
+        60
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 35
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 36
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            39,
+            42
+          ]
+        }
+      ],
+      "title": "🎞️ VAE Decode (vidéo)",
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": [],
+      "color": "#5a7a3a",
+      "bgcolor": "#363"
+    },
+    {
+      "id": 48,
+      "type": "VAEDecodeAudio",
+      "pos": [
+        730,
+        990
+      ],
+      "size": [
+        260,
+        60
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 37
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 38
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            40,
+            43
+          ]
+        }
+      ],
+      "title": "🔊 VAE Decode (audio)",
+      "properties": {
+        "Node name for S&R": "VAEDecodeAudio"
+      },
+      "widgets_values": [],
+      "color": "#5a7a3a",
+      "bgcolor": "#363"
+    },
+    {
+      "id": 49,
+      "type": "CreateVideo",
+      "pos": [
+        1040,
+        900
+      ],
+      "size": [
+        280,
+        110
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 39
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 40,
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            41
+          ]
+        }
+      ],
+      "title": "🎬 Create Video (mux vidéo+audio synchronisé)",
+      "properties": {
+        "Node name for S&R": "CreateVideo"
+      },
+      "widgets_values": [
+        24,
+        8
+      ],
+      "color": "#2f5f8f",
+      "bgcolor": "#248"
+    },
+    {
+      "id": 50,
+      "type": "SaveVideo",
+      "pos": [
+        1370,
+        900
+      ],
+      "size": [
+        340,
+        130
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 41
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": []
+        }
+      ],
+      "title": "💾 Save Video — SORTIE PRINCIPALE",
+      "properties": {
+        "Node name for S&R": "SaveVideo"
+      },
+      "widgets_values": [
+        "video/MiniMax_H3_REF2V",
+        "auto",
+        "auto"
+      ],
+      "color": "#2f5f8f",
+      "bgcolor": "#248"
+    },
+    {
+      "id": 51,
+      "type": "VHS_VideoCombine",
+      "pos": [
+        1040,
+        1080
+      ],
+      "size": [
+        340,
+        250
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 4,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 42
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 43,
+          "shape": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Filenames",
+          "type": "VHS_FILENAMES",
+          "links": []
+        }
+      ],
+      "title": "🎞️ Preview rapide GIF/WEBP (optionnel — bypass par défaut)",
+      "properties": {
+        "Node name for S&R": "VHS_VideoCombine"
+      },
+      "widgets_values": [
+        8,
+        0,
+        "MiniMax_H3_preview",
+        "image/webp",
+        false,
+        true
+      ],
+      "color": "#2f5f8f",
+      "bgcolor": "#248"
+    },
+    {
+      "id": 52,
+      "type": "MarkdownNote",
+      "pos": [
+        1370,
+        1050
+      ],
+      "size": [
+        340,
+        260
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "💾 Export — pourquoi CreateVideo/SaveVideo",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "Le mux natif `CreateVideo`→`SaveVideo` synchronise vidéo+audio en une seule passe, sans étape externe — c'est la sortie **officielle** recommandée par Comfy-Org pour H3.\n\n`VHS_VideoCombine` devient largement redondant comme sortie finale (le mux natif fait déjà le travail, avec le son) — conservé ici **uniquement** comme preview rapide GIF/WEBP optionnel, bypassé par défaut. Réactivez-le via son groupe si besoin d'un aperçu léger."
+      ],
+      "color": "#2f5f8f",
+      "bgcolor": "#111"
+    }
+  ],
+  "links": [
+    [
+      1,
+      6,
+      0,
+      8,
+      0,
+      "FLOAT"
+    ],
+    [
+      2,
+      11,
+      0,
+      15,
+      0,
+      "MODEL"
+    ],
+    [
+      3,
+      12,
+      0,
+      15,
+      1,
+      "CLIP"
+    ],
+    [
+      4,
+      15,
+      0,
+      17,
+      0,
+      "MODEL"
+    ],
+    [
+      5,
+      15,
+      1,
+      17,
+      1,
+      "CLIP"
+    ],
+    [
+      6,
+      17,
+      0,
+      19,
+      0,
+      "MODEL"
+    ],
+    [
+      7,
+      19,
+      0,
+      20,
+      0,
+      "MODEL"
+    ],
+    [
+      8,
+      20,
+      0,
+      22,
+      0,
+      "MODEL"
+    ],
+    [
+      9,
+      22,
+      0,
+      23,
+      0,
+      "MODEL"
+    ],
+    [
+      10,
+      23,
+      0,
+      25,
+      0,
+      "MODEL"
+    ],
+    [
+      11,
+      25,
+      0,
+      26,
+      0,
+      "MODEL"
+    ],
+    [
+      12,
+      26,
+      0,
+      29,
+      0,
+      "MODEL"
+    ],
+    [
+      13,
+      17,
+      1,
+      30,
+      0,
+      "CLIP"
+    ],
+    [
+      14,
+      30,
+      0,
+      39,
+      0,
+      "CLIP"
+    ],
+    [
+      15,
+      13,
+      0,
+      39,
+      1,
+      "VAE"
+    ],
+    [
+      16,
+      14,
+      0,
+      39,
+      2,
+      "VAE"
+    ],
+    [
+      17,
+      31,
+      0,
+      39,
+      3,
+      "IMAGE"
+    ],
+    [
+      18,
+      32,
+      0,
+      39,
+      4,
+      "IMAGE"
+    ],
+    [
+      19,
+      33,
+      0,
+      39,
+      5,
+      "IMAGE"
+    ],
+    [
+      20,
+      35,
+      0,
+      39,
+      6,
+      "IMAGE"
+    ],
+    [
+      21,
+      35,
+      2,
+      39,
+      7,
+      "AUDIO"
+    ],
+    [
+      22,
+      37,
+      0,
+      39,
+      8,
+      "AUDIO"
+    ],
+    [
+      23,
+      9,
+      0,
+      39,
+      9,
+      "STRING"
+    ],
+    [
+      24,
+      7,
+      0,
+      39,
+      10,
+      "INT"
+    ],
+    [
+      25,
+      7,
+      1,
+      39,
+      11,
+      "INT"
+    ],
+    [
+      26,
+      8,
+      1,
+      39,
+      12,
+      "INT"
+    ],
+    [
+      27,
+      29,
+      0,
+      42,
+      0,
+      "MODEL"
+    ],
+    [
+      28,
+      29,
+      0,
+      44,
+      0,
+      "MODEL"
+    ],
+    [
+      29,
+      39,
+      0,
+      44,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      30,
+      43,
+      0,
+      45,
+      0,
+      "NOISE"
+    ],
+    [
+      31,
+      44,
+      0,
+      45,
+      1,
+      "GUIDER"
+    ],
+    [
+      32,
+      41,
+      0,
+      45,
+      2,
+      "SAMPLER"
+    ],
+    [
+      33,
+      42,
+      0,
+      45,
+      3,
+      "SIGMAS"
+    ],
+    [
+      34,
+      39,
+      1,
+      45,
+      4,
+      "LATENT"
+    ],
+    [
+      35,
+      45,
+      0,
+      47,
+      0,
+      "LATENT"
+    ],
+    [
+      36,
+      13,
+      0,
+      47,
+      1,
+      "VAE"
+    ],
+    [
+      37,
+      45,
+      0,
+      48,
+      0,
+      "LATENT"
+    ],
+    [
+      38,
+      14,
+      0,
+      48,
+      1,
+      "VAE"
+    ],
+    [
+      39,
+      47,
+      0,
+      49,
+      0,
+      "IMAGE"
+    ],
+    [
+      40,
+      48,
+      0,
+      49,
+      1,
+      "AUDIO"
+    ],
+    [
+      41,
+      49,
+      0,
+      50,
+      0,
+      "VIDEO"
+    ],
+    [
+      42,
+      47,
+      0,
+      51,
+      0,
+      "IMAGE"
+    ],
+    [
+      43,
+      48,
+      0,
+      51,
+      1,
+      "AUDIO"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "0. PILOTAGE",
+      "bounding": [
+        -4750,
+        -820,
+        4500,
+        560
+      ],
+      "color": "#4a4a4a",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "A. CONFIGURATION",
+      "bounding": [
+        -4750,
+        -60,
+        1450,
+        940
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "B. CHARGEMENT MODÈLES",
+      "bounding": [
+        -3320,
+        -60,
+        780,
+        540
+      ],
+      "color": "#1c5d3b",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 4,
+      "title": "C1. LORA — STACK STANDARD",
+      "bounding": [
+        -2500,
+        -60,
+        620,
+        520
+      ],
+      "color": "#8a6d1f",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 5,
+      "title": "C2. LORA — CLIP RÉSERVÉ (bypass)",
+      "bounding": [
+        -1880,
+        -60,
+        580,
+        460
+      ],
+      "color": "#8a6d1f",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 6,
+      "title": "C3. LORA — BRANCHE TURBO (mute)",
+      "bounding": [
+        -1240,
+        -60,
+        580,
+        760
+      ],
+      "color": "#7a3b8a",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 7,
+      "title": "D1. ACCÉL. — SAGE ATTENTION (actif)",
+      "bounding": [
+        -2500,
+        500,
+        620,
+        590
+      ],
+      "color": "#7a3b8a",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 8,
+      "title": "D2/D3. ACCÉL. — EASYCACHE / SPECTRUM (bypass)",
+      "bounding": [
+        -1880,
+        500,
+        580,
+        650
+      ],
+      "color": "#7a3b8a",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 9,
+      "title": "D4. ACCÉL. — SOLATTN (réservé, non câblé)",
+      "bounding": [
+        -1240,
+        500,
+        580,
+        460
+      ],
+      "color": "#7a3b8a",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 10,
+      "title": "E. RÉFÉRENCES (images / vidéo / audio)",
+      "bounding": [
+        -4160,
+        960,
+        3760,
+        660
+      ],
+      "color": "#b5544a",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 11,
+      "title": "F. CONDITIONNEMENT",
+      "bounding": [
+        -620,
+        960,
+        540,
+        920
+      ],
+      "color": "#2b6d6d",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 12,
+      "title": "G. SAMPLING",
+      "bounding": [
+        -620,
+        600,
+        1330,
+        910
+      ],
+      "color": "#4a4a8a",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 13,
+      "title": "H. DÉCODAGE",
+      "bounding": [
+        670,
+        860,
+        380,
+        220
+      ],
+      "color": "#5a7a3a",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 14,
+      "title": "I. EXPORT",
+      "bounding": [
+        980,
+        860,
+        800,
+        500
+      ],
+      "color": "#2f5f8f",
+      "font_size": 24,
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.55,
+      "offset": [
+        4800,
+        900
+      ]
+    },
+    "frontendVersion": "1.0.0"
+  },
+  "version": 0.4
+}

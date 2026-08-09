@@ -64,6 +64,8 @@ source "${PROJECT_ROOT}/lib/download.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/models.sh"
 # shellcheck disable=SC1091
+source "${PROJECT_ROOT}/lib/lora_auto.sh"
+# shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/workflows.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/optimization.sh"
@@ -92,6 +94,7 @@ nvidia-smi || {
   create_model_folders
   run_step "hf_login" hf_login "$FORCE"
   if download_h3_models; then mark_step_done "h3_models"; fi
+  install_turbo_lora
   print_summary
   exit 0
 fi
@@ -107,6 +110,12 @@ run_step "comfyui_cloned"     clone_or_update_comfyui     "$FORCE"
 run_step "python_venv"        setup_python_venv          "$FORCE"
 run_step "comfyui_requirements" install_comfyui_requirements "$FORCE"
 install_extra_requirements
+# Pas de run_step ici volontairement : l'idempotence d'install_sageattention
+# vient de son propre check `import sageattention` (cf. lib/python.sh), pas
+# d'un state-file. Un run_step marquerait l'étape "faite" même en cas
+# d'échec réseau/compilation transitoire, empêchant toute nouvelle tentative
+# au prochain lancement sans passer par --force (qui refait tout le reste).
+install_sageattention
 run_step "manager_installed"  install_or_update_manager   "$FORCE"
 run_step "optional_nodes"     install_optional_nodes      "$FORCE"
 run_step "model_folders"      create_model_folders        "$FORCE"
@@ -140,6 +149,7 @@ if [[ "$SKIP_MODELS" == "false" ]]; then
   else
     log_ok "Modèles H3 déjà téléchargés, étape sautée."
   fi
+  install_turbo_lora
 else
   log_info "--skip-models : téléchargement des poids H3 sauté (à faire plus tard via menu.sh ou --only-models)."
 fi

@@ -164,5 +164,6 @@ except Exception as e:
 
 print(f"[xformers]        {status('xformers')}")
 print(f"[flash_attn]      {status('flash_attn')}")
+print(f"[sageattention]   {status('sageattention')}")
 PYEOF
 }
