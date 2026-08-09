@@ -21,6 +21,7 @@
 # Usage :
 #   ./install_lora.sh <URL>                    installe (ou saute si déjà présent)
 #   ./install_lora.sh --force <URL>             réinstalle même si déjà présent
+#   ./install_lora.sh --filename <nom> <URL>    force un nom local explicite
 #   ./install_lora.sh --list                    liste les LoRA installés (avec taille)
 #   ./install_lora.sh --remove <fichier>        supprime un LoRA (confirmation demandée)
 #   ./install_lora.sh --help                    aide détaillée
@@ -30,9 +31,18 @@
 #   bash install_lora.sh https://civitai.com/api/download/models/123456
 #   bash install_lora.sh https://civitai.red/api/download/models/3193337?fileId=3074134
 #   bash install_lora.sh --force https://civitai.com/api/download/models/123456
+#   bash install_lora.sh --filename my_turbo_lora.safetensors https://civitai.com/api/download/models/123456
 #   bash install_lora.sh --list
 #   bash install_lora.sh --remove anime_style.safetensors
 #   CIVITAI_API_KEY=xxxxx bash install_lora.sh https://civitai.com/api/download/models/123456
+#
+# --filename <nom> :
+#   Impose le nom du fichier local dans models/loras/, quelle que soit
+#   l'URL fournie (extension .safetensors garantie automatiquement si
+#   absente). Sans ce flag, comportement historique inchangé : nom déduit
+#   de l'URL directe, ou de l'en-tête Content-Disposition pour CivitAI. Un
+#   nom explicite évite aussi une requête réseau superflue (curl -I) rien
+#   que pour déterminer le nom quand il est déjà connu à l'avance.
 #
 # Script utilitaire additionnel : il ne modifie ni config.env, ni install.sh,
 # ni le flux d'installation existant (lib/*.sh non touchés). Il n'a besoin
@@ -105,6 +115,14 @@ Installation :
       Exemple :
         $0 --force https://civitai.com/api/download/models/123456
 
+  $0 --filename <nom.safetensors> <URL>
+      Impose le nom local du fichier dans ${LORA_DIR}, au lieu du nom
+      déduit de l'URL / de l'en-tête Content-Disposition. Combinable avec
+      --force. L'extension .safetensors est garantie même si omise.
+
+      Exemple :
+        $0 --filename my_turbo_lora.safetensors https://civitai.com/api/download/models/123456
+
 Consultation :
   $0 --list
       Affiche tous les LoRA installés, numérotés, avec la taille de chacun
@@ -162,8 +180,10 @@ civitai_auth_curl_args() {
   fi
 }
 
-# determine_lora_filename <url>
+# determine_lora_filename <url> [override]
 # Détermine le nom de fichier local le plus fiable possible :
+#   0) [override] non vide -> utilisé tel quel (priorité absolue, aucune
+#      requête réseau nécessaire pour le déterminer)
 #   1) URL se terminant directement par .safetensors -> on garde ce nom
 #   2) CivitAI (civitai.com / civitai.red) -> le vrai nom est dans l'en-tête
 #      Content-Disposition renvoyé après redirection, pas dans l'URL
@@ -171,8 +191,16 @@ civitai_auth_curl_args() {
 # Dans tous les cas, l'extension .safetensors est garantie en sortie.
 determine_lora_filename() {
   local url="$1"
+  local override="${2:-}"
   local path_part="${url%%\?*}"
   local name=""
+
+  if [[ -n "$override" ]]; then
+    name="$override"
+    [[ "$name" != *.safetensors ]] && name="${name}.safetensors"
+    echo "$name"
+    return 0
+  fi
 
   if [[ "$path_part" == *.safetensors ]]; then
     basename "$path_part"
@@ -394,16 +422,20 @@ print_banner() {
 }
 
 install_lora() {
-  local url="$1" force="$2"
+  local url="$1" force="$2" filename_override="${3:-}"
 
   check_comfyui_installed
   create_lora_folder
 
   local filename dest_file
-  filename="$(determine_lora_filename "$url")"
+  filename="$(determine_lora_filename "$url" "$filename_override")"
   dest_file="${LORA_DIR}/${filename}"
 
-  log_info "Nom de fichier détecté : ${filename}"
+  if [[ -n "$filename_override" ]]; then
+    log_info "Nom de fichier imposé (--filename) : ${filename}"
+  else
+    log_info "Nom de fichier détecté : ${filename}"
+  fi
 
   if [[ -n "${CIVITAI_API_KEY:-}" ]] && is_civitai_url "$url"; then
     log_info "Using CivitAI API authentication."
@@ -450,6 +482,7 @@ main() {
   local action="install"
   local force="false"
   local remove_target=""
+  local filename_override=""
   local positional=()
 
   while [[ $# -gt 0 ]]; do
@@ -475,6 +508,16 @@ main() {
         ;;
       --force)
         force="true"
+        shift
+        ;;
+      --filename)
+        shift
+        if [[ $# -lt 1 ]]; then
+          log_error "--filename attend un nom de fichier en argument."
+          usage
+          exit 1
+        fi
+        filename_override="$1"
         shift
         ;;
       -*)
@@ -510,7 +553,7 @@ main() {
       fi
 
       print_banner
-      install_lora "$lora_url" "$force"
+      install_lora "$lora_url" "$force" "$filename_override"
       ;;
   esac
 }

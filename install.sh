@@ -94,6 +94,7 @@ nvidia-smi || {
   create_model_folders
   run_step "hf_login" hf_login "$FORCE"
   if download_h3_models; then mark_step_done "h3_models"; fi
+  install_turbo_node
   install_turbo_lora
   print_summary
   exit 0
@@ -149,6 +150,7 @@ if [[ "$SKIP_MODELS" == "false" ]]; then
   else
     log_ok "Modèles H3 déjà téléchargés, étape sautée."
   fi
+  install_turbo_node
   install_turbo_lora
 else
   log_info "--skip-models : téléchargement des poids H3 sauté (à faire plus tard via menu.sh ou --only-models)."

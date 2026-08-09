@@ -61,7 +61,11 @@ install_optional_nodes
 # installé (main.py présent) vers update.sh, jamais install.sh — sans cet
 # appel, un pod redémarré avec un volume réseau où ce LoRA manquerait
 # (ancien volume antérieur à cette fonctionnalité, suppression manuelle...)
-# ne le récupérerait jamais automatiquement.
+# ne le récupérerait jamais automatiquement. Même raisonnement pour le
+# custom node Turbo ci-dessous : install_turbo_node() est un simple clone-
+# si-absent (jamais de git pull automatique, voir lib/lora_auto.sh), donc
+# sans risque de mise à jour intempestive à chaque redémarrage de pod.
+install_turbo_node
 install_turbo_lora
 
 compute_optimization_flags

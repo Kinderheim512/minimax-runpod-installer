@@ -1,7 +1,7 @@
 {
   "id": "b1e6c2a4-h3r2v-4f3a-9c1d-official-h3-workflow",
   "revision": 0,
-  "last_node_id": 52,
+  "last_node_id": 56,
   "last_link_id": 43,
   "nodes": [
     {
@@ -96,7 +96,7 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎚️ MUTE — C3. Branche Turbo LoRA (désactivée par défaut)",
+      "title": "🎚️ MUTE — C3. Branche Turbo LoRA (ACTIVE — sampler dédié installé)",
       "properties": {
         "Node name for S&R": "Fast Groups Muter (rgthree)",
         "matchTitle": "^C3\\."
@@ -619,7 +619,7 @@
     },
     {
       "id": 19,
-      "type": "LoraLoaderModelOnly",
+      "type": "MiniMaxH3TurboLoRA",
       "pos": [
         -1180,
         0
@@ -647,9 +647,9 @@
           ]
         }
       ],
-      "title": "⚡ C3. Turbo LoRA — v4_step600 pruned, force 1.0 (ACTIF, + Sage Attention)",
+      "title": "⚡ C3. MiniMax H3 Turbo LoRA — nœud officiel larryvrh (dédié, ACTIF)",
       "properties": {
-        "Node name for S&R": "LoraLoaderModelOnly"
+        "Node name for S&R": "MiniMaxH3TurboLoRA"
       },
       "widgets_values": [
         "minimax_h3_turbo_v4_step600_pruned_comfyui.safetensors",
@@ -712,15 +712,15 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "⚡ Branche Turbo LoRA — LIRE avant activation",
+      "title": "✅ Branche Turbo LoRA — sampler dédié installé (risque audio corrigé)",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Architecturalement à part — ne pas juste \"activer\"\n\nLa LoRA Turbo MiniMax H3 (few-step) n'est **pas un simple patch de poids** : elle nécessite un sampler dédié, remplaçant `KSamplerSelect`/`BasicScheduler`/`SamplerCustomAdvanced` du groupe G, car la vidéo et l'audio tournent sur deux échelles de bruit différentes (shift≈12 vidéo, shift≈3 audio). Un sampler standard \"sur-avance\" l'audio à faible step count → signal cassé.\n\n**Ce que ce nœud générique `LoraLoaderModelOnly` fait ici :** un point de branchement neutre, prêt à recevoir le fichier LoRA Turbo une fois choisi — **pas** un sampler Turbo dédié : je n'ai pas trouvé de nom de nœud de sampler Turbo suffisamment stable/standardisé pour l'écrire en dur sans risquer un import cassé (écosystème encore fragmenté à ce jour, plusieurs conversions concurrentes).\n\n**Avant d'activer cette branche :**\n1. Choisissez la conversion LoRA compatible avec le checkpoint **pruned** (`minimax_h3_ref2va_pruned_int8_convrot`) — privilégiez une conversion pensée spécifiquement pour les checkpoints pruned plutôt qu'un fichier LoRA brut, la compatibilité pruned n'étant pas garantie universellement.\n2. Installez le nœud de sampler Turbo dédié fourni par cette conversion et câblez-le en **remplacement** du groupe G (Sampling), pas en complément.\n3. Testez vous-même avant production — des erreurs de forme non bloquantes sur certaines couches ont été rapportées par la communauté sur cette combinaison checkpoint pruned + LoRA Turbo.\n\nCette branche reste **MUTE (désactivée)** par défaut et n'interfère avec rien du chemin principal."
+        "## Mis à jour — nœuds officiels installés\n\nCette branche utilise maintenant les vrais nœuds dédiés du dépôt [larryvrh/ComfyUI-MiniMax-H3-Turbo](https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo) :\n\n- **C3** : `MiniMaxH3TurboLoRA` (au lieu du `LoraLoaderModelOnly` générique)\n- **G** : `MiniMaxH3TurboSampler` (au lieu du `KSamplerSelect` générique) — gère les deux échelles de bruit vidéo/audio (shift≈12 / shift≈3) séparément, donc l'audio ne casse plus à faible step count.\n\n**Prérequis pour que ça tourne réellement :** installer le custom node (`ComfyUI-Manager` → chercher \"MiniMax-H3 Turbo\", ou `git clone` manuel dans `custom_nodes/`) — sinon ComfyUI signalera un nœud manquant au chargement du graphe.\n\n**Réglages recommandés par l'auteur :** scheduler `simple`, 4 à 8 steps (8 = qualité un peu meilleure, pas de gain au-delà), force LoRA à 1.0 (déjà réglé)."
       ],
-      "color": "#7a3b8a",
-      "bgcolor": "#111"
+      "color": "#1c5d3b",
+      "bgcolor": "#153"
     },
     {
       "id": 22,
@@ -1204,7 +1204,7 @@
       ],
       "flags": {},
       "order": 0,
-      "mode": 0,
+      "mode": 2,
       "inputs": [],
       "outputs": [
         {
@@ -1236,16 +1236,21 @@
       "properties": {
         "Node name for S&R": "VHS_LoadVideo"
       },
-      "widgets_values": [
-        "reference_motion.mp4",
-        24,
-        "Disabled",
-        512,
-        512,
-        0,
-        0,
-        1
-      ],
+      "widgets_values": {
+        "video": "reference_motion.mp4",
+        "force_rate": 24,
+        "custom_width": 0,
+        "custom_height": 0,
+        "frame_load_cap": 0,
+        "skip_first_frames": 0,
+        "select_every_nth": 1,
+        "format": "AnimateDiff",
+        "videopreview": {
+          "hidden": false,
+          "paused": false,
+          "params": {}
+        }
+      },
       "color": "#b5544a",
       "bgcolor": "#633"
     },
@@ -1493,7 +1498,7 @@
     },
     {
       "id": 41,
-      "type": "KSamplerSelect",
+      "type": "MiniMaxH3TurboSampler",
       "pos": [
         -40,
         640
@@ -1515,13 +1520,11 @@
           ]
         }
       ],
-      "title": "🎯 Sampler — res_multistep",
+      "title": "🎯 MiniMax H3 Turbo Sampler — nœud officiel larryvrh (dual-clock vidéo/audio)",
       "properties": {
-        "Node name for S&R": "KSamplerSelect"
+        "Node name for S&R": "MiniMaxH3TurboSampler"
       },
-      "widgets_values": [
-        "res_multistep"
-      ],
+      "widgets_values": [],
       "color": "#4a4a8a",
       "bgcolor": "#337"
     },
@@ -1984,6 +1987,110 @@
       ],
       "color": "#2f5f8f",
       "bgcolor": "#111"
+    },
+    {
+      "id": 53,
+      "type": "MarkdownNote",
+      "pos": [
+        -3060,
+        1600
+      ],
+      "size": [
+        420,
+        420
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🎥 VHS_LoadVideo — bien régler les paramètres (poids vs fiabilité)",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## Paramètres qui comptent vraiment\n\n**`skip_first_frames`** — saute N frames AVANT de charger quoi que ce soit. ⚠️ Piège vécu sur ce projet : si `skip_first_frames` ≥ nombre total de frames de la vidéo, il ne reste RIEN à charger → référence vide → rejetée par `MiniMaxH3ReferenceToVideo`. Laisser à `0` sauf besoin précis de couper un début de clip.\n\n**`frame_load_cap`** — plafond de frames chargées après le skip. `0` = pas de plafond (charge tout le reste). Sur une vidéo très longue, plafonner (ex. 120-200) réduit le poids d'entrée sans avoir à retoucher le fichier source.\n\n**`select_every_nth`** — garde 1 frame sur N. Un bon complément à `frame_load_cap` sur une vidéo longue : `select_every_nth=2` divise le poids par 2 en conservant le mouvement global (juste un peu moins fluide en détail).\n\n**`force_rate`** — aligner sur 24 (le fps de sortie H3, cf. `CreateVideo`). Un décalage de fps introduit un resampling qui peut désynchroniser légèrement le mouvement de référence.\n\n**`custom_width` / `custom_height`** (actif seulement si `force_size` ≠ `Disabled`) — forcer une résolution basse (ex. 512-768 px de côté) réduit nettement le poids d'entrée. Par défaut (`Disabled`), la vidéo est chargée à sa résolution native : inutilement lourd si elle dépasse largement la résolution de sortie choisie dans `Résolution (Size)` (groupe A).\n\n**Repère pratique :** pour une vidéo de référence 'mouvement', mieux vaut un clip **court mais représentatif** (quelques secondes suffisent généralement) en **résolution modeste**, plutôt qu'un clip long en pleine résolution. Le sur-échantillonnage (trop de frames, trop de pixels) n'améliore pas la fidélité du mouvement transmis à H3 — il alourdit juste le chargement et la VRAM."
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 54,
+      "type": "MarkdownNote",
+      "pos": [
+        -4100,
+        1600
+      ],
+      "size": [
+        620,
+        300
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🖼️ Références Image — poids selon ref_image_size",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## Le vrai levier de poids est sur le nœud F, pas ici\n\n`ref_image_size` (widget du nœud `MiniMaxH3ReferenceToVideo`, groupe F) contrôle ce qui se passe après le chargement :\n\n- **`match`** (par défaut) : chaque image de référence est réduite à la résolution de sortie avant sampling → poids d'entrée peu important, tu peux charger des images assez grandes sans souci.\n- **`max`** : jusqu'à 2048 px de côté court est conservé, et ces tokens de référence restent actifs à **chaque step** du sampling → le coût VRAM/temps grimpe fortement avec la résolution ET le nombre d'images cumulées.\n\n**Recommandations si tu passes en `max` :**\n- limite-toi à 3-4 images de référence maximum sur une A6000 48 Go ;\n- pré-recadre les images sur le sujet pertinent (visage, tenue, style) avant de les charger — pas la peine de garder une photo 4K pleine résolution si seul un détail sert de référence ;\n- pas besoin de pré-redimensionner en `match` : le nœud le fait déjà, l'optimisation ne rapporte rien ici."
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 55,
+      "type": "MarkdownNote",
+      "pos": [
+        -2700,
+        1600
+      ],
+      "size": [
+        340,
+        300
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🎙️ Référence Audio — durée et échantillonnage",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "Le nœud `LoadAudio` de base n'a **pas de réglage de découpe intégré** (pas de start/duration) — il charge le fichier entier tel quel. Si ton audio de référence est plus long que la durée cible (widget 'Durée (secondes)', groupe A), coupe-le **en amont** (hors ComfyUI) à la longueur voulue pour éviter une incohérence entre la voix/musique de référence et la durée générée.\n\n**Échantillonnage :** vise du 44.1 kHz ou 48 kHz. Un fichier à 32 kHz (observé sur une de tes exports générées) peut introduire des artefacts avec le VAE audio H3 — rééchantillonne en amont si besoin (ex. via ffmpeg `-ar 48000`)."
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 56,
+      "type": "MarkdownNote",
+      "pos": [
+        -3060,
+        940
+      ],
+      "size": [
+        320,
+        70
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "⚠️ Placeholder — remplacer avant usage",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "`reference_motion.mp4` n'existe pas sur le pod → nœud **muté** par défaut. Pour l'utiliser : uploade ta vraie vidéo, sélectionne-la dans le widget `video`, puis repasse ce nœud en mode actif (mode 0)."
+      ],
+      "color": "#8a1f1f",
+      "bgcolor": "#411"
     }
   ],
   "links": [
