@@ -14,10 +14,11 @@ while true; do
   echo "  4) Mettre à jour"
   echo "  5) Lancer ComfyUI"
   echo "  6) Lancer ComfyUI (tmux recommandé)"
-  echo "  7) Désinstaller"
-  echo "  8) Quitter"
+  echo "  7) Arrêter ComfyUI (utile si un lancement précédent est resté bloqué)"
+  echo "  8) Désinstaller"
+  echo "  9) Quitter"
   echo ""
-  read -r -p "  Choix [1-8] : " choice
+  read -r -p "  Choix [1-9] : " choice
 
   # "|| true" sur chaque sous-commande : sous set -e, un install.sh/check.sh/
   # uninstall.sh qui échoue (ou qu'on annule) tuerait sinon tout le menu au
@@ -29,8 +30,9 @@ while true; do
     4) bash "${PROJECT_ROOT}/update.sh" || true ;;
     5) bash "${PROJECT_ROOT}/launch.sh" || true ;;
     6) bash "${PROJECT_ROOT}/launch.sh" --tmux || true ;;
-    7) bash "${PROJECT_ROOT}/uninstall.sh" || true ;;
-    8) echo "Au revoir."; exit 0 ;;
+    7) bash "${PROJECT_ROOT}/launch.sh" --stop || true ;;
+    8) bash "${PROJECT_ROOT}/uninstall.sh" || true ;;
+    9) echo "Au revoir."; exit 0 ;;
     *) echo "Choix invalide." ;;
   esac
 done

@@ -14,6 +14,78 @@
 set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMUX_SESSION_NAME="minimax"
+# Défini avant de sourcer lib/utils.sh (qui ne fixe ce chemin que si vide)
+# pour que TOUS les logs de ce script, dès la toute première ligne,
+# atterrissent dans launch.log — comportement inchangé par rapport à avant.
+LOG_FILE="${PROJECT_ROOT}/logs/launch.log"
+
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/config.env"
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/lib/utils.sh"
+
+# Détection d'un process ComfyUI "fantôme" ------------------------------
+# But : distinguer trois situations avant de lancer, plutôt qu'une seule
+# ("répond sur le port" / "ne répond pas") :
+#   1. Un serveur tourne ET répond déjà sur COMFYUI_PORT -> rien à faire.
+#   2. Un process main.py de CETTE installation tourne mais ne répond pas
+#      encore (démarrage en cours : chargement modèles, ~30-60s) OU plus du
+#      tout (planté/bloqué, VRAM potentiellement toujours occupée) -> ne
+#      JAMAIS lancer une seconde instance par-dessus (elle se battrait pour
+#      le même port et la même VRAM) : on prévient et on laisse la main.
+#   3. Rien ne tourne -> lancement normal.
+# `main.py` est lancé avec un chemin RELATIF (`cd "$INSTALL_DIR"; exec python
+# main.py`, cf. plus bas) : la ligne de commande ne contient donc jamais
+# INSTALL_DIR en clair, et un simple `pgrep -f ".../main.py"` ne matcherait
+# jamais rien. On identifie donc chaque candidat par sa ligne de commande
+# (contient "main.py"), puis on vérifie son répertoire de travail réel via
+# /proc/<pid>/cwd — c'est ça qui garantit qu'on cible bien CETTE installation
+# ComfyUI (INSTALL_DIR), pas un autre process python du système qui aurait
+# aussi "main.py" dans sa ligne de commande.
+find_comfyui_pid() {
+  require_cmd pgrep || return 0
+  local target_dir pid cwd
+  target_dir="$(readlink -f "$INSTALL_DIR" 2>/dev/null)"
+  [[ -n "$target_dir" ]] || return 0
+  for pid in $(pgrep -f 'python[3]?[^&]*main\.py' 2>/dev/null); do
+    cwd="$(readlink -f "/proc/${pid}/cwd" 2>/dev/null)"
+    [[ -n "$cwd" && "$cwd" == "$target_dir" ]] && echo "$pid"
+  done
+  # Sous `set -e` (utilisé par ce script), une fonction appelée comme
+  # `var="$(find_comfyui_pid)"` fait avorter tout le script si son code de
+  # sortie est non-nul — or "rien trouvé" (aucune ligne imprimée par le
+  # `for` ci-dessus) est un résultat NORMAL, pas une erreur : sans ce
+  # `return 0` explicite, le statut de sortie hérite de celui du dernier
+  # `[[ ... ]] && echo` évalué (1 s'il n'y avait pas de match), ce qui
+  # ferait planter stop_comfyui() en plein milieu au 2e appel de
+  # vérification post-kill (bug repéré en testant cette correction).
+  return 0
+}
+
+stop_comfyui() {
+  local pids
+  pids="$(find_comfyui_pid)"
+  if [[ -z "$pids" ]]; then
+    log_info "Aucun process ComfyUI (${INSTALL_DIR}/main.py) trouvé — rien à arrêter."
+    return 0
+  fi
+  log_info "Arrêt de ComfyUI (PID : ${pids//$'\n'/, })..."
+  # shellcheck disable=SC2086  # plusieurs PID possibles sur des lignes séparées, split volontaire
+  kill $pids 2>/dev/null || true
+  sleep 2
+  pids="$(find_comfyui_pid)"
+  if [[ -n "$pids" ]]; then
+    log_warn "Toujours actif après SIGTERM (PID : ${pids//$'\n'/, }) — arrêt forcé (SIGKILL)."
+    # shellcheck disable=SC2086
+    kill -9 $pids 2>/dev/null || true
+  fi
+  log_ok "ComfyUI arrêté — la VRAM qu'il occupait devrait être libérée sous peu."
+}
+
+if [[ "${1:-}" == "--stop" ]]; then
+  stop_comfyui
+  exit 0
+fi
 
 attach_tmux_if_interactive() {
   # Point d'attache unique pour la session tmux : s'exécute exactement comme
@@ -62,22 +134,22 @@ if [[ "${1:-}" == "--tmux" ]]; then
   launch_in_tmux
 fi
 
-if curl -fs "http://127.0.0.1:8188" >/dev/null 2>&1; then
-
+if curl -fs "http://127.0.0.1:${COMFYUI_PORT}" >/dev/null 2>&1; then
     echo
-    echo "[INFO] ComfyUI est déjà lancé."
+    log_ok "ComfyUI est déjà lancé et répond sur le port ${COMFYUI_PORT}."
     echo
-
     exit 0
-
 fi
 
-LOG_FILE="${PROJECT_ROOT}/logs/launch.log"
-
-# shellcheck disable=SC1091
-source "${PROJECT_ROOT}/config.env"
-# shellcheck disable=SC1091
-source "${PROJECT_ROOT}/lib/utils.sh"
+existing_pid="$(find_comfyui_pid)"
+if [[ -n "$existing_pid" ]]; then
+  echo
+  log_warn "Un process ComfyUI (PID : ${existing_pid//$'\n'/, }) tourne déjà mais ne répond pas (encore) sur le port ${COMFYUI_PORT}."
+  log_warn "S'il vient d'être lancé : patientez le temps du chargement des modèles (30-60s selon le GPU) puis réessayez."
+  log_warn "S'il est bloqué/planté (VRAM potentiellement toujours occupée) : bash launch.sh --stop, puis relancez."
+  echo
+  exit 1
+fi
 
 if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
   log_error "Environnement virtuel introuvable (${VENV_DIR}). Lancez d'abord bash install.sh."
