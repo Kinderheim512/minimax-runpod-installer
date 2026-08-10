@@ -126,7 +126,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Modèles requis (4 fichiers)\n\n**diffusion_models/**\n`minimax_h3_ref2va_pruned_int8_convrot.safetensors`\n\n**text_encoders/**\n`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`\n\n**vae/**\n`minimax_h3_video_vae_fp16.safetensors`\n`minimax_h3_audio_vae_fp32.safetensors`\n\nSource : 🤗 Comfy-Org/MiniMax-H3\n\n## Extensions requises\n- ComfyUI core ≥ 0.30 (nœuds MiniMax H3 natifs)\n- ComfyUI-KJNodes (Kijai) — Patch Sage Attention KJ + Mem-Eff Sage Attention Patch H3\n- rgthree-comfy — LoRA, bascules, reroutes\n- ComfyUI-Spectrum-MiniMax-H3 (xmarre) — groupe D3 uniquement, désactivé par défaut\n- ComfyUI-VideoHelperSuite — ingestion vidéo de référence (groupe E) + preview optionnel (groupe I)\n- `sageattention` (lib Python) installée dans l'environnement ComfyUI"
+        "## Modèles requis (4 fichiers de base + 1 LoRA)\n\n**diffusion_models/**\n`minimax_h3_ref2va_pruned_int8_convrot.safetensors`\n\n**text_encoders/**\n`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`\n\n**vae/**\n`minimax_h3_video_vae_fp16.safetensors`\n`minimax_h3_audio_vae_fp32.safetensors`\n\n**loras/**\n`minimax_h3_turbo_v4_step600_ema.safetensors`\n*(requis car la branche Turbo LoRA — groupe C3 — est active par défaut dans ce workflow)*\n\nSource : 🤗 Comfy-Org/MiniMax-H3\n\n## Extensions requises\n- ComfyUI core ≥ 0.30 (nœuds MiniMax H3 natifs)\n- ComfyUI-KJNodes (Kijai) — Patch Sage Attention KJ + Mem-Eff Sage Attention Patch H3\n- rgthree-comfy — LoRA, bascules, reroutes\n- ComfyUI-Spectrum-MiniMax-H3 (xmarre) — groupe D3 uniquement, désactivé par défaut\n- ComfyUI-VideoHelperSuite — ingestion vidéo de référence (groupe E) + preview optionnel (groupe I)\n- `sageattention` (lib Python) installée dans l'environnement ComfyUI"
       ],
       "color": "#3f789e",
       "bgcolor": "#111"
@@ -652,7 +652,7 @@
         "Node name for S&R": "MiniMaxH3TurboLoRA"
       },
       "widgets_values": [
-        "minimax_h3_turbo_v4_step600_pruned_comfyui.safetensors",
+        "minimax_h3_turbo_v4_step600_ema.safetensors",
         1.0
       ],
       "color": "#7a3b8a",
@@ -1210,9 +1210,7 @@
         {
           "name": "IMAGE",
           "type": "IMAGE",
-          "links": [
-            20
-          ]
+          "links": []
         },
         {
           "name": "frame_count",
@@ -1222,9 +1220,7 @@
         {
           "name": "AUDIO",
           "type": "AUDIO",
-          "links": [
-            21
-          ]
+          "links": []
         },
         {
           "name": "video_info",
@@ -1275,7 +1271,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "`VHS_LoadVideo` plutôt qu'un loader natif basique : `force_rate` (aligné 24 fps), `frame_load_cap` et redimensionnement permettent d'homogénéiser des clips hétérogènes avant envoi à H3.\n\nPour une 2ᵉ/3ᵉ référence vidéo, dupliquez ce nœud et branchez-le sur `ref_video_1` / `ref_video_2` (+ `ref_video_audio_1` / `_2` si la vidéo a une bande-son à conserver)."
+        "`VHS_LoadVideo` plutôt qu'un loader natif basique : `force_rate` (aligné 24 fps), `frame_load_cap` et redimensionnement permettent d'homogénéiser des clips hétérogènes avant envoi à H3.\n\nPour une 2ᵉ/3ᵉ référence vidéo, dupliquez ce nœud et branchez-le sur `ref_video_1` / `ref_video_2` (+ `ref_video_audio_1` / `_2` si la vidéo a une bande-son à conserver).\n\nComme pour la 1ʳᵉ référence vidéo (cf. note ⚠️ Placeholder) : le fil `AUDIO` n'est à connecter que si tu veux garder le son de cette vidéo — pour le mouvement seul, laisse-le débranché, aucun souci."
       ],
       "color": "#b5544a",
       "bgcolor": "#111"
@@ -1336,7 +1332,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "Donnez un **rôle explicite** à chaque référence dans le prompt (identité / style / mouvement / caméra / voix) et respectez strictement l'**ordre de connexion** pour que la numérotation `<Picture i>` / `<Video k>` / `<Audio j>` corresponde — bonne pratique documentée par Comfy-Org."
+        "## Rappel — règle de rôle des références\n\nMême règle que la note 📎 « Règle de tagging » en haut du graphe (groupe A) : rôle explicite (identité / style / mouvement / caméra / voix) + ordre de connexion respecté pour que `<Picture i>` / `<Video k>` / `<Audio j>` correspondent.\n\nVoir cette note pour le détail complet — c'est la même règle, pas une variante."
       ],
       "color": "#b5544a",
       "bgcolor": "#111"
@@ -1392,13 +1388,13 @@
         {
           "name": "ref_videos.ref_video_0",
           "type": "IMAGE",
-          "link": 20,
+          "link": null,
           "shape": 7
         },
         {
           "name": "ref_video_audios.ref_video_audio_0",
           "type": "AUDIO",
-          "link": 21,
+          "link": null,
           "shape": 7
         },
         {
@@ -1491,7 +1487,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "`match` (par défaut) : références réduites à la résolution de sortie — plus rapide.\n\n`max` : jusqu'à 2048 px de côté court conservé — meilleure fidélité d'identité, mais nettement plus lent (les tokens de référence restent actifs à chaque step de sampling)."
+        "## Rappel — ref_image_size\n\n`match` (par défaut, rapide) vs `max` (plus fidèle, plus lent). Voir la note 🖼️ « Références Image — poids selon ref_image_size » (groupe E) pour le détail complet et les recommandations chiffrées — même compromis, explication plus complète là-bas."
       ],
       "color": "#2b6d6d",
       "bgcolor": "#111"
@@ -1733,7 +1729,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "Base large documentée : `res_multistep` + scheduler `simple`, 20 steps. Dégradation notable < 15 steps, gain modeste > 25 steps.\n\n⚠️ **Ne pas utiliser `LCM` + scheduler `Beta`** en réglage par défaut : retour communautaire confirmé — casse complètement l'audio (bruit/sifflement), malgré la promesse de vitesse."
+        "Base large documentée : `res_multistep` + scheduler `simple`, 20 steps. Dégradation notable < 15 steps, gain modeste > 25 steps.\n\n⚠️ **Ne pas utiliser `LCM` + scheduler `Beta`** en réglage par défaut : retour communautaire confirmé — casse complètement l'audio (bruit/sifflement), malgré la promesse de vitesse.\n\n⚠️ **Ce seuil de 15 steps concerne le pipeline de base (sans Turbo LoRA).** La branche Turbo (C3, active par défaut dans ce workflow) est spécifiquement conçue et validée par son auteur pour tourner à 4-8 steps — les 8 steps actuellement configurés sont donc normaux et attendus, pas une erreur de réglage."
       ],
       "color": "#4a4a8a",
       "bgcolor": "#111"
@@ -2087,7 +2083,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "`reference_motion.mp4` n'existe pas sur le pod → nœud **muté** par défaut. Pour l'utiliser : uploade ta vraie vidéo, sélectionne-la dans le widget `video`, puis repasse ce nœud en mode actif (mode 0)."
+        "`reference_motion.mp4` n'existe pas sur le pod → nœud **muté** par défaut, **et les liens vers `ref_video_0` / `ref_video_audio_0` (nœud F) ont été retirés** pour que le workflow se charge et s'exécute sans erreur même sans référence vidéo.\n\n## Pour utiliser une vraie référence vidéo\n\n1. Uploade ta vidéo et sélectionne-la dans le widget `video` de ce nœud.\n2. Repasse ce nœud en mode actif (clic droit → Mode → Always).\n3. **Reconnecte manuellement** sa sortie `IMAGE` vers l'entrée `ref_videos.ref_video_0` du nœud F (MiniMax H3 — Reference to Video) — c'est ce qui transmet le **mouvement**.\n4. La sortie `AUDIO` vers `ref_video_audios.ref_video_audio_0` est **optionnelle** : connecte-la **seulement si tu veux garder le son de la vidéo de référence** (voix, musique, bruitage). Si tu ne veux que le mouvement, laisse `AUDIO` déconnecté — aucune erreur, le reste du workflow fonctionne normalement.\n\n⚠️ Muter ce nœud sans déconnecter ses liens (ou l'inverse) fait planter la validation du prompt (erreur au nœud `Save Video`) — toujours faire les deux ensemble : actif+connecté, ou muté+déconnecté."
       ],
       "color": "#8a1f1f",
       "bgcolor": "#411"
@@ -2245,22 +2241,6 @@
       39,
       5,
       "IMAGE"
-    ],
-    [
-      20,
-      35,
-      0,
-      39,
-      6,
-      "IMAGE"
-    ],
-    [
-      21,
-      35,
-      2,
-      39,
-      7,
-      "AUDIO"
     ],
     [
       22,
