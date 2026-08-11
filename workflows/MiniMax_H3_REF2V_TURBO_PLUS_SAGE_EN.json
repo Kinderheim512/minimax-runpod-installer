@@ -1,5 +1,5 @@
 {
-  "id": "b1e6c2a4-h3r2v-4f3a-9c1d-official-h3-workflow",
+  "id": "b1e6c2a4-h3r2v-4f3a-9c1d-official-h3-workflow-en",
   "revision": 0,
   "last_node_id": 56,
   "last_link_id": 43,
@@ -25,7 +25,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## MiniMax H3 — REF2V Turbo + Sage\n\n**Lecture du graphe (gauche → droite) :**\n`A. Configuration` → `B. Modèles` → `C. LoRA` → `D. Accélérations` → `E. Références` → `F. Conditionnement` → `G. Sampling` → `H. Décodage` → `I. Export`\n\n### Bascules de groupes\n- **Bypass** : le MODEL/CLIP traverse le groupe sans être modifié. Utilisé pour C2, D2 et D3.\n- **Mute** : la branche ne s’exécute pas. Utilisé pour la branche parallèle C3.\n\n### Lire les annotations\nChaque note détaillée est placée auprès d’un seul composant et explique ses réglages, son rôle et le moment où le modifier. Les deux notes en tête de graphe restent globales : elles décrivent le workflow et les prérequis.\n\n**Référence de validation :** RTX A6000 48 Go (Ampere / SM86), ComfyUI 0.31. Les réglages mémoire et CUDA restent adaptatifs : ne forcez pas une stack CUDA différente depuis le workflow."
+        "## MiniMax H3 — REF2V Turbo + Sage\n\n**Read the graph (left → right):**\n`A. Configuration` → `B. Models` → `C. LoRA` → `D. Accelerations` → `E. References` → `F. Conditioning` → `G. Sampling` → `H. Decoding` → `I. Export`\n\n### Group switches\n- **Bypass**: MODEL/CLIP passes through the group unchanged. Used for C2, D2, and D3.\n- **Mute**: the branch does not run. Used for the parallel C3 branch.\n\n### Reading annotations\nEach detailed note sits beside one component and explains its settings, purpose, and when to change it. The two notes at the top remain global: they describe the workflow and its prerequisites.\n\n**Validation reference:** RTX A6000 48 GB (Ampere / SM86), ComfyUI 0.31. CUDA and memory settings remain adaptive; do not force a different CUDA stack from this workflow."
       ],
       "color": "#4a4a4a",
       "bgcolor": "#111"
@@ -46,7 +46,7 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎚️ BYPASS — D. Accélérations (D1 actif / D2·D3 en réserve)",
+      "title": "🎚️ BYPASS — D. Accelerations (D1 active / D2·D3 on standby)",
       "properties": {
         "Node name for S&R": "Fast Groups Bypasser (rgthree)",
         "matchTitle": "^D"
@@ -71,7 +71,7 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎚️ BYPASS — C2. LoRA CLIP (réservé, vide par défaut)",
+      "title": "🎚️ BYPASS — C2. CLIP LoRA (reserved; empty by default)",
       "properties": {
         "Node name for S&R": "Fast Groups Bypasser (rgthree)",
         "matchTitle": "^C2\\."
@@ -96,7 +96,7 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎚️ MUTE — C3. Branche Turbo LoRA (ACTIVE — sampler dédié installé)",
+      "title": "🎚️ MUTE — C3. Turbo LoRA branch (ACTIVE — dedicated sampler installed)",
       "properties": {
         "Node name for S&R": "Fast Groups Muter (rgthree)",
         "matchTitle": "^C3\\."
@@ -121,12 +121,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "📦 Modèles et extensions requis",
+      "title": "📦 Required models and extensions",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Fichiers de modèles\n\n**`diffusion_models/`**  \n`minimax_h3_ref2va_pruned_int8_convrot.safetensors`\n\n**`text_encoders/`**  \n`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`\n\n**`vae/`**  \n`minimax_h3_video_vae_fp16.safetensors`  \n`minimax_h3_audio_vae_fp32.safetensors`\n\n**`loras/`**  \n`minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors`\n\nLa branche C3 est active par défaut : ce LoRA doit donc être présent sous **ce nom exact**, défini dans `config.env`.\n\n## Extensions\n- ComfyUI core ≥ 0.30\n- ComfyUI-KJNodes (patches Sage Attention)\n- rgthree-comfy (LoRA, bascules, reroutes)\n- ComfyUI-VideoHelperSuite (vidéo de référence et preview)\n- `sageattention` dans l’environnement ComfyUI\n- ComfyUI-Spectrum-MiniMax-H3 uniquement pour D3, désactivé par défaut"
+        "## Model files\n\n**`diffusion_models/`**  \n`minimax_h3_ref2va_pruned_int8_convrot.safetensors`\n\n**`text_encoders/`**  \n`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`\n\n**`vae/`**  \n`minimax_h3_video_vae_fp16.safetensors`  \n`minimax_h3_audio_vae_fp32.safetensors`\n\n**`loras/`**  \n`minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors`\n\nC3 is enabled by default, so this Turbo LoRA must exist under **this exact filename**, defined in `config.env`.\n\n## Extensions\n- ComfyUI core ≥ 0.30\n- ComfyUI-KJNodes (Sage Attention patches)\n- rgthree-comfy (LoRA, switches, reroutes)\n- ComfyUI-VideoHelperSuite (reference video and preview)\n- `sageattention` in the ComfyUI environment\n- ComfyUI-Spectrum-MiniMax-H3 for D3 only; disabled by default"
       ],
       "color": "#3f789e",
       "bgcolor": "#111"
@@ -155,7 +155,7 @@
           ]
         }
       ],
-      "title": "⏱️ Durée (secondes)",
+      "title": "⏱️ Duration (seconds)",
       "properties": {
         "Node name for S&R": "PrimitiveFloat"
       },
@@ -196,7 +196,7 @@
           ]
         }
       ],
-      "title": "📐 Résolution (Size)",
+      "title": "📐 Resolution (Size)",
       "properties": {
         "Node name for S&R": "ResolutionSelector"
       },
@@ -254,7 +254,7 @@
           "links": []
         }
       ],
-      "title": "🔢 Durée → length (frames, grille 17k+5)",
+      "title": "🔢 Duration → length (frames, 17k+5 grid)",
       "properties": {
         "Node name for S&R": "ComfyMathExpression"
       },
@@ -288,12 +288,12 @@
           ]
         }
       ],
-      "title": "📝 Prompt (texte + tags de référence)",
+      "title": "📝 Prompt (text + reference tags)",
       "properties": {
         "Node name for S&R": "PrimitiveStringMultiline"
       },
       "widgets_values": [
-        "Style cinématographique, ambiance nocturne. Utiliser <Picture 1> pour l'identité du personnage et <Picture 2> pour le style visuel.\n\nCUT 1 : ...\n"
+        "Cinematic style, nighttime atmosphere. Use <Picture 1> for the character identity and <Picture 2> for the visual style.\n\nCUT 1: ...\n"
       ],
       "color": "#3f789e",
       "bgcolor": "#245"
@@ -314,12 +314,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎬 F. Référence vers vidéo — références, tags et taille",
+      "title": "🎬 F. Reference to Video — refs, tags, and size",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Composer les références\n\nCe nœud réunit le prompt, les images, les vidéos et l’audio. Attribuez un rôle explicite à chaque référence : identité, style, mouvement, caméra, voix ou musique.\n\nLes tags sont numérotés **par type** et suivent les connexions : `<Picture 1>`, `<Video 1>`, `<Audio 1>`. Une piste audio extraite d’une vidéo compte également parmi les audios.\n\n### `ref_image_size`\n- **`match`** (actuel) : réduit les images à la taille de sortie ; rapide et le plus sûr pour la VRAM.\n- **`max`** : conserve davantage de détail de référence, mais augmente nettement le temps et la VRAM à chaque étape. Sur 48 Go, limitez alors le nombre d’images et testez avant une longue génération.\n\nNe modifiez pas les connexions existantes pour changer le rôle d’une référence : changez d’abord le prompt et les fichiers chargés."
+        "## Combining references\n\nThis node brings together the prompt, images, video, and audio. Give each reference an explicit role: identity, style, movement, camera, voice, or music.\n\nTags are numbered **by type** and follow connections: `<Picture 1>`, `<Video 1>`, `<Audio 1>`. Audio extracted from a reference video also counts as audio.\n\n### `ref_image_size`\n- **`match`** (current): scales images to output size; fast and safest for VRAM.\n- **`max`**: preserves more reference detail, but substantially increases time and VRAM at every step. On 48 GB, limit image count and test before a long generation.\n\nDo not change existing wiring just to change a reference role: first change the prompt and loaded files."
       ],
       "color": "#3f789e",
       "bgcolor": "#111"
@@ -420,7 +420,7 @@
           ]
         }
       ],
-      "title": "🎞️ VAE Vidéo (fp16)",
+      "title": "🎞️ Video VAE (fp16)",
       "properties": {
         "Node name for S&R": "VAELoader"
       },
@@ -455,7 +455,7 @@
           ]
         }
       ],
-      "title": "🔊 VAE Audio (fp32)",
+      "title": "🔊 Audio VAE (fp32)",
       "properties": {
         "Node name for S&R": "VAELoader"
       },
@@ -507,7 +507,7 @@
           ]
         }
       ],
-      "title": "🎨 C1. LoRA Stack — style / personnage (0 active par défaut)",
+      "title": "🎨 C1. LoRA Stack — style / character (0 active by default)",
       "properties": {
         "Node name for S&R": "Power Lora Loader (rgthree)"
       },
@@ -531,12 +531,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎨 C1. LoRA Stack — mode d’emploi",
+      "title": "🎨 C1. LoRA Stack — how to use",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## LoRA de style ou de personnage\n\n**Par défaut :** ce nœud est un passthrough ; aucun LoRA n’est actif et aucun câblage n’est à modifier.\n\n**Ajouter un LoRA :** cliquez sur `+ Add Lora`. Chaque ligne possède son interrupteur ; vous pouvez charger plusieurs LoRA puis les activer individuellement pour comparer.\n\nCette pile agit sur le modèle de diffusion. Laissez le CLIP traverser sans modification, sauf si vous disposez d’un LoRA explicitement compatible Qwen3-VL/H3 (groupe C2)."
+        "## Style or character LoRAs\n\n**Default:** this node is a passthrough; no LoRA is active and no wiring needs to change.\n\n**Add a LoRA:** click `+ Add Lora`. Each row has its own switch; load several LoRAs and enable them individually for comparison.\n\nThis stack affects the diffusion model. Leave CLIP unchanged unless you have a LoRA explicitly compatible with Qwen3-VL/H3 (C2 group)."
       ],
       "color": "#8a6d1f",
       "bgcolor": "#111"
@@ -583,7 +583,7 @@
           ]
         }
       ],
-      "title": "🔤 C2. LoRA CLIP — réservé (bypass par défaut)",
+      "title": "🔤 C2. CLIP LoRA — reserved (bypassed by default)",
       "properties": {
         "Node name for S&R": "Power Lora Loader (rgthree)"
       },
@@ -607,12 +607,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🔤 C2. LoRA CLIP — réserve",
+      "title": "🔤 C2. CLIP reserve",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## LoRA pour le text encoder\n\nCe nœud est câblé mais **bypassé** par défaut. Il est conservé pour un éventuel LoRA compatible avec le text encoder Qwen3-VL/H3.\n\nPour l’utiliser : ajoutez le LoRA dans ce nœud, puis réactivez uniquement le groupe C2 depuis le bypasser en haut du graphe. Sans LoRA validé pour le CLIP, laissez C2 bypassé."
+        "## LoRA for the text encoder\n\nThis node is wired but **bypassed** by default. It is reserved for a future LoRA compatible with the Qwen3-VL/H3 text encoder.\n\nTo use it: add the LoRA here, then enable only C2 from the bypasser at the top of the graph. Without a validated CLIP LoRA, leave C2 bypassed."
       ],
       "color": "#8a6d1f",
       "bgcolor": "#111"
@@ -647,7 +647,7 @@
           ]
         }
       ],
-      "title": "⚡ C3. MiniMax H3 Turbo LoRA — nœud officiel larryvrh (dédié, ACTIF)",
+      "title": "⚡ C3. MiniMax H3 Turbo LoRA — official larryvrh node (dedicated, ACTIVE)",
       "properties": {
         "Node name for S&R": "MiniMaxH3TurboLoRA"
       },
@@ -688,7 +688,7 @@
           ]
         }
       ],
-      "title": "⚡ Reroute MODEL (C3 → D1a)",
+      "title": "⚡ MODEL reroute (C3 → D1a)",
       "properties": {
         "Node name for S&R": "Reroute (rgthree)"
       },
@@ -712,12 +712,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "⚡ C3. Turbo LoRA — fonctionnement et fichier requis",
+      "title": "⚡ C3. Turbo LoRA — purpose and required file",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Turbo LoRA dédié\n\nCe nœud `MiniMaxH3TurboLoRA` applique le LoRA Turbo au **MODEL**. Il remplace un loader LoRA générique pour rester compatible avec le `MiniMaxH3TurboSampler` utilisé plus loin.\n\n**Réglage de base :** force `1.0`. Le LoRA v4 est prévu pour rester à cette valeur sur la plage de 4 à 8 steps. Pour un mouvement rapide à 4 steps, privilégiez d’abord 6 à 8 steps : cela réduit généralement le smear / ghosting.\n\nN’ajustez la force qu’en réponse à un défaut précis, avec seed fixe : flou ou ghosting persistant → augmentez légèrement (`≈1.05–1.20`) ; grain ou sur-accentuation → réduisez (`≈0.80–0.95`). Ne changez jamais force, scheduler et steps dans le même essai.\n\nLe nom affiché doit être `minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors`, soit le nom que l’installateur télécharge dans `models/loras/`. La branche C3 est active par défaut."
+        "## Dedicated Turbo LoRA\n\nThis `MiniMaxH3TurboLoRA` node applies the Turbo LoRA to the **MODEL**. It replaces a generic LoRA loader to remain compatible with the downstream `MiniMaxH3TurboSampler`.\n\n**Baseline setting:** strength `1.0`. The v4 LoRA is designed to stay at this value across the 4–8 step range. For fast motion at 4 steps, first move to 6–8 steps: that usually reduces smear / ghosting.\n\nAdjust strength only in response to a specific defect, with a fixed seed: persistent blur or ghosting → raise it slightly (`≈1.05–1.20`); grain or over-sharpening → lower it (`≈0.80–0.95`). Never change strength, scheduler, and steps in the same test.\n\nThe displayed filename must be `minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors`, which is what the installer downloads to `models/loras/`. C3 is active by default."
       ],
       "color": "#1c5d3b",
       "bgcolor": "#153"
@@ -760,7 +760,7 @@
           ]
         }
       ],
-      "title": "⚙️ D1. Patch Sage Attention KJ (ACTIF — combiné avec Turbo)",
+      "title": "⚙️ D1a. Patch Sage Attention KJ (ACTIVE — combined with Turbo)",
       "properties": {
         "Node name for S&R": "PathchSageAttentionKJ"
       },
@@ -801,7 +801,7 @@
           ]
         }
       ],
-      "title": "💾 D1. Mem-Eff Sage Attention Patch H3 (ACTIF — combiné avec Turbo)",
+      "title": "💾 D1b. Mem-Eff Sage Attention Patch H3 (ACTIVE — combined with Turbo)",
       "properties": {
         "Node name for S&R": "MiniMaxH3MemoryEfficientSageAttentionPatch"
       },
@@ -825,12 +825,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "⚙️ D1a. Sage Attention — choix du mode",
+      "title": "⚙️ D1a. Sage Attention — choosing a mode",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Patch Sage Attention KJ\n\nCe nœud remplace l’attention du **MODEL** par SageAttention. La bibliothèque `sageattention` doit être installée ; le patch est expérimental et doit rester facile à désactiver pour un test A/B.\n\n- **`disabled`** : le nœud transmet le modèle sans patch ; utilisez-le pour isoler un problème.\n- **`auto`** : délègue le choix de l’implémentation à la fonction générique de SageAttention. Utile pour la compatibilité, moins explicite pour comparer les performances.\n- **`sageattn_qk_int8_pv_fp16_cuda`** : choix actuel pour l’A6000/Ampere. Il appelle le kernel CUDA explicite, avec Q/K int8 et P/V fp16.\n- **`…_triton`** : autre implémentation ; à n’essayer qu’en A/B si le kernel CUDA explicite échoue ou régresse.\n- **modes FP8 / SageAttention 3** : ne pas choisir par défaut ; ils dépendent fortement de l’architecture et du build installés.\n\n**PyTorch :** ce menu ne propose pas de « mode PyTorch ». Pour revenir à l’attention normale ComfyUI/PyTorch/SDPA, choisissez `disabled` ou bypasssez D1.\n\n**`allow_compile` :** laissez `false`. À `true`, `torch.compile` peut tracer dans la fonction SageAttention ; cela ne compile ni n’installe SageAttention. Il exige SageAttention ≥ 2.2 et un test réel de stabilité."
+        "## Patch Sage Attention KJ\n\nThis node replaces **MODEL** attention with SageAttention. The `sageattention` library must be installed; this is an experimental patch and must remain easy to disable for A/B testing.\n\n- **`disabled`**: passes the model through unpatched; use it to isolate an issue.\n- **`auto`**: delegates implementation choice to SageAttention’s generic function. Useful for compatibility, less explicit for performance comparison.\n- **`sageattn_qk_int8_pv_fp16_cuda`**: current choice for A6000/Ampere. It calls the explicit CUDA kernel, with Q/K int8 and P/V fp16.\n- **`…_triton`**: alternate implementation; try it only in A/B testing if the explicit CUDA kernel fails or regresses.\n- **FP8 / SageAttention 3 modes**: do not select by default; they depend strongly on the installed build and GPU architecture.\n\n**PyTorch:** this menu has no “PyTorch mode”. To return to normal ComfyUI/PyTorch/SDPA attention, choose `disabled` or bypass D1.\n\n**`allow_compile`:** keep `false`. At `true`, `torch.compile` may trace into the SageAttention function; it neither compiles nor installs SageAttention. It requires SageAttention ≥ 2.2 and an actual stability test."
       ],
       "color": "#7a3b8a",
       "bgcolor": "#111"
@@ -865,7 +865,7 @@
           ]
         }
       ],
-      "title": "🗄️ D2. EasyCache natif (bypass par défaut — à tester)",
+      "title": "🗄️ D2. Native EasyCache (bypassed by default — test first)",
       "properties": {
         "Node name for S&R": "EasyCache"
       },
@@ -908,7 +908,7 @@
           ]
         }
       ],
-      "title": "🌈 D3. Spectrum (expérimental — bypass par défaut)",
+      "title": "🌈 D3. Spectrum (experimental — bypassed by default)",
       "properties": {
         "Node name for S&R": "SpectrumApplyMiniMaxH3"
       },
@@ -932,12 +932,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🗄️ D2. EasyCache — test A/B",
+      "title": "🗄️ D2. EasyCache — A/B test",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Cache d’accélération\n\nEasyCache est **bypassé par défaut** : il peut accélérer les clips longs, mais change la stratégie de cache du modèle. Activez D2 seul, gardez D3 bypassé et comparez à seed, prompt, durée et résolution identiques.\n\nLes valeurs déjà présentes sont un point de départ du nœud, pas une recommandation universelle. Conservez-les pour le premier essai ; ne les ajustez qu’après avoir constaté un gain sans perte visuelle."
+        "## Cache acceleration\n\nEasyCache is **bypassed by default**: it may speed up long clips, but changes the model’s caching strategy. Enable D2 alone, keep D3 bypassed, and compare with identical seed, prompt, duration, and resolution.\n\nThe existing values are a node starting point, not a universal recommendation. Keep them for the first test; adjust only after observing a real speed gain without visible loss."
       ],
       "color": "#7a3b8a",
       "bgcolor": "#111"
@@ -958,12 +958,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🌈 D3. Spectrum — expérimental",
+      "title": "🌈 D3. Spectrum — experimental",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Accélérateur approximatif\n\nSpectrum est **bypassé par défaut**. Il peut modifier la trajectoire de débruitage : même avec le même seed, le résultat peut différer du chemin de base.\n\nN’activez pas D3 en même temps que D2/EasyCache. Testez-le seul, sur un clip court représentatif, puis comparez la vitesse, la cohérence du mouvement et l’audio avant tout usage de production."
+        "## Approximate accelerator\n\nSpectrum is **bypassed by default**. It can change the denoising trajectory: even with the same seed, its output can differ from the baseline path.\n\nDo not enable D3 together with D2/EasyCache. Test it alone on a representative short clip, then compare speed, motion consistency, and audio before production use."
       ],
       "color": "#7a3b8a",
       "bgcolor": "#111"
@@ -999,7 +999,7 @@
           ]
         }
       ],
-      "title": "→ MODEL (post-LoRA + post-accélération) vers G. Sampling",
+      "title": "→ MODEL (after LoRA + accelerations) to G. Sampling",
       "properties": {
         "Node name for S&R": "Reroute (rgthree)"
       },
@@ -1037,7 +1037,7 @@
           ]
         }
       ],
-      "title": "→ CLIP (post-LoRA) vers F. Conditionnement",
+      "title": "→ CLIP (after LoRA) to F. Conditioning",
       "properties": {
         "Node name for S&R": "Reroute (rgthree)"
       },
@@ -1074,7 +1074,7 @@
           "links": []
         }
       ],
-      "title": "🖼️ Référence Image 1",
+      "title": "🖼️ Image Reference 1",
       "properties": {
         "Node name for S&R": "LoadImage"
       },
@@ -1114,7 +1114,7 @@
           "links": []
         }
       ],
-      "title": "🖼️ Référence Image 2",
+      "title": "🖼️ Image Reference 2",
       "properties": {
         "Node name for S&R": "LoadImage"
       },
@@ -1154,7 +1154,7 @@
           "links": []
         }
       ],
-      "title": "🖼️ Référence Image 3",
+      "title": "🖼️ Image Reference 3",
       "properties": {
         "Node name for S&R": "LoadImage"
       },
@@ -1181,12 +1181,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🖼️ E1–E3. Références image",
+      "title": "🖼️ E1–E3. Image references",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Images de référence\n\nLes trois loaders servent par défaut à l’identité, au style et à une référence libre. Ils alimentent les entrées `ref_image_0`, `ref_image_1` et `ref_image_2` du nœud F.\n\nDans le prompt, utilisez `<Picture 1>`, `<Picture 2>`, etc. selon **l’ordre de connexion**, pas l’ordre d’écriture. Jusqu’à 9 images sont possibles : dupliquez un loader et reliez-le au prochain port libre du nœud F.\n\nLe coût réel des images est contrôlé par `ref_image_size` dans le nœud F ; voir sa note."
+        "## Image references\n\nThe three loaders are provided for identity, style, and a free reference. They feed `ref_image_0`, `ref_image_1`, and `ref_image_2` on node F.\n\nIn the prompt, use `<Picture 1>`, `<Picture 2>`, and so on in **connection order**, not writing order. Up to 9 images are possible: duplicate a loader and connect it to the next free port on node F.\n\nThe actual image cost is controlled by `ref_image_size` on node F; see that node’s note."
       ],
       "color": "#b5544a",
       "bgcolor": "#111"
@@ -1228,7 +1228,7 @@
           "links": []
         }
       ],
-      "title": "🎥 Référence Vidéo 1 (VHS)",
+      "title": "🎥 Video Reference 1 (VHS)",
       "properties": {
         "Node name for S&R": "VHS_LoadVideo"
       },
@@ -1266,12 +1266,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎥 E4. Référence vidéo — réglages et branchement",
+      "title": "🎥 E4. Video reference — settings and connection",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Mouvement et audio de référence\n\nLe fichier `reference_motion.mp4` est un placeholder : ce nœud est **muté** et ses liens vers F sont retirés par défaut, afin que le workflow fonctionne sans vidéo.\n\nPour l’utiliser : sélectionnez une vraie vidéo, repassez le nœud en mode **Always**, reliez `IMAGE` à `ref_video_0` du nœud F. Reliez `AUDIO` à `ref_video_audio_0` seulement si vous voulez réutiliser le son source.\n\n**Réglages :** `force_rate=24` aligne la référence sur la sortie ; laissez `skip_first_frames=0` sauf découpe volontaire ; `frame_load_cap=0` charge tout ; `select_every_nth>1` allège les longues vidéos. Préférez un clip court et représentatif, à résolution modeste. Dupliquez ce nœud pour `ref_video_1` et `ref_video_2`."
+        "## Motion and source audio\n\n`reference_motion.mp4` is a placeholder: this node is **muted** and its links to F are removed by default, so the workflow runs without a video.\n\nTo use it: select a real video, set the node mode to **Always**, and connect `IMAGE` to `ref_video_0` on node F. Connect `AUDIO` to `ref_video_audio_0` only when you want to reuse the source sound.\n\n**Settings:** `force_rate=24` aligns the reference with output; keep `skip_first_frames=0` unless intentionally trimming; `frame_load_cap=0` loads all frames; `select_every_nth>1` lightens long clips. Prefer a short, representative clip at modest resolution. Duplicate this node for `ref_video_1` and `ref_video_2`."
       ],
       "color": "#b5544a",
       "bgcolor": "#111"
@@ -1300,7 +1300,7 @@
           ]
         }
       ],
-      "title": "🎙️ Référence Audio 1 (voix/musique)",
+      "title": "🎙️ Audio Reference 1 (voice/music)",
       "properties": {
         "Node name for S&R": "LoadAudio"
       },
@@ -1327,12 +1327,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎯 G1. Turbo Sampler — vidéo + audio",
+      "title": "🎯 G1. Turbo Sampler — video + audio",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Sampler dédié au Turbo LoRA\n\n`MiniMaxH3TurboSampler` fournit les réglages de bruit adaptés aux deux horloges du modèle : vidéo et audio. Gardez-le lorsque C3 (Turbo LoRA) est actif.\n\nIl s’adapte automatiquement à la version de ComfyUI : sur les versions récentes qui gèrent nativement `ModelSamplingAV`, il suit le chemin standard ; sur les versions plus anciennes, il sépare les horaires vidéo/audio pour éviter une audio déformée à faible nombre de steps. Aucun réglage manuel n’est nécessaire.\n\nLe couple Turbo validé ici est : Turbo LoRA actif + ce sampler + scheduler `simple` + 4 à 8 steps. Ne remplacez pas ce nœud par un sélecteur de sampler générique : vous perdriez cette compatibilité entre versions.\n\nCe nœud prépare le sampler ; l’exécution réelle reste dans `Sampler Custom Advanced`."
+        "## Sampler dedicated to Turbo LoRA\n\n`MiniMaxH3TurboSampler` supplies noise settings suitable for the model’s two clocks: video and audio. Keep it when C3 (Turbo LoRA) is active.\n\nIt automatically adapts to the ComfyUI version: on recent versions with native `ModelSamplingAV` support, it follows the standard path; on older versions, it separates video/audio schedules to avoid distorted audio at low step counts. No manual setting is needed.\n\nThe validated Turbo combination here is: Turbo LoRA enabled + this sampler + `simple` scheduler + 4 to 8 steps. Do not replace this node with a generic sampler selector: you would lose this cross-version compatibility.\n\nThis node prepares the sampler; actual execution remains in `Sampler Custom Advanced`."
       ],
       "color": "#b5544a",
       "bgcolor": "#111"
@@ -1452,7 +1452,7 @@
           ]
         }
       ],
-      "title": "🎬 MiniMax H3 — Référence vers vidéo (ref2va)",
+      "title": "🎬 MiniMax H3 — Reference to Video (ref2va)",
       "properties": {
         "Node name for S&R": "MiniMaxH3ReferenceToVideo"
       },
@@ -1490,7 +1490,7 @@
           ]
         }
       ],
-      "title": "🎯 MiniMax H3 Turbo Sampler — nœud officiel larryvrh (dual-clock vidéo/audio)",
+      "title": "🎯 MiniMax H3 Turbo Sampler — official larryvrh node (dual video/audio clock)",
       "properties": {
         "Node name for S&R": "MiniMaxH3TurboSampler"
       },
@@ -1674,7 +1674,7 @@
           "links": []
         }
       ],
-      "title": "▶️ Sampler Custom Advanced (exécution)",
+      "title": "▶️ Sampler Custom Advanced (execution)",
       "properties": {
         "Node name for S&R": "SamplerCustomAdvanced"
       },
@@ -1703,7 +1703,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Planning de bruit\n\nLe scheduler produit la suite de sigmas utilisée par le sampler ; il ne choisit pas le sampler lui-même.\n\n- **`simple`** : réglage actuel et requis pour le chemin Turbo.\n- **`steps=8`** : très bon compromis. `4` est le minimum ; `6–8` est préférable pour les mouvements rapides ou intenses.\n- **Au-delà de 8** : ne l’utilisez pas par défaut. Le gain cesse généralement d’être visible et des artefacts de sur-accentuation peuvent apparaître.\n- **`denoise=1`** : génération complète. Une valeur inférieure n’est utile que si vous contrôlez volontairement un débruitage partiel avec un latent approprié.\n\nPour un test fiable, modifiez une seule variable. Ne prenez pas `LCM` + scheduler `Beta` comme réglage par défaut : ce couple a déjà posé des problèmes d’audio dans ce pipeline."
+        "## Noise schedule\n\nThe scheduler produces the sigma sequence used by the sampler; it does not choose the sampler itself.\n\n- **`simple`**: current setting and required for the Turbo path.\n- **`steps=8`**: a strong compromise. `4` is the minimum; `6–8` is preferable for fast or intense motion.\n- **Above 8**: do not use by default. The gain generally stops being visible and over-sharpening artifacts can appear.\n- **`denoise=1`**: full generation. A lower value is useful only when deliberately controlling partial denoising with an appropriate latent.\n\nFor a reliable test, change one variable at a time. Do not use `LCM` + `Beta` scheduler as a default: that pair has already caused audio issues in this pipeline."
       ],
       "color": "#4a4a8a",
       "bgcolor": "#111"
@@ -1744,7 +1744,7 @@
           ]
         }
       ],
-      "title": "🎞️ VAE Decode (vidéo)",
+      "title": "🎞️ VAE Decode (video)",
       "properties": {
         "Node name for S&R": "VAEDecode"
       },
@@ -1832,7 +1832,7 @@
           ]
         }
       ],
-      "title": "🎬 Create Video (mux vidéo+audio synchronisé)",
+      "title": "🎬 Create Video (synchronized video+audio mux)",
       "properties": {
         "Node name for S&R": "CreateVideo"
       },
@@ -1871,7 +1871,7 @@
           "links": []
         }
       ],
-      "title": "💾 Save Video — SORTIE PRINCIPALE",
+      "title": "💾 Save Video — MAIN OUTPUT",
       "properties": {
         "Node name for S&R": "SaveVideo"
       },
@@ -1917,7 +1917,7 @@
           "links": []
         }
       ],
-      "title": "🎞️ Aperçu rapide GIF/WEBP (optionnel — bypass par défaut)",
+      "title": "🎞️ Quick Preview GIF/WEBP (optional — bypassed by default)",
       "properties": {
         "Node name for S&R": "VHS_VideoCombine"
       },
@@ -1948,12 +1948,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎞️ I3. Aperçu rapide — WebP/GIF",
+      "title": "🎞️ I3. Quick Preview — WebP/GIF",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Aperçu léger, pas sortie finale\n\n`VHS_VideoCombine` est **bypassé** par défaut : il ne crée donc aucun fichier supplémentaire. Activez-le seulement pour vérifier rapidement le cadrage et le mouvement.\n\n**Réglage actuel :** WebP animé, préfixe `MiniMax_H3_preview`, **24 fps** — la même cadence que la sortie H3. L’aperçu reflète ainsi correctement la durée et la vitesse du mouvement.\n\nRéduire la cadence rend le fichier plus léger, mais fait aussi jouer les mêmes images plus lentement ; utilisez-le uniquement pour un aperçu compact à partager, pas pour juger le timing.\n\nPour la sortie de production, utilisez toujours `CreateVideo → SaveVideo` : ce chemin conserve la vidéo 24 fps et le mux audio synchronisé."
+        "## Lightweight preview, not final output\n\n`VHS_VideoCombine` is **bypassed** by default, so it creates no extra file. Enable it only to check framing and motion quickly.\n\n**Current setting:** animated WebP, `MiniMax_H3_preview` prefix, **24 fps** — the same rate as H3 output. The preview therefore reflects the intended duration and motion speed.\n\nLowering frame rate makes the file lighter, but also plays the same frames more slowly; use that only for a compact shareable preview, not to judge timing.\n\nFor production output, always use `CreateVideo → SaveVideo`: this path keeps 24 fps video and synchronized audio muxing."
       ],
       "color": "#2f5f8f",
       "bgcolor": "#111"
@@ -1974,12 +1974,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎙️ E5. Référence audio — durée et fréquence",
+      "title": "🎙️ E5. Audio reference — duration and sample rate",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Voix ou musique de référence\n\n`LoadAudio` charge le fichier entier : il n’a pas de réglage de début ou de durée. Si l’audio est plus long que la vidéo cible, découpez-le avant de l’importer.\n\nVisez 44,1 kHz ou 48 kHz. Un audio à 32 kHz peut produire des artefacts avec le VAE audio H3. Dans le prompt, décrivez son rôle et utilisez le tag `<Audio 1>` selon l’ordre de connexion."
+        "## Voice or music reference\n\n`LoadAudio` loads the entire file; it has no start or duration controls. If audio is longer than the target video, trim it before importing.\n\nTarget 44.1 kHz or 48 kHz. Audio at 32 kHz can introduce artifacts with the H3 audio VAE. In the prompt, describe its role and use `<Audio 1>` according to connection order."
       ],
       "color": "#b5544a",
       "bgcolor": "#111"
@@ -2005,7 +2005,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Patch mémoire MiniMax H3\n\nCe second patch s’applique **après** le patch Sage Attention au même MODEL. Son objectif est de réduire le pic de VRAM de l’attention H3, particulièrement lorsque les références sont nombreuses ou que `ref_image_size=max`.\n\nIl n’a pas de widget à régler : laissez-le actif avec D1. Pour mesurer son effet, ne le désactivez que dans un essai A/B contrôlé avec la même résolution, durée, seed et références."
+        "## MiniMax H3 memory patch\n\nThis second patch runs **after** the Sage Attention patch on the same MODEL. It aims to reduce H3 attention’s VRAM peak, especially with many references or `ref_image_size=max`.\n\nIt has no widget to tune: keep it enabled with D1. To measure its effect, disable it only in a controlled A/B test using the same resolution, duration, seed, and references."
       ],
       "color": "#8a1f1f",
       "bgcolor": "#411"
@@ -2344,7 +2344,7 @@
   "groups": [
     {
       "id": 1,
-      "title": "0. PILOTAGE",
+      "title": "0. CONTROLS",
       "bounding": [
         -4750,
         -820,
@@ -2370,7 +2370,7 @@
     },
     {
       "id": 3,
-      "title": "B. CHARGEMENT MODÈLES",
+      "title": "B. MODEL LOADING",
       "bounding": [
         -3320,
         -60,
@@ -2383,7 +2383,7 @@
     },
     {
       "id": 4,
-      "title": "C1. LORA — STACK STANDARD",
+      "title": "C1. LORA — STANDARD STACK",
       "bounding": [
         -2500,
         -60,
@@ -2396,7 +2396,7 @@
     },
     {
       "id": 5,
-      "title": "C2. LORA — CLIP RÉSERVÉ (bypass)",
+      "title": "C2. LORA — CLIP RESERVED (bypass)",
       "bounding": [
         -1880,
         -60,
@@ -2409,7 +2409,7 @@
     },
     {
       "id": 6,
-      "title": "C3. LORA — BRANCHE TURBO (mute)",
+      "title": "C3. LORA — TURBO BRANCH (mute)",
       "bounding": [
         -1240,
         -60,
@@ -2422,7 +2422,7 @@
     },
     {
       "id": 7,
-      "title": "D1. ACCÉL. — SAGE ATTENTION (actif)",
+      "title": "D1. ACCEL. — SAGE ATTENTION (active)",
       "bounding": [
         -2500,
         500,
@@ -2435,7 +2435,7 @@
     },
     {
       "id": 8,
-      "title": "D2/D3. ACCÉL. — EASYCACHE / SPECTRUM (bypass)",
+      "title": "D2/D3. ACCEL. — EASYCACHE / SPECTRUM (bypass)",
       "bounding": [
         -1880,
         500,
@@ -2448,7 +2448,7 @@
     },
     {
       "id": 9,
-      "title": "D4. ACCÉL. — SOLATTN (réservé, non câblé)",
+      "title": "D4. ACCEL. — SOLATTN (reserved, not wired)",
       "bounding": [
         -1240,
         500,
@@ -2461,7 +2461,7 @@
     },
     {
       "id": 10,
-      "title": "E. RÉFÉRENCES (images / vidéo / audio)",
+      "title": "E. REFERENCES (images / video / audio)",
       "bounding": [
         -4160,
         960,
@@ -2474,7 +2474,7 @@
     },
     {
       "id": 11,
-      "title": "F. CONDITIONNEMENT",
+      "title": "F. CONDITIONING",
       "bounding": [
         -620,
         960,
@@ -2500,7 +2500,7 @@
     },
     {
       "id": 13,
-      "title": "H. DÉCODAGE",
+      "title": "H. DECODING",
       "bounding": [
         670,
         860,

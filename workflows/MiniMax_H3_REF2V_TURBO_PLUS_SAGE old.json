@@ -20,12 +20,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "📘 README — MiniMax H3 REF2V Turbo + Sage",
+      "title": "📘 README — MiniMax H3 REF2V — Workflow officiel",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## MiniMax H3 — REF2V Turbo + Sage\n\n**Lecture du graphe (gauche → droite) :**\n`A. Configuration` → `B. Modèles` → `C. LoRA` → `D. Accélérations` → `E. Références` → `F. Conditionnement` → `G. Sampling` → `H. Décodage` → `I. Export`\n\n### Bascules de groupes\n- **Bypass** : le MODEL/CLIP traverse le groupe sans être modifié. Utilisé pour C2, D2 et D3.\n- **Mute** : la branche ne s’exécute pas. Utilisé pour la branche parallèle C3.\n\n### Lire les annotations\nChaque note détaillée est placée auprès d’un seul composant et explique ses réglages, son rôle et le moment où le modifier. Les deux notes en tête de graphe restent globales : elles décrivent le workflow et les prérequis.\n\n**Référence de validation :** RTX A6000 48 Go (Ampere / SM86), ComfyUI 0.31. Les réglages mémoire et CUDA restent adaptatifs : ne forcez pas une stack CUDA différente depuis le workflow."
+        "## MiniMax H3 — REF2V (Reference-to-Video) — Workflow officiel du projet\n\n**Ordre de lecture du graphe (gauche → droite) :**\n`A. Configuration` → `B. Chargement modèles` → `C. LoRA` → `D. Accélérations` → `E. Références` → `F. Conditionnement` → `G. Sampling` → `H. Décodage` → `I. Export`\n\n**Comment piloter les groupes bascule-un-clic :**\n- Les nœuds *Fast Groups Bypasser / Muter (rgthree)* ci-dessous listent automatiquement tous les groupes de couleur correspondante dès que le graphe est ouvert dans ComfyUI — aucune configuration manuelle requise.\n- **Bypass** = le groupe devient un fil transparent (le MODEL/CLIP traverse sans modification) → utilisé pour C2 (LoRA CLIP) et D2/D3 (EasyCache / Spectrum), qui sont chaînés en série sur le MODEL.\n- **Mute** = le groupe ne s'exécute pas du tout → utilisé pour C3 (branche Turbo LoRA), qui est une branche parallèle non chaînée.\n\n**Matériel de référence :** RTX A6000 48 Go (SM86/Ampere) — ComfyUI 0.31.\n\nVoir la note \"📦 Modèles requis\" (groupe A) pour les chemins exacts des 4 fichiers de poids nécessaires."
       ],
       "color": "#4a4a4a",
       "bgcolor": "#111"
@@ -121,12 +121,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "📦 Modèles et extensions requis",
+      "title": "📦 Modèles requis",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Fichiers de modèles\n\n**`diffusion_models/`**  \n`minimax_h3_ref2va_pruned_int8_convrot.safetensors`\n\n**`text_encoders/`**  \n`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`\n\n**`vae/`**  \n`minimax_h3_video_vae_fp16.safetensors`  \n`minimax_h3_audio_vae_fp32.safetensors`\n\n**`loras/`**  \n`minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors`\n\nLa branche C3 est active par défaut : ce LoRA doit donc être présent sous **ce nom exact**, défini dans `config.env`.\n\n## Extensions\n- ComfyUI core ≥ 0.30\n- ComfyUI-KJNodes (patches Sage Attention)\n- rgthree-comfy (LoRA, bascules, reroutes)\n- ComfyUI-VideoHelperSuite (vidéo de référence et preview)\n- `sageattention` dans l’environnement ComfyUI\n- ComfyUI-Spectrum-MiniMax-H3 uniquement pour D3, désactivé par défaut"
+        "## Modèles requis (4 fichiers de base + 1 LoRA)\n\n**diffusion_models/**\n`minimax_h3_ref2va_pruned_int8_convrot.safetensors`\n\n**text_encoders/**\n`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`\n\n**vae/**\n`minimax_h3_video_vae_fp16.safetensors`\n`minimax_h3_audio_vae_fp32.safetensors`\n\n**loras/**\n`minimax_h3_turbo_v4_step600_ema.safetensors`\n*(requis car la branche Turbo LoRA — groupe C3 — est active par défaut dans ce workflow)*\n\nSource : 🤗 Comfy-Org/MiniMax-H3\n\n## Extensions requises\n- ComfyUI core ≥ 0.30 (nœuds MiniMax H3 natifs)\n- ComfyUI-KJNodes (Kijai) — Patch Sage Attention KJ + Mem-Eff Sage Attention Patch H3\n- rgthree-comfy — LoRA, bascules, reroutes\n- ComfyUI-Spectrum-MiniMax-H3 (xmarre) — groupe D3 uniquement, désactivé par défaut\n- ComfyUI-VideoHelperSuite — ingestion vidéo de référence (groupe E) + preview optionnel (groupe I)\n- `sageattention` (lib Python) installée dans l'environnement ComfyUI"
       ],
       "color": "#3f789e",
       "bgcolor": "#111"
@@ -302,24 +302,24 @@
       "id": 10,
       "type": "MarkdownNote",
       "pos": [
-        -560,
-        1640
+        -3740,
+        0
       ],
       "size": [
-        460,
-        430
+        420,
+        460
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎬 F. Référence vers vidéo — références, tags et taille",
+      "title": "📎 Règle de tagging (important)",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Composer les références\n\nCe nœud réunit le prompt, les images, les vidéos et l’audio. Attribuez un rôle explicite à chaque référence : identité, style, mouvement, caméra, voix ou musique.\n\nLes tags sont numérotés **par type** et suivent les connexions : `<Picture 1>`, `<Video 1>`, `<Audio 1>`. Une piste audio extraite d’une vidéo compte également parmi les audios.\n\n### `ref_image_size`\n- **`match`** (actuel) : réduit les images à la taille de sortie ; rapide et le plus sûr pour la VRAM.\n- **`max`** : conserve davantage de détail de référence, mais augmente nettement le temps et la VRAM à chaque étape. Sur 48 Go, limitez alors le nombre d’images et testez avant une longue génération.\n\nNe modifiez pas les connexions existantes pour changer le rôle d’une référence : changez d’abord le prompt et les fichiers chargés."
+        "## Règle de tagging des références\n\nLes tags dans le prompt doivent respecter :\n1. **L'ordre de connexion** des références au groupe E, pas l'ordre où vous les citez dans le texte.\n2. **La numérotation par type**, 1-based :\n   - Images → `<Picture 1>`, `<Picture 2>`, ... (max 9)\n   - Vidéos → `<Video 1>`, `<Video 2>`, ... (max 3)\n   - Audios → `<Audio 1>`, `<Audio 2>`, ... (max 3, y compris la piste audio d'une vidéo de référence)\n\nDonnez un **rôle explicite** à chaque référence dans le prompt : identité / style / mouvement / caméra / voix — c'est ce qui permet à H3 de bien dissocier les références entre elles."
       ],
       "color": "#3f789e",
       "bgcolor": "#111"
@@ -531,12 +531,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎨 C1. LoRA Stack — mode d’emploi",
+      "title": "🎨 Stack LoRA — mode d'emploi",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## LoRA de style ou de personnage\n\n**Par défaut :** ce nœud est un passthrough ; aucun LoRA n’est actif et aucun câblage n’est à modifier.\n\n**Ajouter un LoRA :** cliquez sur `+ Add Lora`. Chaque ligne possède son interrupteur ; vous pouvez charger plusieurs LoRA puis les activer individuellement pour comparer.\n\nCette pile agit sur le modèle de diffusion. Laissez le CLIP traverser sans modification, sauf si vous disposez d’un LoRA explicitement compatible Qwen3-VL/H3 (groupe C2)."
+        "**Zéro LoRA (par défaut)** = passthrough transparent, aucun câblage à toucher.\n\n**Ajouter une ou plusieurs LoRA** : clic sur « + Add Lora » dans le nœud — chaque ligne a son propre interrupteur on/off intégré.\n\n**Tester plusieurs LoRA** : ajoutez-les toutes dans ce même nœud et basculez les interrupteurs individuellement.\n\nAucune LoRA connue à ce jour ne cible spécifiquement le CLIP Qwen3-VL de H3 — le CLIP traverse ce nœud sans modification tant qu'aucune n'est ajoutée."
       ],
       "color": "#8a6d1f",
       "bgcolor": "#111"
@@ -607,12 +607,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🔤 C2. LoRA CLIP — réserve",
+      "title": "🔤 Réserve CLIP — pourquoi c'est là",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## LoRA pour le text encoder\n\nCe nœud est câblé mais **bypassé** par défaut. Il est conservé pour un éventuel LoRA compatible avec le text encoder Qwen3-VL/H3.\n\nPour l’utiliser : ajoutez le LoRA dans ce nœud, puis réactivez uniquement le groupe C2 depuis le bypasser en haut du graphe. Sans LoRA validé pour le CLIP, laissez C2 bypassé."
+        "Nœud câblé mais **bypassé par défaut** (fil transparent MODEL+CLIP).\n\nPrêt à recevoir une future LoRA text-encoder Qwen3-VL/H3 sans reconstruire le graphe : réactivez simplement ce groupe via le bypasser « BYPASS — C2 » (pilotage, en haut) et ajoutez la LoRA quand elle existera."
       ],
       "color": "#8a6d1f",
       "bgcolor": "#111"
@@ -652,8 +652,8 @@
         "Node name for S&R": "MiniMaxH3TurboLoRA"
       },
       "widgets_values": [
-        "minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors",
-        1
+        "minimax_h3_turbo_v4_step600_ema.safetensors",
+        1.0
       ],
       "color": "#7a3b8a",
       "bgcolor": "#535"
@@ -705,19 +705,19 @@
       ],
       "size": [
         520,
-        320
+        480
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "⚡ C3. Turbo LoRA — fonctionnement et fichier requis",
+      "title": "✅ Branche Turbo LoRA — sampler dédié installé (risque audio corrigé)",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Turbo LoRA dédié\n\nCe nœud `MiniMaxH3TurboLoRA` applique le LoRA Turbo au **MODEL**. Il remplace un loader LoRA générique pour rester compatible avec le `MiniMaxH3TurboSampler` utilisé plus loin.\n\n**Réglage de base :** force `1.0`. Le LoRA v4 est prévu pour rester à cette valeur sur la plage de 4 à 8 steps. Pour un mouvement rapide à 4 steps, privilégiez d’abord 6 à 8 steps : cela réduit généralement le smear / ghosting.\n\nN’ajustez la force qu’en réponse à un défaut précis, avec seed fixe : flou ou ghosting persistant → augmentez légèrement (`≈1.05–1.20`) ; grain ou sur-accentuation → réduisez (`≈0.80–0.95`). Ne changez jamais force, scheduler et steps dans le même essai.\n\nLe nom affiché doit être `minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors`, soit le nom que l’installateur télécharge dans `models/loras/`. La branche C3 est active par défaut."
+        "## Mis à jour — nœuds officiels installés\n\nCette branche utilise maintenant les vrais nœuds dédiés du dépôt [larryvrh/ComfyUI-MiniMax-H3-Turbo](https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo) :\n\n- **C3** : `MiniMaxH3TurboLoRA` (au lieu du `LoraLoaderModelOnly` générique)\n- **G** : `MiniMaxH3TurboSampler` (au lieu du `KSamplerSelect` générique) — gère les deux échelles de bruit vidéo/audio (shift≈12 / shift≈3) séparément, donc l'audio ne casse plus à faible step count.\n\n**Prérequis pour que ça tourne réellement :** installer le custom node (`ComfyUI-Manager` → chercher \"MiniMax-H3 Turbo\", ou `git clone` manuel dans `custom_nodes/`) — sinon ComfyUI signalera un nœud manquant au chargement du graphe.\n\n**Réglages recommandés par l'auteur :** scheduler `simple`, 4 à 8 steps (8 = qualité un peu meilleure, pas de gain au-delà), force LoRA à 1.0 (déjà réglé)."
       ],
       "color": "#1c5d3b",
       "bgcolor": "#153"
@@ -818,19 +818,19 @@
       ],
       "size": [
         560,
-        500
+        220
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "⚙️ D1a. Sage Attention — choix du mode",
+      "title": "⚙️ D1 — pourquoi ce chemin par défaut",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Patch Sage Attention KJ\n\nCe nœud remplace l’attention du **MODEL** par SageAttention. La bibliothèque `sageattention` doit être installée ; le patch est expérimental et doit rester facile à désactiver pour un test A/B.\n\n- **`disabled`** : le nœud transmet le modèle sans patch ; utilisez-le pour isoler un problème.\n- **`auto`** : délègue le choix de l’implémentation à la fonction générique de SageAttention. Utile pour la compatibilité, moins explicite pour comparer les performances.\n- **`sageattn_qk_int8_pv_fp16_cuda`** : choix actuel pour l’A6000/Ampere. Il appelle le kernel CUDA explicite, avec Q/K int8 et P/V fp16.\n- **`…_triton`** : autre implémentation ; à n’essayer qu’en A/B si le kernel CUDA explicite échoue ou régresse.\n- **modes FP8 / SageAttention 3** : ne pas choisir par défaut ; ils dépendent fortement de l’architecture et du build installés.\n\n**PyTorch :** ce menu ne propose pas de « mode PyTorch ». Pour revenir à l’attention normale ComfyUI/PyTorch/SDPA, choisissez `disabled` ou bypasssez D1.\n\n**`allow_compile` :** laissez `false`. À `true`, `torch.compile` peut tracer dans la fonction SageAttention ; cela ne compile ni n’installe SageAttention. Il exige SageAttention ≥ 2.2 et un test réel de stabilité."
+        "Seule combinaison **confirmée indépendamment** comme bénéfique sur Ampere/SM86 (gain ~15-20 %, source : retours communautaires croisés avec la doc Kijai).\n\nLes deux patches ne sont **pas substituables** : Sage Attention accélère, le patch Mem-Eff réduit le pic VRAM (utile surtout en haute résolution / `ref_image_size=max`, qui garde les tokens de référence actifs tout le sampling). Kijai recommande explicitement les deux ensemble."
       ],
       "color": "#7a3b8a",
       "bgcolor": "#111"
@@ -925,19 +925,19 @@
       ],
       "size": [
         520,
-        250
+        260
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🗄️ D2. EasyCache — test A/B",
+      "title": "🗄️🌈 D2/D3 — avant d'activer",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Cache d’accélération\n\nEasyCache est **bypassé par défaut** : il peut accélérer les clips longs, mais change la stratégie de cache du modèle. Activez D2 seul, gardez D3 bypassé et comparez à seed, prompt, durée et résolution identiques.\n\nLes valeurs déjà présentes sont un point de départ du nœud, pas une recommandation universelle. Conservez-les pour le premier essai ; ne les ajustez qu’après avoir constaté un gain sans perte visuelle."
+        "**EasyCache** : gain généralement plus net que Spectrum sur les clips > 100 frames selon les retours communautaires — le meilleur candidat pour un premier test A/B.\n\n**Spectrum** : accélérateur *approximatif* (l'auteur le dit lui-même) — la trajectoire de débruitage change même à seed/prompt/sampler identiques, avec un risque de dégradation sur mouvements rapides/brefs. Retours contradictoires (×1.15 à ×0.5 selon les utilisateurs).\n\n**Mutuellement exclusifs entre eux** — n'activez qu'un seul des deux à la fois. Comparez la qualité sur votre propre contenu avant production, jamais en réglage par défaut aveugle."
       ],
       "color": "#7a3b8a",
       "bgcolor": "#111"
@@ -951,19 +951,19 @@
       ],
       "size": [
         520,
-        250
+        380
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🌈 D3. Spectrum — expérimental",
+      "title": "🚫 D4. SolAttn — non installé, à dessein",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Accélérateur approximatif\n\nSpectrum est **bypassé par défaut**. Il peut modifier la trajectoire de débruitage : même avec le même seed, le résultat peut différer du chemin de base.\n\nN’activez pas D3 en même temps que D2/EasyCache. Testez-le seul, sur un clip court représentatif, puis comparez la vitesse, la cohérence du mouvement et l’audio avant tout usage de production."
+        "## Groupe réservé, pas de nœud câblé\n\nTrois/quatre implémentations concurrentes existent (kijai/ComfyUI-SolAttn_triton, sumeetprashant/ComfyUI-SolAttn, Saganaki22/ComfyUI-sol-attn, KingGore/ComfyUI_sol-attn_Blackwell) — **aucune ne déclare le support SM86/Ampere**, la doc de sumeetprashant liste explicitement SM86 comme \"non testé\" (dépendance aux descripteurs TMA, fonctionnalité Hopper/Blackwell).\n\nRisque réel : pas de casse matérielle, mais un résultat **silencieusement dégradé** sans avertissement, faute de validation sur cette architecture.\n\n**Je n'ai volontairement câblé aucun nœud ici** plutôt que de deviner un `class_type` non vérifié qui casserait l'import. Quand vous passerez sur une carte Ada/Blackwell (ou qu'un retour communautaire confirmera SM86), installez le fork de votre choix et insérez-le ici, en série après D3, avec le même bypass par défaut."
       ],
       "color": "#7a3b8a",
       "bgcolor": "#111"
@@ -1174,19 +1174,19 @@
       ],
       "size": [
         620,
-        260
+        200
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🖼️ E1–E3. Références image",
+      "title": "🖼️ Extensibilité — jusqu'à 9 images",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Images de référence\n\nLes trois loaders servent par défaut à l’identité, au style et à une référence libre. Ils alimentent les entrées `ref_image_0`, `ref_image_1` et `ref_image_2` du nœud F.\n\nDans le prompt, utilisez `<Picture 1>`, `<Picture 2>`, etc. selon **l’ordre de connexion**, pas l’ordre d’écriture. Jusqu’à 9 images sont possibles : dupliquez un loader et reliez-le au prochain port libre du nœud F.\n\nLe coût réel des images est contrôlé par `ref_image_size` dans le nœud F ; voir sa note."
+        "3 `LoadImage` câblées ici (identité / style / libre) pour démarrer.\n\nLe nœud `MiniMaxH3ReferenceToVideo` (groupe F) expose **9 emplacements** `ref_image_0` … `ref_image_8` en entrées optionnelles — pour en ajouter, glissez simplement une nouvelle `LoadImage` sur un emplacement libre du nœud, **aucun recâblage** des emplacements existants n'est nécessaire."
       ],
       "color": "#b5544a",
       "bgcolor": "#111"
@@ -1258,20 +1258,20 @@
         1340
       ],
       "size": [
-        420,
-        520
+        320,
+        220
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎥 E4. Référence vidéo — réglages et branchement",
+      "title": "🎥 Extensibilité — jusqu'à 3 vidéos",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Mouvement et audio de référence\n\nLe fichier `reference_motion.mp4` est un placeholder : ce nœud est **muté** et ses liens vers F sont retirés par défaut, afin que le workflow fonctionne sans vidéo.\n\nPour l’utiliser : sélectionnez une vraie vidéo, repassez le nœud en mode **Always**, reliez `IMAGE` à `ref_video_0` du nœud F. Reliez `AUDIO` à `ref_video_audio_0` seulement si vous voulez réutiliser le son source.\n\n**Réglages :** `force_rate=24` aligne la référence sur la sortie ; laissez `skip_first_frames=0` sauf découpe volontaire ; `frame_load_cap=0` charge tout ; `select_every_nth>1` allège les longues vidéos. Préférez un clip court et représentatif, à résolution modeste. Dupliquez ce nœud pour `ref_video_1` et `ref_video_2`."
+        "`VHS_LoadVideo` plutôt qu'un loader natif basique : `force_rate` (aligné 24 fps), `frame_load_cap` et redimensionnement permettent d'homogénéiser des clips hétérogènes avant envoi à H3.\n\nPour une 2ᵉ/3ᵉ référence vidéo, dupliquez ce nœud et branchez-le sur `ref_video_1` / `ref_video_2` (+ `ref_video_audio_1` / `_2` si la vidéo a une bande-son à conserver).\n\nComme pour la 1ʳᵉ référence vidéo (cf. note ⚠️ Placeholder) : le fil `AUDIO` n'est à connecter que si tu veux garder le son de cette vidéo — pour le mouvement seul, laisse-le débranché, aucun souci."
       ],
       "color": "#b5544a",
       "bgcolor": "#111"
@@ -1315,24 +1315,24 @@
       "id": 38,
       "type": "MarkdownNote",
       "pos": [
-        370,
-        1080
+        -2700,
+        1150
       ],
       "size": [
-        280,
-        300
+        300,
+        260
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎯 G1. Turbo Sampler — vidéo + audio",
+      "title": "📎 Règle de rôle des références",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Sampler dédié au Turbo LoRA\n\n`MiniMaxH3TurboSampler` fournit les réglages de bruit adaptés aux deux horloges du modèle : vidéo et audio. Gardez-le lorsque C3 (Turbo LoRA) est actif.\n\nIl s’adapte automatiquement à la version de ComfyUI : sur les versions récentes qui gèrent nativement `ModelSamplingAV`, il suit le chemin standard ; sur les versions plus anciennes, il sépare les horaires vidéo/audio pour éviter une audio déformée à faible nombre de steps. Aucun réglage manuel n’est nécessaire.\n\nLe couple Turbo validé ici est : Turbo LoRA actif + ce sampler + scheduler `simple` + 4 à 8 steps. Ne remplacez pas ce nœud par un sélecteur de sampler générique : vous perdriez cette compatibilité entre versions.\n\nCe nœud prépare le sampler ; l’exécution réelle reste dans `Sampler Custom Advanced`."
+        "## Rappel — règle de rôle des références\n\nMême règle que la note 📎 « Règle de tagging » en haut du graphe (groupe A) : rôle explicite (identité / style / mouvement / caméra / voix) + ordre de connexion respecté pour que `<Picture i>` / `<Video k>` / `<Audio j>` correspondent.\n\nVoir cette note pour le détail complet — c'est la même règle, pas une variante."
       ],
       "color": "#b5544a",
       "bgcolor": "#111"
@@ -1452,7 +1452,7 @@
           ]
         }
       ],
-      "title": "🎬 MiniMax H3 — Référence vers vidéo (ref2va)",
+      "title": "🎬 MiniMax H3 — Reference to Video (ref2va)",
       "properties": {
         "Node name for S&R": "MiniMaxH3ReferenceToVideo"
       },
@@ -1465,6 +1465,32 @@
       ],
       "color": "#2b6d6d",
       "bgcolor": "#266"
+    },
+    {
+      "id": 40,
+      "type": "MarkdownNote",
+      "pos": [
+        -560,
+        1640
+      ],
+      "size": [
+        460,
+        220
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🎬 ref_image_size — compromis vitesse/fidélité",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## Rappel — ref_image_size\n\n`match` (par défaut, rapide) vs `max` (plus fidèle, plus lent). Voir la note 🖼️ « Références Image — poids selon ref_image_size » (groupe E) pour le détail complet et les recommandations chiffrées — même compromis, explication plus complète là-bas."
+      ],
+      "color": "#2b6d6d",
+      "bgcolor": "#111"
     },
     {
       "id": 41,
@@ -1691,19 +1717,19 @@
       ],
       "size": [
         340,
-        310
+        260
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "📈 G2. Scheduler — simple / steps / denoise",
+      "title": "🎯 Sampling — recommandations",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Planning de bruit\n\nLe scheduler produit la suite de sigmas utilisée par le sampler ; il ne choisit pas le sampler lui-même.\n\n- **`simple`** : réglage actuel et requis pour le chemin Turbo.\n- **`steps=8`** : très bon compromis. `4` est le minimum ; `6–8` est préférable pour les mouvements rapides ou intenses.\n- **Au-delà de 8** : ne l’utilisez pas par défaut. Le gain cesse généralement d’être visible et des artefacts de sur-accentuation peuvent apparaître.\n- **`denoise=1`** : génération complète. Une valeur inférieure n’est utile que si vous contrôlez volontairement un débruitage partiel avec un latent approprié.\n\nPour un test fiable, modifiez une seule variable. Ne prenez pas `LCM` + scheduler `Beta` comme réglage par défaut : ce couple a déjà posé des problèmes d’audio dans ce pipeline."
+        "Base large documentée : `res_multistep` + scheduler `simple`, 20 steps. Dégradation notable < 15 steps, gain modeste > 25 steps.\n\n⚠️ **Ne pas utiliser `LCM` + scheduler `Beta`** en réglage par défaut : retour communautaire confirmé — casse complètement l'audio (bruit/sifflement), malgré la promesse de vitesse.\n\n⚠️ **Ce seuil de 15 steps concerne le pipeline de base (sans Turbo LoRA).** La branche Turbo (C3, active par défaut dans ce workflow) est spécifiquement conçue et validée par son auteur pour tourner à 4-8 steps — les 8 steps actuellement configurés sont donc normaux et attendus, pas une erreur de réglage."
       ],
       "color": "#4a4a8a",
       "bgcolor": "#111"
@@ -1917,12 +1943,12 @@
           "links": []
         }
       ],
-      "title": "🎞️ Aperçu rapide GIF/WEBP (optionnel — bypass par défaut)",
+      "title": "🎞️ Preview rapide GIF/WEBP (optionnel — bypass par défaut)",
       "properties": {
         "Node name for S&R": "VHS_VideoCombine"
       },
       "widgets_values": [
-        24,
+        8,
         0,
         "MiniMax_H3_preview",
         "image/webp",
@@ -1941,6 +1967,58 @@
       ],
       "size": [
         340,
+        260
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "💾 Export — pourquoi CreateVideo/SaveVideo",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "Le mux natif `CreateVideo`→`SaveVideo` synchronise vidéo+audio en une seule passe, sans étape externe — c'est la sortie **officielle** recommandée par Comfy-Org pour H3.\n\n`VHS_VideoCombine` devient largement redondant comme sortie finale (le mux natif fait déjà le travail, avec le son) — conservé ici **uniquement** comme preview rapide GIF/WEBP optionnel, bypassé par défaut. Réactivez-le via son groupe si besoin d'un aperçu léger."
+      ],
+      "color": "#2f5f8f",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 53,
+      "type": "MarkdownNote",
+      "pos": [
+        -3060,
+        1600
+      ],
+      "size": [
+        420,
+        420
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "🎥 VHS_LoadVideo — bien régler les paramètres (poids vs fiabilité)",
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## Paramètres qui comptent vraiment\n\n**`skip_first_frames`** — saute N frames AVANT de charger quoi que ce soit. ⚠️ Piège vécu sur ce projet : si `skip_first_frames` ≥ nombre total de frames de la vidéo, il ne reste RIEN à charger → référence vide → rejetée par `MiniMaxH3ReferenceToVideo`. Laisser à `0` sauf besoin précis de couper un début de clip.\n\n**`frame_load_cap`** — plafond de frames chargées après le skip. `0` = pas de plafond (charge tout le reste). Sur une vidéo très longue, plafonner (ex. 120-200) réduit le poids d'entrée sans avoir à retoucher le fichier source.\n\n**`select_every_nth`** — garde 1 frame sur N. Un bon complément à `frame_load_cap` sur une vidéo longue : `select_every_nth=2` divise le poids par 2 en conservant le mouvement global (juste un peu moins fluide en détail).\n\n**`force_rate`** — aligner sur 24 (le fps de sortie H3, cf. `CreateVideo`). Un décalage de fps introduit un resampling qui peut désynchroniser légèrement le mouvement de référence.\n\n**`custom_width` / `custom_height`** (actif seulement si `force_size` ≠ `Disabled`) — forcer une résolution basse (ex. 512-768 px de côté) réduit nettement le poids d'entrée. Par défaut (`Disabled`), la vidéo est chargée à sa résolution native : inutilement lourd si elle dépasse largement la résolution de sortie choisie dans `Résolution (Size)` (groupe A).\n\n**Repère pratique :** pour une vidéo de référence 'mouvement', mieux vaut un clip **court mais représentatif** (quelques secondes suffisent généralement) en **résolution modeste**, plutôt qu'un clip long en pleine résolution. Le sur-échantillonnage (trop de frames, trop de pixels) n'améliore pas la fidélité du mouvement transmis à H3 — il alourdit juste le chargement et la VRAM."
+      ],
+      "color": "#b5544a",
+      "bgcolor": "#111"
+    },
+    {
+      "id": 54,
+      "type": "MarkdownNote",
+      "pos": [
+        -4100,
+        1600
+      ],
+      "size": [
+        620,
         300
       ],
       "flags": {},
@@ -1948,14 +2026,14 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎞️ I3. Aperçu rapide — WebP/GIF",
+      "title": "🖼️ Références Image — poids selon ref_image_size",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Aperçu léger, pas sortie finale\n\n`VHS_VideoCombine` est **bypassé** par défaut : il ne crée donc aucun fichier supplémentaire. Activez-le seulement pour vérifier rapidement le cadrage et le mouvement.\n\n**Réglage actuel :** WebP animé, préfixe `MiniMax_H3_preview`, **24 fps** — la même cadence que la sortie H3. L’aperçu reflète ainsi correctement la durée et la vitesse du mouvement.\n\nRéduire la cadence rend le fichier plus léger, mais fait aussi jouer les mêmes images plus lentement ; utilisez-le uniquement pour un aperçu compact à partager, pas pour juger le timing.\n\nPour la sortie de production, utilisez toujours `CreateVideo → SaveVideo` : ce chemin conserve la vidéo 24 fps et le mux audio synchronisé."
+        "## Le vrai levier de poids est sur le nœud F, pas ici\n\n`ref_image_size` (widget du nœud `MiniMaxH3ReferenceToVideo`, groupe F) contrôle ce qui se passe après le chargement :\n\n- **`match`** (par défaut) : chaque image de référence est réduite à la résolution de sortie avant sampling → poids d'entrée peu important, tu peux charger des images assez grandes sans souci.\n- **`max`** : jusqu'à 2048 px de côté court est conservé, et ces tokens de référence restent actifs à **chaque step** du sampling → le coût VRAM/temps grimpe fortement avec la résolution ET le nombre d'images cumulées.\n\n**Recommandations si tu passes en `max` :**\n- limite-toi à 3-4 images de référence maximum sur une A6000 48 Go ;\n- pré-recadre les images sur le sujet pertinent (visage, tenue, style) avant de les charger — pas la peine de garder une photo 4K pleine résolution si seul un détail sert de référence ;\n- pas besoin de pré-redimensionner en `match` : le nœud le fait déjà, l'optimisation ne rapporte rien ici."
       ],
-      "color": "#2f5f8f",
+      "color": "#b5544a",
       "bgcolor": "#111"
     },
     {
@@ -1974,12 +2052,12 @@
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "🎙️ E5. Référence audio — durée et fréquence",
+      "title": "🎙️ Référence Audio — durée et échantillonnage",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Voix ou musique de référence\n\n`LoadAudio` charge le fichier entier : il n’a pas de réglage de début ou de durée. Si l’audio est plus long que la vidéo cible, découpez-le avant de l’importer.\n\nVisez 44,1 kHz ou 48 kHz. Un audio à 32 kHz peut produire des artefacts avec le VAE audio H3. Dans le prompt, décrivez son rôle et utilisez le tag `<Audio 1>` selon l’ordre de connexion."
+        "Le nœud `LoadAudio` de base n'a **pas de réglage de découpe intégré** (pas de start/duration) — il charge le fichier entier tel quel. Si ton audio de référence est plus long que la durée cible (widget 'Durée (secondes)', groupe A), coupe-le **en amont** (hors ComfyUI) à la longueur voulue pour éviter une incohérence entre la voix/musique de référence et la durée générée.\n\n**Échantillonnage :** vise du 44.1 kHz ou 48 kHz. Un fichier à 32 kHz (observé sur une de tes exports générées) peut introduire des artefacts avec le VAE audio H3 — rééchantillonne en amont si besoin (ex. via ffmpeg `-ar 48000`)."
       ],
       "color": "#b5544a",
       "bgcolor": "#111"
@@ -1988,24 +2066,24 @@
       "id": 56,
       "type": "MarkdownNote",
       "pos": [
-        -2440,
-        1330
+        -3060,
+        940
       ],
       "size": [
-        560,
-        210
+        320,
+        70
       ],
       "flags": {},
       "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "title": "💾 D1b. Mem-Eff Sage Attention — VRAM",
+      "title": "⚠️ Placeholder — remplacer avant usage",
       "properties": {
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Patch mémoire MiniMax H3\n\nCe second patch s’applique **après** le patch Sage Attention au même MODEL. Son objectif est de réduire le pic de VRAM de l’attention H3, particulièrement lorsque les références sont nombreuses ou que `ref_image_size=max`.\n\nIl n’a pas de widget à régler : laissez-le actif avec D1. Pour mesurer son effet, ne le désactivez que dans un essai A/B contrôlé avec la même résolution, durée, seed et références."
+        "`reference_motion.mp4` n'existe pas sur le pod → nœud **muté** par défaut, **et les liens vers `ref_video_0` / `ref_video_audio_0` (nœud F) ont été retirés** pour que le workflow se charge et s'exécute sans erreur même sans référence vidéo.\n\n## Pour utiliser une vraie référence vidéo\n\n1. Uploade ta vidéo et sélectionne-la dans le widget `video` de ce nœud.\n2. Repasse ce nœud en mode actif (clic droit → Mode → Always).\n3. **Reconnecte manuellement** sa sortie `IMAGE` vers l'entrée `ref_videos.ref_video_0` du nœud F (MiniMax H3 — Reference to Video) — c'est ce qui transmet le **mouvement**.\n4. La sortie `AUDIO` vers `ref_video_audios.ref_video_audio_0` est **optionnelle** : connecte-la **seulement si tu veux garder le son de la vidéo de référence** (voix, musique, bruitage). Si tu ne veux que le mouvement, laisse `AUDIO` déconnecté — aucune erreur, le reste du workflow fonctionne normalement.\n\n⚠️ Muter ce nœud sans déconnecter ses liens (ou l'inverse) fait planter la validation du prompt (erreur au nœud `Save Video`) — toujours faire les deux ensemble : actif+connecté, ou muté+déconnecté."
       ],
       "color": "#8a1f1f",
       "bgcolor": "#411"

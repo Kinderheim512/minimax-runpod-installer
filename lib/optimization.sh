@@ -13,7 +13,7 @@ compute_optimization_flags() {
   local flags=()
   local env_vars=()
 
-  env_vars+=("PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True")
+  env_vars+=("PYTORCH_CUDA_ALLOC_CONF=expandable_segments:False")
   env_vars+=("HF_XET_HIGH_PERFORMANCE=1")
 
   # --- gestion mémoire selon la VRAM -------------------------------------
