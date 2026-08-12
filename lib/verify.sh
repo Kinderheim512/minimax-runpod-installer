@@ -145,6 +145,8 @@ print_summary() {
   echo "  GPU                : ${GPU_NAME:-?} (${GPU_VRAM_GB:-?} Go VRAM)"
   echo "  Palier de poids H3 : $(resolve_h3_tier 2>/dev/null || echo '?')"
   echo "  Workflows préparés : $(resolve_h3_workflows 2>/dev/null || echo "${H3_WORKFLOWS:-?}")"
+  local _presets_summary; _presets_summary="$(resolve_h3_presets 2>/dev/null || echo "")"
+  [[ -n "$_presets_summary" ]] && echo "  Preset(s) actif(s) : ${_presets_summary}"
   echo "  Port d'écoute      : ${COMFYUI_PORT}"
   echo "  Logs                : ${LOG_DIR}"
   echo -e "${C_BOLD}${C_CYAN}════════════════════════════════════════════════════${C_RESET}"

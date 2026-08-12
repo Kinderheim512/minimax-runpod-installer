@@ -10,6 +10,27 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🧩 Presets — extra models for a specific workflow
+
+- New `--preset=<name>` flag (`H3_PRESETS` in `config.env`, comma-separated
+  for several presets at once) downloads a fixed set of model files and
+  installs the matching workflow, **on top of** the standard `--tier`/
+  `--workflows` install — never replacing or altering it. Leaving it unset
+  (default) reproduces the exact prior behavior.
+- First preset: `aistudynow` — the experimental W4A8 MiniMax H3
+  Reference-to-Video checkpoint (`Kijai/MiniMax-H3-experimental`), its
+  matching INT8 ConvRot video VAE and rank-256 reference LoRA, plus the
+  NVFP4 AWQ text encoder and audio VAE already used by the standard install
+  (skipped if already present — `download_hf_file()` is idempotent), and a
+  dedicated `MiniMax_H3_REF2V_AIStudyNow.json` workflow.
+- New `lib/presets.sh` module and `presets/` directory. Deliberately kept
+  separate from `lib/workflows.sh`/`workflows/`: that path's per-tier
+  filename rewriting (`_patch_workflow_tier_filenames`) must never touch a
+  preset's fixed model filenames.
+- Adding a future preset needs no code change: a manifest entry in
+  `config.env` (`PRESET_<NAME>`, `H3_PRESET_NAMES`, optionally
+  `H3_PRESET_WORKFLOWS`) and a workflow file under `presets/<name>/`.
+
 ### 🧬 H3 weight tiers modernized, multi-repo model architecture
 
 - **`light`** now uses the **INT4Q** mixed INT4/INT8 ConvRot quantization
@@ -20,12 +41,20 @@ Changes since `v1.1.0`, not yet tagged.
   not enough to justify the larger quality gap for a project that prioritizes
   visual fidelity over disk footprint. `light` remains meaningfully smaller
   than `balanced` (~18.5 GB vs ~21 GB diffusion weights per checkpoint).
-- **`balanced`** now uses the **pruned INT8 ConvRot** diffusion weights
-  (previously `light`'s weights, ~21 GB per checkpoint — replaces the older,
-  larger non-pruned INT8 ConvRot weights, ~34 GB) and the **NVFP4 AWQ** text
-  encoder (~15.7 GB — previously `light`-only, replaces the older INT8
-  ConvRot text encoder, ~27.1 GB, no longer referenced by any tier). This is
-  the new community-standard combination for this tier.
+- **`balanced`** now uses the **pruned FP8 scaled** diffusion weights
+  (~21 GB per checkpoint; previously pruned INT8 ConvRot, itself previously
+  `light`'s weights, replacing the older, larger non-pruned INT8 ConvRot
+  weights, ~34 GB) and the **NVFP4 AWQ** text encoder (~15.7 GB —
+  previously `light`-only, replaces the older INT8 ConvRot text encoder,
+  ~27.1 GB, no longer referenced by any tier). The FP8-scaled switch was a
+  deliberate choice by the project maintainer, made aware that the
+  Comfy-Org README documents FP8 scaled as a fallback for int8_convrot
+  ("use only if you can't use int8_convrot"), not an upgrade, and that the
+  bundled Turbo LoRA (`drbaph/MiniMax-H3-Turbo-Lora-ComfyUI`) was validated
+  specifically against the pruned/curve-form (int8_convrot) checkpoint —
+  its compatibility with fp8_scaled is unverified. See `config.env`
+  (`MINIMAX_H3_TURBO_LORA_URL`) and `lib/models.sh` for the manual fallback
+  if `MiniMaxH3TurboLoRA` fails to load.
 - **`max`** is unchanged (BF16).
 - Two accelerators evaluated and deliberately **not** integrated: AsymW4A8
   (depends on an unmerged comfy-kitchen PR and mandatory custom nodes — goes
@@ -47,12 +76,14 @@ Changes since `v1.1.0`, not yet tagged.
   need checking from the models actually missing *and* required by the
   current tier/workflow selection — so a `light`-tier install checks both
   Hugging Face repos, while `balanced`/`max` only ever check one.
-- **`MODEL_SOURCE=civitai` now guarded to `--tier=balanced`**: CivitAI only
-  ever hosted the pruned INT8 ConvRot weights, which is now the `balanced`
-  tier's diffusion weights, not `light`'s (INT4Q is Hugging Face–only).
-  Selecting CivitAI with any other tier now fails fast with a clear error
-  instead of silently downloading the wrong file under the wrong tier's
-  name — this mismatch wasn't guarded against before this change.
+- **`MODEL_SOURCE=civitai` disabled entirely**: CivitAI only ever hosted the
+  pruned INT8 ConvRot weights. It was briefly guarded to `--tier=balanced`
+  only (since that used to be `balanced`'s diffusion weights), but now that
+  `balanced` itself has moved to pruned FP8 scaled, no tier matches the
+  CivitAI files anymore — selecting `MODEL_SOURCE=civitai` now fails fast
+  with a clear error instead of silently downloading an int8_convrot file
+  under an fp8_scaled filename. `H3_CIVITAI_FL2VA_URL`/
+  `H3_CIVITAI_REF2VA_URL` (`config.env`) still exist for manual use.
 - New optional custom nodes installed by default: `rgthree-comfy` and
   `ComfyUI-KJNodes` (both have a `requirements.txt`, installed like
   `ComfyUI-VideoHelperSuite`), and `ComfyUI-SolAttn_triton` (no Python

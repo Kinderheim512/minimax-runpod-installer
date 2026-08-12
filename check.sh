@@ -14,6 +14,8 @@ source "${PROJECT_ROOT}/lib/gpu.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/models.sh"
 # shellcheck disable=SC1091
+source "${PROJECT_ROOT}/lib/presets.sh"
+# shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/verify.sh"
 
 if require_cmd nvidia-smi && nvidia-smi >/dev/null 2>&1; then

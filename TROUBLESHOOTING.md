@@ -65,9 +65,9 @@ that's your setup, set `COMFY_SMART_MEMORY=false` and re-run
 
 This is almost always a **tier mismatch**, not a missing file. The official
 MiniMax H3 workflow JSON files ship with their diffusion/text-encoder loader
-nodes pre-set to the pruned INT8 ConvRot filenames
-(`minimax_h3_fl2va_pruned_int8_convrot.safetensors`,
-`minimax_h3_ref2va_pruned_int8_convrot.safetensors`,
+nodes pre-set to the pruned FP8 scaled filenames
+(`minimax_h3_fl2va_pruned_fp8_scaled.safetensors`,
+`minimax_h3_ref2va_pruned_fp8_scaled.safetensors`,
 `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`) — this is the `balanced`
 tier since `light` switched to INT4Q (see
 [README.md § Model tiers](README.md#-model-tiers-h3_tier)). If you installed

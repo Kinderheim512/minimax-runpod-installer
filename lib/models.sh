@@ -51,6 +51,21 @@ create_model_folders() {
 #                "light") — nouveau standard communauté adopté tel quel.
 #                L'ancien text encoder qwen3vl_32b_minimax_h3_int8_convrot
 #                n'est donc plus référencé par aucun palier.
+#   - balanced (2026-08) : diffusion models repassés de "pruned_int8_convrot"
+#                à "pruned_fp8_scaled" (~21 Go, taille non confirmée
+#                individuellement — vérifiée dynamiquement au téléchargement,
+#                voir lib/download.sh), à la demande explicite de
+#                l'utilisateur. À noter, pour référence future : le README du
+#                dépôt Comfy-Org/MiniMax-H3 documente fp8_scaled comme un
+#                repli ("à utiliser seulement si int8_convrot n'est pas
+#                utilisable"), pas comme une amélioration — changement fait
+#                en connaissance de cause. Le Turbo LoRA
+#                (MINIMAX_H3_TURBO_LORA_URL, voir config.env) a été converti
+#                et validé spécifiquement contre le checkpoint pruned/
+#                curve-form (int8_convrot) ; sa compatibilité avec
+#                pruned_fp8_scaled n'est PAS vérifiée — risque assumé par
+#                l'utilisateur pour MiniMax_H3_REF2V_TURBO_PLUS_SAGE*.json,
+#                qui référence donc maintenant fp8_scaled lui aussi.
 #   - max      : inchangé (BF16).
 #
 # H3_DIFFUSION_FL2VA / H3_DIFFUSION_REF2VA / H3_TEXT_ENCODER ne sont jamais
@@ -62,13 +77,13 @@ create_model_folders() {
 # shellcheck disable=SC2034
 H3_DIFFUSION_FL2VA=(
   "${H3_HF_REPO}|diffusion_models/minimax_h3_fl2va_bf16.safetensors|max|66.3"
-  "${H3_HF_REPO}|diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors|balanced|21"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors|balanced|21"
   "${H3_HF_REPO_INT4}|diffusion_models/minimax_h3_fl2va_pruned_INT4Q.safetensors|light|18.5"
 )
 # shellcheck disable=SC2034  # cf. note ci-dessus sur H3_DIFFUSION_FL2VA
 H3_DIFFUSION_REF2VA=(
   "${H3_HF_REPO}|diffusion_models/minimax_h3_ref2va_bf16.safetensors|max|66.3"
-  "${H3_HF_REPO}|diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors|balanced|21"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_ref2va_pruned_fp8_scaled.safetensors|balanced|21"
   "${H3_HF_REPO_INT4}|diffusion_models/minimax_h3_ref2va_pruned_INT4Q.safetensors|light|18.4"
 )
 # shellcheck disable=SC2034  # cf. note ci-dessus sur H3_DIFFUSION_FL2VA
@@ -701,17 +716,21 @@ download_h3_models() {
       ;;
   esac
 
-  # CivitAI n'héberge que les poids "pruned INT8 ConvRot" — depuis
-  # l'introduction du palier light en INT4Q (dépôt tiers HuggingFace, voir
-  # H3_HF_REPO_INT4 dans config.env), ces poids correspondent au palier
-  # "balanced", plus à "light". Refus explicite plutôt qu'un mauvais fichier
-  # téléchargé sous le mauvais nom : ce n'était pas vérifié avant (le code
-  # supposait implicitement que CivitAI == palier light).
-  if [[ "$model_source" == "civitai" && "$tier" != "balanced" ]]; then
-    log_error "MODEL_SOURCE=civitai n'est disponible que pour --tier=balanced."
-    log_error "CivitAI héberge uniquement les poids pruned INT8 ConvRot (palier balanced) —"
-    log_error "le palier '${tier}' n'y est pas disponible. Utilisez --tier=balanced avec CivitAI,"
-    log_error "ou MODEL_SOURCE=huggingface (défaut) pour '${tier}'."
+  # CivitAI n'héberge que les poids "pruned INT8 ConvRot"
+  # (H3_CIVITAI_FL2VA_URL / H3_CIVITAI_REF2VA_URL, voir config.env). Depuis
+  # 2026-08, le palier "balanced" utilise "pruned_fp8_scaled" (à la demande
+  # explicite de l'utilisateur — voir historique ci-dessus), donc plus aucun
+  # palier ne correspond aux fichiers CivitAI : téléchargement refusé
+  # explicitement plutôt que de récupérer un int8_convrot sous un nom de
+  # fichier fp8_scaled (mismatch silencieux sinon, jamais vérifié par
+  # verify_local_file() puisqu'aucun hash SHA256 n'est renseigné par
+  # défaut). Repli : MODEL_SOURCE=huggingface (défaut).
+  if [[ "$model_source" == "civitai" ]]; then
+    log_error "MODEL_SOURCE=civitai n'est plus disponible : CivitAI héberge uniquement les"
+    log_error "poids pruned INT8 ConvRot, et aucun palier ne les utilise plus (palier"
+    log_error "'balanced' = pruned_fp8_scaled depuis 2026-08). Utilisez MODEL_SOURCE=huggingface"
+    log_error "(défaut) — ou H3_CIVITAI_FL2VA_URL/H3_CIVITAI_REF2VA_URL pointent toujours vers"
+    log_error "les fichiers int8_convrot si vous en avez besoin manuellement."
     return 1
   fi
 

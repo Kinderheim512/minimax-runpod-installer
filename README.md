@@ -80,7 +80,7 @@ one tier — the one you select — never all three.
 |Tier|Min. VRAM|Diffusion model (FL2VA or REF2VA)|Text encoder|Approx. total\*|
 |-|-|-|-|-|
 |`light`|8 GB|INT4Q mixed INT4/INT8 ConvRot, \~18.5 GB|NVFP4 AWQ, \~15.7 GB|\~37 GB|
-|`balanced`|24 GB|pruned INT8 ConvRot, \~21 GB|NVFP4 AWQ, \~15.7 GB|\~40 GB|
+|`balanced`|24 GB|pruned FP8 scaled, \~21 GB|NVFP4 AWQ, \~15.7 GB|\~40 GB|
 |`max` (default)|48 GB|BF16, \~66.3 GB|BF16, \~51.5 GB|\~121 GB|
 
 `light`'s diffusion weights come from a separate, community-maintained
@@ -116,13 +116,22 @@ bash install.sh --tier=light
 ```
 
 > \*\*Compatibility note:\*\* the official workflow JSON files reference the
-> pruned INT8 ConvRot filenames in their model-loader nodes, which is now
+> pruned FP8 scaled filenames in their model-loader nodes, which is now
 > the `balanced`-tier filenames (it used to be `light`'s, before `light`
-> switched to INT4Q — see \[Model tiers](#-model-tiers-h3\_tier) above), and
-> that regardless of which tier you actually install. If you use `light` or
-> `max`, you'll need to reselect the correct file once in each workflow's
+> switched to INT4Q, then `balanced` itself moved from pruned INT8 ConvRot
+> to pruned FP8 scaled — see \[Model tiers](#-model-tiers-h3\_tier) above),
+> and that regardless of which tier you actually install. If you use `light`
+> or `max`, you'll need to reselect the correct file once in each workflow's
 > loader node the first time you open it. See
 > \[TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-workflow-says-a-model-is-missing-even-though-checksh-says-its-installed).
+>
+> \*\*Turbo LoRA note:\*\* the Comfy-Org README documents pruned FP8 scaled as
+> a fallback ("use only if you can't use int8_convrot"), not an upgrade —
+> and the bundled Turbo LoRA (`drbaph/MiniMax-H3-Turbo-Lora-ComfyUI`) was
+> converted and validated specifically against the pruned/curve-form
+> (int8_convrot) checkpoint, not fp8_scaled. If `MiniMaxH3TurboLoRA` fails
+> to load on `balanced`, see `config.env` (`MINIMAX_H3_TURBO_LORA_URL`) for
+> the manual fallback.
 
 \---
 
@@ -146,6 +155,38 @@ All 5 official workflow files under `workflows/` are eligible:
 
 They appear in ComfyUI under **Workflows → Browse Templates** (or directly
 in `ComfyUI/user/default/workflows/`) after install — no manual import.
+
+\---
+
+# 🧩 Presets (extra models for a specific workflow)
+
+Presets add a fixed set of models (and their matching workflow) **on top of**
+the standard install — they never change `--tier`/`--workflows`, and leaving
+`--preset=` unset reproduces the exact behavior you had before this feature
+existed.
+
+```bash
+bash install.sh --preset=aistudynow            # full install + this preset
+bash install.sh --only-models --preset=aistudynow  # (re)download just this preset's models
+```
+
+Or set it permanently in `config.env`:
+
+```bash
+H3\_PRESETS="aistudynow"
+```
+
+Multiple presets: `--preset=aistudynow,other\_preset`. An unknown preset name
+is ignored with a warning, never a hard failure.
+
+|Preset|What it installs|
+|-|-|
+|`aistudynow`|Experimental W4A8 MiniMax H3 Reference-to-Video checkpoint (Kijai/MiniMax-H3-experimental), its matching INT8 ConvRot video VAE and rank-256 reference LoRA, plus the NVFP4 AWQ text encoder and audio VAE already used by the standard install (skipped if already present) — and the dedicated `MiniMax\_H3\_REF2V\_AIStudyNow.json` workflow.|
+
+Adding a new preset later only means: a manifest entry in `config.env`
+(`PRESET\_<NAME>`, `H3\_PRESET\_NAMES`, optionally `H3\_PRESET\_WORKFLOWS`) and a
+workflow file under `presets/<name>/` — nothing in `lib/presets.sh` needs to
+change.
 
 \---
 
@@ -244,6 +285,7 @@ bash install.sh --only-models         # (re)download weights only
 bash install.sh --tier=light          # force a weight tier
 bash install.sh --tier=auto           # pick a tier from detected VRAM
 bash install.sh --workflows=t2v,r2v   # only install these workflows' models
+bash install.sh --preset=aistudynow   # + this preset's models/workflow (additive)
 bash install.sh --yes                 # non-interactive, answers "yes" everywhere
 bash install.sh --force               # redo every step, ignore prior state
 
@@ -300,9 +342,12 @@ the installer only warns, it doesn't block on an unrecognized card.
 │   ├── download.sh           # generic HF file download (hf-cli, resume, verify)
 │   ├── models.sh             # H3 tier/workflow resolution, manifest, download orchestration
 │   ├── workflows.sh          # copies workflow JSON matching the current selection
+│   ├── presets.sh             # extra per-workflow model sets (see Presets above)
 │   ├── optimization.sh       # GPU-tuned ComfyUI launch flags
 │   └── verify.sh             # check.sh backend + install summary
 ├── workflows/               # official MiniMax H3 workflow JSON files (see Workflows above)
+├── presets/                  # preset-specific workflow JSON files (see Presets above)
+│   └── aistudynow/
 ├── docs/
 │   ├── INSTALL\_EN.md         # detailed step-by-step guide (English)
 │   └── INSTALL\_FR.md         # detailed step-by-step guide (French)

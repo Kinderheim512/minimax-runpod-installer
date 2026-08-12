@@ -7,6 +7,9 @@
 #   bash install.sh --only-models         (ré)télécharge uniquement les poids
 #   bash install.sh --tier=light          force un palier de poids
 #   bash install.sh --workflows=t2v,r2v   choisit les workflows préparés
+#   bash install.sh --preset=aistudynow   télécharge en plus les modèles/le
+#                                          workflow d'un preset (additif —
+#                                          n'affecte jamais --tier/--workflows)
 #   bash install.sh --yes                 non interactif (répond "oui" partout)
 #   bash install.sh --force               ignore l'état déjà validé (réexécute tout)
 
@@ -30,6 +33,7 @@ for arg in "$@"; do
     --yes|-y) ASSUME_YES="true" ;;
     --tier=*) H3_TIER="${arg#*=}" ;;
     --workflows=*) H3_WORKFLOWS="${arg#*=}" ;;
+    --preset=*) H3_PRESETS="${arg#*=}" ;;
     -h|--help)
       sed -n '2,/^[^#]/{/^#/p}' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Option inconnue : $arg" >&2; exit 1 ;;
@@ -64,6 +68,8 @@ source "${PROJECT_ROOT}/lib/download.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/models.sh"
 # shellcheck disable=SC1091
+source "${PROJECT_ROOT}/lib/presets.sh"
+# shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/lora_auto.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/workflows.sh"
@@ -96,6 +102,14 @@ nvidia-smi || {
   if download_h3_models; then mark_step_done "h3_models"; fi
   install_turbo_node
   install_turbo_lora
+  H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
+  if [[ -n "$H3_ACTIVE_PRESETS" ]]; then
+    if download_preset_models "$H3_ACTIVE_PRESETS"; then
+      install_preset_workflows "$H3_ACTIVE_PRESETS"
+    else
+      log_warn "Téléchargement du/des preset(s) '${H3_ACTIVE_PRESETS}' incomplet — relancez plus tard : bash install.sh --only-models --preset=${H3_ACTIVE_PRESETS}"
+    fi
+  fi
   print_summary
   exit 0
 fi
@@ -155,6 +169,18 @@ if [[ "$SKIP_MODELS" == "false" ]]; then
 else
   log_info "--skip-models : téléchargement des poids H3 sauté (à faire plus tard via menu.sh ou --only-models)."
 fi
+
+# --- Presets (additif, indépendant de --skip-models : un --preset= explicite
+#     reste honoré même si les poids standard sont sautés) -------------------
+H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
+if [[ -n "$H3_ACTIVE_PRESETS" ]]; then
+  if download_preset_models "$H3_ACTIVE_PRESETS"; then
+    install_preset_workflows "$H3_ACTIVE_PRESETS"
+  else
+    log_warn "Téléchargement du/des preset(s) '${H3_ACTIVE_PRESETS}' incomplet — relancez plus tard : bash install.sh --only-models --preset=${H3_ACTIVE_PRESETS}"
+  fi
+fi
+
 run_step "workflows" install_workflows "$FORCE"
 run_step "optimization" compute_optimization_flags "$FORCE"
 verify_installation || true

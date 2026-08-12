@@ -126,7 +126,7 @@
         "Node name for S&R": "MarkdownNote"
       },
       "widgets_values": [
-        "## Model files\n\n**`diffusion_models/`**  \n`minimax_h3_ref2va_pruned_int8_convrot.safetensors`\n\n**`text_encoders/`**  \n`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`\n\n**`vae/`**  \n`minimax_h3_video_vae_fp16.safetensors`  \n`minimax_h3_audio_vae_fp32.safetensors`\n\n**`loras/`**  \n`minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors`\n\nC3 is enabled by default, so this Turbo LoRA must exist under **this exact filename**, defined in `config.env`.\n\n## Extensions\n- ComfyUI core ≥ 0.30\n- ComfyUI-KJNodes (Sage Attention patches)\n- rgthree-comfy (LoRA, switches, reroutes)\n- ComfyUI-VideoHelperSuite (reference video and preview)\n- `sageattention` in the ComfyUI environment\n- ComfyUI-Spectrum-MiniMax-H3 for D3 only; disabled by default"
+        "## Model files\n\n**`diffusion_models/`**  \n`minimax_h3_ref2va_pruned_fp8_scaled.safetensors`\n\n**`text_encoders/`**  \n`qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors`\n\n**`vae/`**  \n`minimax_h3_video_vae_fp16.safetensors`  \n`minimax_h3_audio_vae_fp32.safetensors`\n\n**`loras/`**  \n`minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors`\n\nC3 is enabled by default, so this Turbo LoRA must exist under **this exact filename**, defined in `config.env`.\n\n## Extensions\n- ComfyUI core ≥ 0.30\n- ComfyUI-KJNodes (Sage Attention patches)\n- rgthree-comfy (LoRA, switches, reroutes)\n- ComfyUI-VideoHelperSuite (reference video and preview)\n- `sageattention` in the ComfyUI environment\n- ComfyUI-Spectrum-MiniMax-H3 for D3 only; disabled by default"
       ],
       "color": "#3f789e",
       "bgcolor": "#111"
@@ -353,7 +353,7 @@
         "Node name for S&R": "UNETLoader"
       },
       "widgets_values": [
-        "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+        "minimax_h3_ref2va_pruned_fp8_scaled.safetensors",
         "default"
       ],
       "color": "#1c5d3b",
