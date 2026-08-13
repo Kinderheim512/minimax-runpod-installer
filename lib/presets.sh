@@ -5,14 +5,16 @@
 #
 # Un preset ne redéfinit RIEN de l'installation standard : il ajoute des
 # fichiers en plus (téléchargés via download_hf_file(), lib/download.sh —
-# même logique d'idempotence/reprise/vérification que le reste du projet) et
-# installe un workflow ComfyUI dédié. H3_PRESETS vide (défaut) => ce fichier
-# ne fait rien.
+# même logique d'idempotence/reprise/vérification que le reste du projet),
+# éventuellement des nœuds custom dédiés (via _clone_or_update_node_repo(),
+# lib/nodes.sh — même logique de clonage/mise à jour que les nœuds optionnels
+# globaux), et installe un workflow ComfyUI dédié. H3_PRESETS vide (défaut)
+# => ce fichier ne fait rien.
 #
 # Source de vérité pour la liste des presets connus et leur manifeste :
-# H3_PRESET_NAMES / PRESET_<NOM> / H3_PRESET_WORKFLOWS (config.env). Ajouter
-# un preset ne nécessite aucune modification ici — voir le commentaire dans
-# config.env.
+# H3_PRESET_NAMES / PRESET_<NOM> / PRESET_<NOM>_NODE_REPOS (optionnel) /
+# H3_PRESET_WORKFLOWS (config.env). Ajouter un preset ne nécessite aucune
+# modification ici — voir le commentaire dans config.env.
 
 # resolve_h3_presets — normalise H3_PRESETS/--preset= : liste séparée par des
 # virgules, jetons vides ignorés silencieusement, jetons inconnus ignorés
@@ -137,6 +139,54 @@ download_preset_models() {
   done
 
   log_ok "Modèles du/des preset(s) '${presets_csv}' téléchargés."
+}
+
+# _preset_node_repos_ref <nom> -> nom de variable du tableau de nœuds custom
+# du preset (PRESET_<NOM_MAJ>_NODE_REPOS) sur stdout. Même convention que
+# _preset_manifest_ref() ci-dessus, tableau distinct : un preset peut n'avoir
+# aucun nœud custom (cas le plus courant — ex. aistudynow n'en a pas besoin,
+# le support H3 étant natif), ce tableau est alors absent de config.env.
+_preset_node_repos_ref() {
+  local name="$1"
+  echo "PRESET_${name^^}_NODE_REPOS"
+}
+
+# install_preset_nodes <presets_csv>
+# Clone/met à jour les nœuds custom déclarés par les presets actifs, un par
+# un, réutilisant _clone_or_update_node_repo() (lib/nodes.sh) telle quelle —
+# aucune logique de clonage dupliquée ici. Silencieux si un preset actif ne
+# déclare aucun tableau PRESET_<NOM>_NODE_REPOS (cas courant) : ce n'est pas
+# une erreur, juste l'absence de nœud dédié pour ce preset. Jamais bloquant,
+# comme install_optional_nodes() : un échec de clonage logue un avertissement
+# et n'interrompt ni les autres nœuds ni le reste de l'installation.
+install_preset_nodes() {
+  local presets_csv="$1"
+  [[ -z "$presets_csv" ]] && return 0
+
+  local -a names=()
+  IFS=',' read -ra names <<< "$presets_csv"
+
+  local name ref repo_url any_declared="false"
+  for name in "${names[@]}"; do
+    [[ -z "$name" ]] && continue
+    ref="$(_preset_node_repos_ref "$name")"
+    # Garde requise sous `set -u` : un nameref vers une variable jamais
+    # déclarée (preset sans nœud custom, cas courant) lèverait une erreur non
+    # bloquante voulue autrement — declare -p vérifie l'existence sans y
+    # toucher.
+    declare -p "$ref" &>/dev/null || continue
+    any_declared="true"
+    local -n repos="$ref"
+    [[ ${#repos[@]} -eq 0 ]] && continue
+    log_step "Preset '${name}' — nœuds custom associés"
+    mkdir -p "${INSTALL_DIR}/custom_nodes"
+    for repo_url in "${repos[@]}"; do
+      _clone_or_update_node_repo "$repo_url" "true"
+    done
+  done
+
+  [[ "$any_declared" == "false" ]] && return 0
+  log_ok "Nœuds custom du/des preset(s) '${presets_csv}' à jour."
 }
 
 # install_preset_workflows <presets_csv>
