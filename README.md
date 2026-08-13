@@ -182,30 +182,11 @@ is ignored with a warning, never a hard failure.
 |Preset|What it installs|
 |-|-|
 |`aistudynow`|Experimental W4A8 MiniMax H3 Reference-to-Video checkpoint (Kijai/MiniMax-H3-experimental), its matching INT8 ConvRot video VAE and rank-256 reference LoRA, plus the NVFP4 AWQ text encoder and audio VAE already used by the standard install (skipped if already present) — and the dedicated `MiniMax\_H3\_REF2V\_AIStudyNow.json` workflow.|
-|`dasiwa_mmh3v12`|"DaSiWa - MiniMaxH3 MythicAlchemy v12" (T2VA/I2VA/FLF2VA/REF2VA) checkpoints — INT8 ConvRot FL2VA + REF2VA (Comfy-Org/MiniMax-H3, outside the standard tiers) and the INT4 ConvRot text encoder (Abiray/MiniMax-H3-GGUF) as selected in the workflow's Settings node — plus the fp16 video VAE and fp32 audio VAE (already used by the standard install, repeated here so the preset is self-contained), the TAE fast-preview model (Kijai/MiniMax-H3-TAE), the AnimeSharpV4 upscale model (Kim2091/2x-AnimeSharpV4) and the RIFE 4.26 frame-interpolation model (Comfy-Org/frame\_interpolation) — and the dedicated `DaSiWa\_MiniMaxH3\_MythicAlchemy\_v12.json` workflow.|
 
 Adding a new preset later only means: a manifest entry in `config.env`
 (`PRESET\_<NAME>`, `H3\_PRESET\_NAMES`, optionally `H3\_PRESET\_WORKFLOWS`) and a
 workflow file under `presets/<name>/` — nothing in `lib/presets.sh` needs to
 change.
-
-### Installing only ComfyUI/CUDA/PyTorch + a preset's own models
-
-If you only want a specific preset's models — not the standard tier's — combine
-`--skip-models` (skips the standard `H3\_TIER` weights) with `--preset=`
-(presets are additive and independent of `--skip-models`, so they're still
-honored):
-
-```bash
-bash install.sh --skip-models --preset=dasiwa_mmh3v12
-```
-
-This installs system packages, GPU/CUDA setup, PyTorch, ComfyUI, ComfyUI-Manager,
-the custom nodes — everything except the standard tier's weights — then
-downloads only the preset's models and copies its workflow in. Note this also
-skips the standard turbo LoRA install (`install_turbo_node`/`install_turbo_lora`
-only run when standard models aren't skipped); install it manually later via
-`bash install_lora.sh` if a given workflow needs it.
 
 \---
 
@@ -305,7 +286,6 @@ bash install.sh --tier=light          # force a weight tier
 bash install.sh --tier=auto           # pick a tier from detected VRAM
 bash install.sh --workflows=t2v,r2v   # only install these workflows' models
 bash install.sh --preset=aistudynow   # + this preset's models/workflow (additive)
-bash install.sh --skip-models --preset=dasiwa_mmh3v12  # ComfyUI/CUDA/PyTorch only + this preset's models
 bash install.sh --yes                 # non-interactive, answers "yes" everywhere
 bash install.sh --force               # redo every step, ignore prior state
 
