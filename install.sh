@@ -104,7 +104,9 @@ nvidia-smi || {
   install_turbo_lora
   H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
   if [[ -n "$H3_ACTIVE_PRESETS" ]]; then
+    install_preset_nodes "$H3_ACTIVE_PRESETS"
     if download_preset_models "$H3_ACTIVE_PRESETS"; then
+      install_preset_symlinks "$H3_ACTIVE_PRESETS"
       install_preset_workflows "$H3_ACTIVE_PRESETS"
     else
       log_warn "Téléchargement du/des preset(s) '${H3_ACTIVE_PRESETS}' incomplet — relancez plus tard : bash install.sh --only-models --preset=${H3_ACTIVE_PRESETS}"
@@ -174,7 +176,9 @@ fi
 #     reste honoré même si les poids standard sont sautés) -------------------
 H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
 if [[ -n "$H3_ACTIVE_PRESETS" ]]; then
+  install_preset_nodes "$H3_ACTIVE_PRESETS"
   if download_preset_models "$H3_ACTIVE_PRESETS"; then
+    install_preset_symlinks "$H3_ACTIVE_PRESETS"
     install_preset_workflows "$H3_ACTIVE_PRESETS"
   else
     log_warn "Téléchargement du/des preset(s) '${H3_ACTIVE_PRESETS}' incomplet — relancez plus tard : bash install.sh --only-models --preset=${H3_ACTIVE_PRESETS}"

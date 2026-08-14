@@ -95,6 +95,21 @@ attach_tmux_if_interactive() {
   # bootstrap.sh lancé de façon non interactive : curl | bash, Start Command
   # RunPod, etc.). ComfyUI, lui, tourne déjà dans la session détachée à ce
   # stade et n'est pas affecté par ce choix.
+  #
+  # CAS IMBRIQUÉ — si ce script tourne DANS un client tmux déjà attaché à une
+  # AUTRE session (ex. le terminal web RunPod ouvre lui-même une session par
+  # défaut), "$TMUX" est déjà présent dans l'environnement : un
+  # "tmux attach-session" classique refuse alors de s'imbriquer
+  # ("sessions should be nested with care, unset $TMUX to force"), échoue, et
+  # à cause du "exec" ce script se termine aussitôt sans jamais atteindre la
+  # session "minimax" — ComfyUI tourne bien dedans, mais rien ne l'affiche,
+  # ce qui donne l'impression que "tmux ne démarre pas". La bonne commande
+  # dans ce cas est "tmux switch-client" : elle change simplement la session
+  # affichée par le client tmux courant, sans l'imbriquer.
+  if [[ -n "${TMUX:-}" ]]; then
+    exec tmux switch-client -t "$TMUX_SESSION_NAME"
+  fi
+
   if [[ -t 0 && -t 1 ]]; then
     exec tmux attach-session -t "$TMUX_SESSION_NAME"
   fi
