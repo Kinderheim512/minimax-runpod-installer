@@ -99,10 +99,14 @@ nvidia-smi || {
   install_extra_requirements
   create_model_folders
   run_step "hf_login" hf_login "$FORCE"
-  if download_h3_models; then mark_step_done "h3_models"; fi
+  H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
+  if [[ "$(preset_replaces_standard_tier "$H3_ACTIVE_PRESETS")" == "true" ]]; then
+    log_info "Preset '${H3_ACTIVE_PRESETS}' remplace le palier standard H3_TIER (voir H3_PRESET_REPLACES_STANDARD_TIER, config.env) — téléchargement du palier standard sauté."
+  else
+    if download_h3_models; then mark_step_done "h3_models"; fi
+  fi
   install_turbo_node
   install_turbo_lora
-  H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
   if [[ -n "$H3_ACTIVE_PRESETS" ]]; then
     install_preset_nodes "$H3_ACTIVE_PRESETS"
     if download_preset_models "$H3_ACTIVE_PRESETS"; then
@@ -137,9 +141,16 @@ run_step "manager_installed"  install_or_update_manager   "$FORCE"
 run_step "optional_nodes"     install_optional_nodes      "$FORCE"
 run_step "model_folders"      create_model_folders        "$FORCE"
 
+# --- Presets : résolu une fois ici (avant la décision "faut-il encore
+#     télécharger le palier standard H3_TIER ?" ci-dessous), réutilisé plus
+#     bas pour l'installation des presets eux-mêmes. -----------------------
+H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
+
 if [[ "$SKIP_MODELS" == "false" ]]; then
   run_step "hf_login" hf_login "$FORCE"
-  if ! step_done "h3_models" || [[ "$FORCE" == "true" ]]; then
+  if [[ "$(preset_replaces_standard_tier "$H3_ACTIVE_PRESETS")" == "true" ]]; then
+    log_info "Preset '${H3_ACTIVE_PRESETS}' remplace le palier standard H3_TIER (voir H3_PRESET_REPLACES_STANDARD_TIER, config.env) — téléchargement du palier standard sauté."
+  elif ! step_done "h3_models" || [[ "$FORCE" == "true" ]]; then
     # Estimation dynamique de l'espace requis : mêmes fonctions que celles
     # utilisées à l'intérieur de download_h3_models() (lib/models.sh), donc
     # une seule source de vérité pour "combien d'espace il faut" — plus de
@@ -173,8 +184,8 @@ else
 fi
 
 # --- Presets (additif, indépendant de --skip-models : un --preset= explicite
-#     reste honoré même si les poids standard sont sautés) -------------------
-H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
+#     reste honoré même si les poids standard sont sautés — H3_ACTIVE_PRESETS
+#     déjà résolu plus haut) ---------------------------------------------
 if [[ -n "$H3_ACTIVE_PRESETS" ]]; then
   install_preset_nodes "$H3_ACTIVE_PRESETS"
   if download_preset_models "$H3_ACTIVE_PRESETS"; then
@@ -185,7 +196,18 @@ if [[ -n "$H3_ACTIVE_PRESETS" ]]; then
   fi
 fi
 
-run_step "workflows" install_workflows "$FORCE"
+# Sauté quand le preset actif remplace le palier standard (même garde que
+# pour download_h3_models() ci-dessus) : les workflows officiels t2v/i2v/r2v
+# référencent les poids du palier standard H3_TIER, jamais téléchargés dans
+# ce cas — les copier créerait des workflows "fantômes" dans ComfyUI,
+# pointant vers des fichiers absents. Le workflow propre au preset a déjà
+# été installé plus haut par install_preset_workflows(), indépendamment de
+# ce garde-fou.
+if [[ "$(preset_replaces_standard_tier "$H3_ACTIVE_PRESETS")" == "true" ]]; then
+  log_info "Preset '${H3_ACTIVE_PRESETS}' remplace le palier standard H3_TIER — workflows officiels t2v/i2v/r2v non copiés (référenceraient des poids non installés)."
+else
+  run_step "workflows" install_workflows "$FORCE"
+fi
 run_step "optimization" compute_optimization_flags "$FORCE"
 verify_installation || true
 print_summary

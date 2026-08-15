@@ -187,6 +187,7 @@ install_preset_nodes() {
 
   [[ "$any_declared" == "false" ]] && return 0
   log_ok "Nœuds custom du/des preset(s) '${presets_csv}' à jour."
+  return 0
 }
 
 # _preset_symlinks_ref <nom> -> nom de variable du tableau de liens
@@ -196,6 +197,33 @@ install_preset_nodes() {
 _preset_symlinks_ref() {
   local name="$1"
   echo "PRESET_${name^^}_SYMLINKS"
+}
+
+# preset_replaces_standard_tier <presets_csv>
+# "true" sur stdout si au moins un preset actif figure dans
+# H3_PRESET_REPLACES_STANDARD_TIER (config.env) — signifie qu'il fournit
+# lui-même un jeu complet fl2va/ref2va/text encoder et que télécharger EN
+# PLUS le palier H3_TIER standard ne ferait que dupliquer des poids pour le
+# même rôle. "false" sinon (cas par défaut : les presets sont additifs).
+# Utilisé par install.sh pour décider de sauter download_h3_models().
+preset_replaces_standard_tier() {
+  local presets_csv="$1"
+  [[ -z "$presets_csv" ]] && { echo "false"; return 0; }
+
+  local -a names=()
+  IFS=',' read -ra names <<< "$presets_csv"
+
+  local name replaces_name
+  for name in "${names[@]}"; do
+    [[ -z "$name" ]] && continue
+    for replaces_name in "${H3_PRESET_REPLACES_STANDARD_TIER[@]}"; do
+      if [[ "$name" == "$replaces_name" ]]; then
+        echo "true"
+        return 0
+      fi
+    done
+  done
+  echo "false"
 }
 
 # install_preset_symlinks <presets_csv>

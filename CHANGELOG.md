@@ -10,13 +10,53 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🔀 `dasiwa_mmh3v12` becomes the default preset; symlink-install crash fixed
+
+- `H3_PRESETS` now defaults to `"dasiwa_mmh3v12"` (`config.env`) — a
+  deliberate project choice, not a fallback. `H3_PRESETS=""` (env) or
+  `--preset=` (empty value) opts back into no preset / the standard
+  `H3_TIER` weights. Implemented with `${H3_PRESETS-default}` (no `:`),
+  not `${H3_PRESETS:-default}`, so an explicitly empty value is honored
+  rather than silently replaced by the default — the two expansions differ
+  precisely on that case.
+- New `H3_PRESET_REPLACES_STANDARD_TIER` array (`config.env`) — presets
+  listed here provide their own complete fl2va/ref2va/text-encoder set
+  (under a different precision/repo), so `install.sh` now skips
+  `download_h3_models()` entirely when one is active, avoiding ~40–80 GB of
+  redundant duplicate weights. Only `dasiwa_mmh3v12` is listed; `aistudynow`
+  and `minimaxh3auto_v5` remain purely additive. New
+  `preset_replaces_standard_tier()` helper in `lib/presets.sh`; both
+  `install.sh` code paths (`--only-models` and the full install) now
+  resolve `H3_ACTIVE_PRESETS` once, before deciding whether to call
+  `download_h3_models()`, instead of resolving it twice as before.
+- Kept `dasiwa_mmh3v12`'s own manifest on **INT8 ConvRot** (not FP8 scaled)
+  after reviewing community benchmarks: SSIM fidelity and generation speed
+  both favor INT8 ConvRot over FP8 scaled on Ampere-class cards, consistent
+  with the upstream Comfy-Org README's own guidance (FP8 scaled documented
+  as a fallback for when INT8 ConvRot can't be used, not an upgrade).
+- Fixed a crash in `install_preset_symlinks()` (`lib/presets.sh`): when
+  called as a bare statement under `set -Eeuo pipefail` (as `install.sh`
+  does), the function fell through to `[[ "$any_declared" == "false" ]] &&
+  return 0` as its *last* statement — which evaluates to exit status 1
+  whenever a preset's symlinks *were* declared and successfully created,
+  aborting the whole install immediately after logging success for every
+  individual link. Fixed with an explicit `if/fi` that always ends on a
+  real `return 0`. Hardened `install_preset_nodes()` (same file) against
+  the identical pattern for consistency, even though it wasn't yet
+  observed to fail there (it happened to always end on `log_ok`, which
+  currently returns 0).
+- New `symlinks-fix` verified end-to-end with `set -e` re-execution
+  (including idempotent re-run) against a mocked `INSTALL_DIR`, not just
+  `bash -n`.
+
 ### 🧩 Presets — extra models for a specific workflow
 
 - New `--preset=<name>` flag (`H3_PRESETS` in `config.env`, comma-separated
   for several presets at once) downloads a fixed set of model files and
   installs the matching workflow, **on top of** the standard `--tier`/
-  `--workflows` install — never replacing or altering it. Leaving it unset
-  (default) reproduces the exact prior behavior.
+  `--workflows` install by default — never altering it. Leaving it unset
+  (before 2026-08) reproduced the exact prior behavior; see "`dasiwa_mmh3v12`
+  becomes the default preset" above for the current default.
 - First preset: `aistudynow` — the experimental W4A8 MiniMax H3
   Reference-to-Video checkpoint (`Kijai/MiniMax-H3-experimental`), its
   matching INT8 ConvRot video VAE and rank-256 reference LoRA, plus the

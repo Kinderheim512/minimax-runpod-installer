@@ -58,16 +58,20 @@ This single command:
 * detects your GPU and picks a matching PyTorch/CUDA build
 * installs ComfyUI, ComfyUI-Manager, and the optional custom nodes
 * creates the Python environment
-* downloads the MiniMax H3 weight tier that fits your GPU (or `max` if you
-haven't set `H3\_TIER` — see [Model tiers](#-model-tiers-h3_tier) below)
+* downloads the **DaSiWa MythicAlchemy v12** model set and workflow by
+default (`H3_PRESETS=dasiwa_mmh3v12` — see
+[Presets](#-presets-extra-models-for-a-specific-workflow) below); the
+standard `H3_TIER` weight tier is skipped in this case to avoid downloading
+two redundant ~21 GB copies of fl2va/ref2va — set `H3_PRESETS=""` to opt
+out and get the standard tier instead
 * installs the official workflows
 * computes GPU-tuned launch flags
 * starts ComfyUI **inside a persistent tmux session** (see [TMUX.md](TMUX.md))
 
 No manual configuration is required for a first run. For anything beyond
 the default (a specific tier, a subset of workflows, skipping model
-downloads, non-interactive runs), see [CLI reference](#-cli-reference)
-below, or the full walkthrough in
+downloads, non-interactive runs, disabling the default preset), see
+[CLI reference](#-cli-reference) below, or the full walkthrough in
 [docs/INSTALL\_EN.md](docs/INSTALL_EN.md) / [docs/INSTALL\_FR.md](docs/INSTALL_FR.md).
 
 \---
@@ -161,13 +165,24 @@ in `ComfyUI/user/default/workflows/`) after install — no manual import.
 # 🧩 Presets (extra models for a specific workflow)
 
 Presets add a fixed set of models (and their matching workflow) **on top of**
-the standard install — they never change `--tier`/`--workflows`, and leaving
-`--preset=` unset reproduces the exact behavior you had before this feature
-existed.
+the standard install by default — `--tier`/`--workflows` still apply, and
+`H3_PRESETS=""` (or `--preset=` with no value) reproduces the exact behavior
+this project had before this feature existed (no preset, standard tier only).
+
+**As of 2026-08, `dasiwa_mmh3v12` is the project's default** (`H3_PRESETS`
+in `config.env`) — a deliberate choice, not a fallback. Unlike the other
+presets, it's listed in `H3_PRESET_REPLACES_STANDARD_TIER`: since its own
+FL2VA/REF2VA/text-encoder checkpoints cover the same role as the standard
+`H3_TIER` weights (just a different precision/repo), downloading both would
+waste ~40–80 GB of redundant weights for no benefit — so `install.sh` skips
+the standard-tier download entirely whenever a preset from that list is
+active. Set `H3_PRESETS=""` in `config.env` (or `--preset=` on the command
+line) to opt back into the standard `H3_TIER` weights instead.
 
 ```bash
 bash install.sh --preset=aistudynow            # full install + this preset
 bash install.sh --only-models --preset=aistudynow  # (re)download just this preset's models
+bash install.sh --preset=                      # disable the default preset, use the standard H3_TIER tier
 ```
 
 Or set it permanently in `config.env`:
@@ -182,13 +197,14 @@ is ignored with a warning, never a hard failure.
 |Preset|What it installs|
 |-|-|
 |`aistudynow`|Experimental W4A8 MiniMax H3 Reference-to-Video checkpoint (Kijai/MiniMax-H3-experimental), its matching INT8 ConvRot video VAE and rank-256 reference LoRA, plus the NVFP4 AWQ text encoder and audio VAE already used by the standard install (skipped if already present) — and the dedicated `MiniMax\_H3\_REF2V\_AIStudyNow.json` workflow.|
-|`dasiwa_mmh3v12`|"DaSiWa - MiniMaxH3 MythicAlchemy v12" (T2VA/I2VA/FLF2VA/REF2VA) checkpoints — INT8 ConvRot FL2VA + REF2VA (Comfy-Org/MiniMax-H3, outside the standard tiers) and the INT4 ConvRot text encoder (Abiray/MiniMax-H3-GGUF) as selected in the workflow's Settings node — plus the fp16 video VAE and fp32 audio VAE (already used by the standard install, repeated here so the preset is self-contained), the TAE fast-preview model (Kijai/MiniMax-H3-TAE), the AnimeSharpV4 upscale model (Kim2091/2x-AnimeSharpV4) and the RIFE 4.26 frame-interpolation model (Comfy-Org/frame\_interpolation) — and the dedicated `DaSiWa\_MiniMaxH3\_MythicAlchemy\_v12.json` workflow.|
+|`dasiwa_mmh3v12` **(default)**|"DaSiWa - MiniMaxH3 MythicAlchemy v12" (T2VA/I2VA/FLF2VA/REF2VA) checkpoints — INT8 ConvRot FL2VA + REF2VA (Comfy-Org/MiniMax-H3, outside the standard tiers) and the INT4 ConvRot text encoder (Abiray/MiniMax-H3-GGUF) as selected in the workflow's Settings node — plus the fp16 video VAE and fp32 audio VAE (already used by the standard install, repeated here so the preset is self-contained), the TAE fast-preview model (Kijai/MiniMax-H3-TAE), the AnimeSharpV4 upscale model (Kim2091/2x-AnimeSharpV4) and the RIFE 4.26 frame-interpolation model (Comfy-Org/frame\_interpolation) — and the dedicated `DaSiWa\_MiniMaxH3\_MythicAlchemy\_v12.json` workflow. **Replaces the standard `H3_TIER` download** (see above) — INT8 ConvRot was kept deliberately over FP8 scaled: community benchmarks (SSIM fidelity, generation speed) and the upstream Comfy-Org README both favor INT8 ConvRot on Ampere-class cards.|
 |`minimaxh3auto_v5`|"Minimax H3 Auto-Prompter" (T2VA/I2VA/L2VA/FL2VA/REF2V) — downloads the local GGUF prompt-writing LLM (DavidAU/Qwen3.6-27B-Fable-Fusion-711-Uncensored-Heretic-NM-DAU-NEO-MAX-MTP-GGUF) and its vision projector `mmproj-F16.gguf` into `models/LLM`, plus the `Qwen3.5-9B-abliterated` CLIP text encoder (lukey03/Qwen3.5-9B-abliterated) into `models/text_encoders`, and the dedicated `MinimaxH3Auto_v5.json` workflow. **Filename caveat**: the repo file is `model.safetensors` — this project's preset downloader never renames files, but the workflow's CLIPLoader widget expects `Qwen3.5-9B-abliterated.safetensors`, so rename it once after download (`mv ComfyUI/models/text_encoders/model.safetensors ComfyUI/models/text_encoders/Qwen3.5-9B-abliterated.safetensors`) or reselect `model.safetensors` in the node's dropdown. **Requires the `ComfyUI-LLM-text-processor` custom node** (installed separately via `OPTIONAL_NODE_REPOS`, not by the preset itself — presets never install custom nodes). Its llama.cpp backend only ships official Windows x64+CUDA 13 binaries — on this Linux/RunPod install it needs a Linux-built llama.cpp binary in place manually before the node will run (see the node's [README](https://github.com/KingManiya/ComfyUI-LLM-text-processor#llamacpp)); this installer does not build or fetch one for you.|
 
 Adding a new preset later only means: a manifest entry in `config.env`
-(`PRESET\_<NAME>`, `H3\_PRESET\_NAMES`, optionally `H3\_PRESET\_WORKFLOWS`) and a
-workflow file under `presets/<name>/` — nothing in `lib/presets.sh` needs to
-change.
+(`PRESET\_<NAME>`, `H3\_PRESET\_NAMES`, optionally `H3\_PRESET\_WORKFLOWS`, and
+`H3\_PRESET\_REPLACES\_STANDARD\_TIER` if it should replace rather than
+supplement the standard tier) and a workflow file under `presets/<name>/` —
+nothing in `lib/presets.sh` needs to change.
 
 ### Installing only ComfyUI/CUDA/PyTorch + a preset's own models
 

@@ -8,7 +8,8 @@ while true; do
   echo ""
   echo "  MiniMax H3 — RunPod / ComfyUI"
   echo "  ─────────────────────────────"
-  echo "  1) Installer"
+  echo "  0) Assistant de configuration puis installer (palier, preset, Turbo, SageAttention)"
+  echo "  1) Installer (réglages par défaut/config.env)"
   echo "  2) Télécharger les modèles"
   echo "  3) Vérifier l'installation"
   echo "  4) Mettre à jour"
@@ -18,12 +19,13 @@ while true; do
   echo "  8) Désinstaller"
   echo "  9) Quitter"
   echo ""
-  read -r -p "  Choix [1-9] : " choice
+  read -r -p "  Choix [0-9] : " choice
 
   # "|| true" sur chaque sous-commande : sous set -e, un install.sh/check.sh/
   # uninstall.sh qui échoue (ou qu'on annule) tuerait sinon tout le menu au
   # lieu de revenir simplement à l'invite suivante.
   case "$choice" in
+    0) bash "${PROJECT_ROOT}/wizard.sh" || true ;;
     1) bash "${PROJECT_ROOT}/install.sh" || true ;;
     2) bash "${PROJECT_ROOT}/install.sh" --only-models || true ;;
     3) bash "${PROJECT_ROOT}/check.sh" || true ;;
