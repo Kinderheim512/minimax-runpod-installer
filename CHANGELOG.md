@@ -10,6 +10,23 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🐛 Fix: `launch.sh` crashed with a raw Python traceback when PyTorch was missing/broken
+
+- Reproduced on the pre-built Docker image: running `./launch.sh` directly
+  (bypassing `docker-entrypoint.sh`) starts ComfyUI against a venv where
+  PyTorch was never installed (it's intentionally excluded at build time,
+  see `DOCKER_BUILD_NO_TORCH` below) — resulted in an unhandled
+  `ImportError`/`OSError` from `import torch` deep inside `main.py`.
+- `launch.sh` now checks `import torch; torch.cuda.is_available()` in the
+  target venv before activating it for real, and exits with a clear
+  actionable message (run `docker-entrypoint.sh` instead, or `install.sh`)
+  instead of letting ComfyUI crash raw.
+- Also widened the `DOCKER_BUILD_NO_TORCH` filter regex in
+  `pip_install_requirements()` (`lib/python.sh`) to also catch
+  `torch[extra]` and `torch @ <url>` forms, which the previous regex let
+  through — a custom node using either form could still leave a partial,
+  mismatched torch install in the baked image.
+
 ### 🐛 Fix: custom-node/Manager `requirements.txt` could pull in a generic PyPI PyTorch during the Docker image build
 
 - Confirmed in practice: a custom node's unpinned `torch` line in its own

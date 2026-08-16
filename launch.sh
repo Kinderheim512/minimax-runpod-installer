@@ -175,6 +175,25 @@ if [[ ! -f "${INSTALL_DIR}/main.py" ]]; then
   exit 1
 fi
 
+# Garde-fou PyTorch ------------------------------------------------------
+# Dans l'image Docker pré-installée, PyTorch n'est PAS présent au build
+# (voir docker-build-steps.sh, DOCKER_BUILD_NO_TORCH) : il n'est installé
+# qu'au démarrage du conteneur par install_pytorch(), appelée depuis
+# docker-entrypoint.sh. Si ce script est lancé directement (à la main, ou
+# via une commande de démarrage RunPod mal configurée qui court-circuite
+# l'entrypoint), le venv peut n'avoir aucun torch fonctionnel — sans ce
+# contrôle, ComfyUI plante avec une trace Python brute (ImportError/OSError)
+# qui ne dit pas à l'utilisateur quoi faire. On vérifie donc explicitement
+# ici, AVANT d'activer le venv pour de bon, que `import torch` réussit et
+# que CUDA est disponible.
+# shellcheck disable=SC1091
+if ! "${VENV_DIR}/bin/python" -c "import torch; assert torch.cuda.is_available()" >/dev/null 2>&1; then
+  log_error "PyTorch absent ou non fonctionnel dans ${VENV_DIR} (CUDA indisponible ou import en échec)."
+  log_error "Si vous êtes dans l'image Docker pré-installée : ne lancez jamais launch.sh directement au premier démarrage — utilisez ./docker-entrypoint.sh (ou relancez le conteneur normalement), qui installe PyTorch pour ce GPU avant de lancer ComfyUI."
+  log_error "Sinon : relancez bash install.sh (ou installez PyTorch manuellement via install_pytorch dans lib/python.sh)."
+  exit 1
+fi
+
 MINIMAX_ENV_VARS=()
 MINIMAX_LAUNCH_FLAGS=()
 flags_file="${INSTALL_DIR}/user/.minimax_launch_flags"

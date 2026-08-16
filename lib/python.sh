@@ -402,7 +402,7 @@ pip_install_requirements() {
     local tmp=""
     if [[ "${DOCKER_BUILD_NO_TORCH:-false}" == "true" ]]; then
         tmp="$(mktemp)"
-        grep -viE '^[[:space:]]*(torch|torchvision|torchaudio)[[:space:]]*([<>=!~;].*)?$' "$req" > "$tmp"
+        grep -viE '^[[:space:]]*(torch|torchvision|torchaudio)[[:space:]]*(\[[^]]*\])?[[:space:]]*([<>=!~;@].*)?$' "$req" > "$tmp"
         target="$tmp"
     fi
 
