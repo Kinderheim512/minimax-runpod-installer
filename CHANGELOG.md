@@ -10,6 +10,38 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🧠 `H3_TIER` split from 3 to 5 tiers; `wizard.sh` model-tier picker; workflow auto-patch bug fixed
+
+- The official `Comfy-Org/MiniMax-H3` repo added `pruned_bf16` (~40.2 GB,
+  full precision, no lossy quantization) alongside the already-known
+  `pruned_int8_convrot`/`pruned_fp8_scaled` (~21 GB each). Rather than keep
+  `balanced` on `fp8_scaled` (documented upstream as a fallback, not a
+  recommendation), the tier is split into five explicit choices:
+  `light` (unchanged, INT4Q, third-party repo), `pruned` (**new** —
+  INT8 ConvRot, the upstream-recommended choice, restores native Turbo LoRA
+  compatibility), `pruned_scaled` (**new** — FP8 scaled, explicit manual
+  fallback, never auto-selected), `balanced` (**redefined** — now
+  `pruned_bf16`, i.e. "the official models" at full precision), `max`
+  (unchanged, BF16 unpruned). Every tier except `light` now comes from the
+  official repo.
+- `lib/gpu.sh::detect_gpu` — VRAM auto-detection ladder gained a `pruned`
+  rung (new `H3_TIER_MIN_VRAM_PRUNED_GB`, default 24) between `light` and
+  `balanced`; `H3_TIER_MIN_VRAM_BALANCED_GB` default raised 24→40 to match
+  `balanced`'s new, bigger checkpoint. `pruned_scaled` is deliberately
+  absent from this ladder — always a manual `--tier=` choice, never picked
+  by `auto`.
+- `wizard.sh`'s tier question now lists all 5 tiers with their approximate
+  size/VRAM instead of 3.
+- Fixed a latent bug in `lib/workflows.sh::_known_filenames_for_key()`: the
+  manifest format is `"repo|subpath|tier|size"` (4 fields, since the
+  multi-repo architecture change), but the field-extraction line was never
+  updated and still read only 3 — `IFS='|' read -r subpath _ _` silently
+  captured the **repo** name (e.g. `MiniMax-H3`) into `$subpath` instead of
+  the actual filename. This broke `_patch_workflow_tier_filenames()`'s
+  candidate matching for every tier, always, since that field was added —
+  found while verifying the 5-tier change end-to-end, unrelated to it
+  otherwise. Fixed to `read -r _ subpath _ _`.
+
 ### 🔀 `dasiwa_mmh3v12` becomes the default preset; symlink-install crash fixed
 
 - `H3_PRESETS` now defaults to `"dasiwa_mmh3v12"` (`config.env`) — a

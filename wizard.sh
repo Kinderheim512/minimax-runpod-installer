@@ -124,9 +124,11 @@ else
   # --- Palier de poids H3 -----------------------------------------------------
   ask_choice "Palier de poids H3 (précision/VRAM) :" WIZ_TIER "auto" \
     "auto|Auto-détection selon la VRAM (recommandé)" \
-    "light|light — VRAM réduite, qualité/vitesse moindres" \
-    "balanced|balanced — bon compromis (~24-48 Go VRAM)" \
-    "max|max — précision maximale (48 Go+ VRAM)"
+    "light|light — VRAM réduite, qualité/vitesse moindres (~18,5 Go, dépôt tiers)" \
+    "pruned|pruned — INT8 ConvRot, recommandation officielle Comfy-Org (~21 Go)" \
+    "pruned_scaled|pruned_scaled — FP8 scaled, repli si pruned ne fonctionne pas (~21 Go)" \
+    "balanced|balanced — modèles officiels pleine précision, élagués (~40 Go)" \
+    "max|max — précision maximale, non élagué (~66 Go, 48 Go+ VRAM)"
 
   # --- Workflows ---------------------------------------------------------------
   ask_workflows

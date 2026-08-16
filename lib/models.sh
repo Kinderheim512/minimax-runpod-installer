@@ -67,6 +67,34 @@ create_model_folders() {
 #                l'utilisateur pour MiniMax_H3_REF2V_TURBO_PLUS_SAGE*.json,
 #                qui référence donc maintenant fp8_scaled lui aussi.
 #   - max      : inchangé (BF16).
+#   - 5 paliers (2026-08, révision) : le dépôt officiel Comfy-Org/MiniMax-H3
+#                s'est enrichi entre-temps de fichiers "pruned_bf16" (pleine
+#                précision, élagué — 40.2 Go, confirmé par la communauté) en
+#                plus des "pruned_int8_convrot"/"pruned_fp8_scaled" déjà
+#                connus. Plutôt que de garder "balanced" sur fp8_scaled (un
+#                repli documenté comme tel par Comfy-Org, pas une
+#                recommandation), le palier est éclaté en 5 pour donner un
+#                choix explicite plutôt qu'un compromis caché :
+#                  - light         : inchangé (INT4Q, dépôt tiers H3_HF_REPO_INT4)
+#                  - pruned        : NOUVEAU — pruned_int8_convrot (21 Go,
+#                                    recommandation officielle Comfy-Org),
+#                                    redevient compatible Turbo LoRA (voir
+#                                    note "balanced (2026-08)" ci-dessus —
+#                                    validé contre ce même checkpoint).
+#                  - pruned_scaled : NOUVEAU — pruned_fp8_scaled (21 Go),
+#                                    repli explicite pour qui ne peut pas
+#                                    utiliser int8_convrot ; n'est JAMAIS
+#                                    choisi automatiquement par --tier=auto
+#                                    (voir GPU_TIER_RECOMMENDED, lib/gpu.sh)
+#                                    — toujours un choix manuel délibéré.
+#                  - balanced      : redéfini — pruned_bf16 (40.2 Go),
+#                                    pleine précision (aucune quantization
+#                                    lossy sur le transformer), donc "les
+#                                    modèles officiels" au sens strict.
+#                  - max           : inchangé (BF16 non élagué).
+#                Les 4 paliers autres que "light" viennent maintenant tous du
+#                même dépôt officiel H3_HF_REPO (aucun dépôt tiers hors
+#                "light").
 #
 # H3_DIFFUSION_FL2VA / H3_DIFFUSION_REF2VA / H3_TEXT_ENCODER ne sont jamais
 # référencés par leur nom littéral plus bas dans ce fichier : ils sont passés
@@ -77,19 +105,25 @@ create_model_folders() {
 # shellcheck disable=SC2034
 H3_DIFFUSION_FL2VA=(
   "${H3_HF_REPO}|diffusion_models/minimax_h3_fl2va_bf16.safetensors|max|66.3"
-  "${H3_HF_REPO}|diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors|balanced|21"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_fl2va_pruned_bf16.safetensors|balanced|40.2"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors|pruned|21"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_fl2va_pruned_fp8_scaled.safetensors|pruned_scaled|21"
   "${H3_HF_REPO_INT4}|diffusion_models/minimax_h3_fl2va_pruned_INT4Q.safetensors|light|18.5"
 )
 # shellcheck disable=SC2034  # cf. note ci-dessus sur H3_DIFFUSION_FL2VA
 H3_DIFFUSION_REF2VA=(
   "${H3_HF_REPO}|diffusion_models/minimax_h3_ref2va_bf16.safetensors|max|66.3"
-  "${H3_HF_REPO}|diffusion_models/minimax_h3_ref2va_pruned_fp8_scaled.safetensors|balanced|21"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_ref2va_pruned_bf16.safetensors|balanced|40.2"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors|pruned|21"
+  "${H3_HF_REPO}|diffusion_models/minimax_h3_ref2va_pruned_fp8_scaled.safetensors|pruned_scaled|21"
   "${H3_HF_REPO_INT4}|diffusion_models/minimax_h3_ref2va_pruned_INT4Q.safetensors|light|18.4"
 )
 # shellcheck disable=SC2034  # cf. note ci-dessus sur H3_DIFFUSION_FL2VA
 H3_TEXT_ENCODER=(
   "${H3_HF_REPO}|text_encoders/qwen3vl_32b_minimax_h3_bf16.safetensors|max|51.5"
   "${H3_HF_REPO}|text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors|balanced|15.7"
+  "${H3_HF_REPO}|text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors|pruned|15.7"
+  "${H3_HF_REPO}|text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors|pruned_scaled|15.7"
   "${H3_HF_REPO}|text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors|light|15.7"
 )
 # H3_VAE porte désormais son repo par entrée ("repo|sous_chemin"), comme les
@@ -119,9 +153,9 @@ resolve_h3_tier() {
     log_info "H3_TIER=auto → palier '${tier}' choisi selon la VRAM détectée."
   fi
   case "$tier" in
-    light|balanced|max) ;;
+    light|pruned|pruned_scaled|balanced|max) ;;
     *)
-      log_warn "H3_TIER/--tier='${tier}' inconnu (valeurs valides : light, balanced, max, auto) — repli sur 'balanced'."
+      log_warn "H3_TIER/--tier='${tier}' inconnu (valeurs valides : light, pruned, pruned_scaled, balanced, max, auto) — repli sur 'balanced'."
       tier="balanced"
       ;;
   esac

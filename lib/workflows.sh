@@ -135,7 +135,13 @@ _known_filenames_for_key() {
   local -n arr="$arr_name"
   local entry subpath
   for entry in "${arr[@]}"; do
-    IFS='|' read -r subpath _ _ <<< "$entry"
+    # Format "repo|sous_chemin|palier|taille" (4 champs, architecture
+    # multi-dépôts — voir H3_DIFFUSION_FL2VA dans lib/models.sh) : le champ
+    # à extraire est le 2e, pas le 1er. `read -r subpath _ _` (3
+    # placeholders) lisait par erreur le champ "repo" dans $subpath — bug
+    # découvert en vérifiant le passage à 5 paliers, présent depuis
+    # l'introduction du champ "repo" dans le manifeste.
+    IFS='|' read -r _ subpath _ _ <<< "$entry"
     basename "$subpath"
   done
 }
