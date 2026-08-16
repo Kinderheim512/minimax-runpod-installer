@@ -210,7 +210,12 @@ determine_lora_filename() {
   local cd_header
   local -a auth_args
   mapfile -t auth_args < <(civitai_auth_curl_args "$url")
-  cd_header="$(curl -sIL "${auth_args[@]}" "$url" 2>/dev/null | tr -d '\r' | grep -i '^content-disposition:' | tail -n1)"
+  # Note : on utilise une requête GET à portée réduite (-r 0-0, un seul octet)
+  # plutôt qu'un HEAD (-I). Le CDN de CivitAI ne renvoie souvent l'en-tête
+  # Content-Disposition (contenant le vrai nom du fichier) que sur une vraie
+  # réponse GET/206, pas sur un HEAD — d'où un nom de fichier tombant en repli
+  # sur l'ID numérique de l'URL sans ce correctif.
+  cd_header="$(curl -sL -r 0-0 "${auth_args[@]}" -D - -o /dev/null "$url" 2>/dev/null | tr -d '\r' | grep -i '^content-disposition:' | tail -n1)"
   if [[ -n "$cd_header" ]]; then
     name="$(echo "$cd_header" | sed -n 's/.*filename\*\{0,1\}=\(UTF-8..\)\{0,1\}"\{0,1\}\([^";]*\)"\{0,1\}.*/\2/p' | tail -n1)"
     if [[ -n "$name" ]] && command -v python3 >/dev/null 2>&1; then
