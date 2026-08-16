@@ -176,11 +176,11 @@ install_preset_nodes() {
     # toucher.
     declare -p "$ref" &>/dev/null || continue
     any_declared="true"
-    local -n repos="$ref"
-    [[ ${#repos[@]} -eq 0 ]] && continue
+    local -n node_repo_arr="$ref"
+    [[ ${#node_repo_arr[@]} -eq 0 ]] && continue
     log_step "Preset '${name}' — nœuds custom associés"
     mkdir -p "${INSTALL_DIR}/custom_nodes"
-    for repo_url in "${repos[@]}"; do
+    for repo_url in "${node_repo_arr[@]}"; do
       _clone_or_update_node_repo "$repo_url" "true"
     done
   done
