@@ -42,13 +42,17 @@ PERSONAL_STORAGE_OUTPUTS_DIR() { echo "${INSTALL_DIR}/output"; }
 # utilisée pour les poids H3 obligatoires) : un coffre perso non accessible
 # ne doit produire qu'un avertissement, jamais bloquer install.sh/update.sh.
 _personal_storage_hf_ready() {
-  # Sur un pod tout neuf (première exécution d'install.sh, hors image Docker
-  # pré-installée), cette fonction peut être appelée AVANT que le venv
-  # n'existe (sync_personal_storage_pull tourne tout en début d'install.sh,
-  # avant setup_python_venv) : le CLI HF n'y est alors pas encore installé.
-  # Avertissement non bloquant plutôt qu'une erreur d'activation du venv —
-  # le coffre HF sera de toute façon retenté automatiquement à la prochaine
-  # exécution (update.sh, ou un futur redémarrage de ce même pod).
+  # Le venv ET le CLI HF (paquet huggingface_hub) sont garantis présents ici :
+  # install.sh appelle sync_personal_storage_pull APRÈS install_extra_
+  # requirements dans ses deux branches (voir le commentaire à cet endroit
+  # dans install.sh) — un venv fraîchement créé mais encore vide (avant
+  # l'installation des dépendances) ne suffit pas : detect_hf_cli()
+  # ci-dessous ne trouverait ni 'hf' ni 'huggingface-cli' et cette fonction
+  # échouerait quand même. Ce garde reste utile en défense : dans l'image
+  # Docker pré-installée, venv + CLI HF sont déjà baked dans l'image (voir
+  # docker-build-steps.sh), donc ce cas ne se présente normalement jamais ;
+  # il ne sert que de filet de sécurité si cette fonction venait à être
+  # appelée depuis un autre contexte à l'avenir.
   if [[ ! -f "${VENV_DIR}/bin/activate" ]]; then
     log_warn "Environnement virtuel pas encore créé — synchronisation HF du stockage perso reportée (sera retentée par update.sh ou un futur redémarrage)."
     return 1

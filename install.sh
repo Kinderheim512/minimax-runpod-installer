@@ -86,12 +86,6 @@ echo "  │  Installateur MiniMax H3 pour RunPod + ComfyUI      │"
 echo "  └────────────────────────────────────────────────────┘"
 echo -e "${C_RESET}"
 
-# Restauration du stockage perso (LoRAs/presets/outputs) — tout début de
-# l'exécution, avant toute autre étape et quel que soit le mode (--only-models
-# ou installation complète) : no-op silencieux si PERSONAL_STORAGE_HF_REPO/
-# PERSONAL_LORAS_GITHUB_RELEASE_URL sont vides (voir config.env).
-sync_personal_storage_pull
-
 if [[ "$ONLY_MODELS" == "true" ]]; then
   if [[ ! -f "${INSTALL_DIR}/main.py" ]]; then
     log_error "ComfyUI n'est pas installé dans ${INSTALL_DIR}. Lancez d'abord : bash install.sh"
@@ -105,6 +99,20 @@ nvidia-smi || {
 }
   run_step "python_venv" setup_python_venv "$FORCE"
   install_extra_requirements
+  # Restauration du stockage perso (LoRAs/presets/outputs) — APRÈS
+  # install_extra_requirements, pas juste après le venv : _personal_
+  # storage_hf_ready() (lib/personal_storage.sh) a besoin que le CLI HF
+  # (fourni par le paquet huggingface_hub, installé ici) soit réellement
+  # présent dans le venv, pas seulement que le venv existe — un venv tout
+  # juste créé est vide. Dans cette branche (--only-models),
+  # install_comfyui_requirements n'est jamais appelée, donc
+  # install_extra_requirements est la SEULE source de ce CLI : ne jamais
+  # placer cet appel avant. Sur un pod tout neuf, un mauvais placement fait
+  # échouer silencieusement le pull à CHAQUE fois — et comme update.sh ne
+  # fait que pousser (jamais tirer), le coffre perso ne serait alors jamais
+  # restauré automatiquement. No-op silencieux si PERSONAL_STORAGE_HF_REPO/
+  # PERSONAL_LORAS_GITHUB_RELEASE_URL sont vides.
+  sync_personal_storage_pull
   create_model_folders
   run_step "hf_login" hf_login "$FORCE"
   H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
@@ -139,6 +147,11 @@ run_step "comfyui_cloned"     clone_or_update_comfyui     "$FORCE"
 run_step "python_venv"        setup_python_venv          "$FORCE"
 run_step "comfyui_requirements" install_comfyui_requirements "$FORCE"
 install_extra_requirements
+# Restauration du stockage perso (LoRAs/presets/outputs) — APRÈS
+# install_extra_requirements (voir le commentaire équivalent, plus détaillé,
+# dans la branche ONLY_MODELS ci-dessus) : le CLI HF doit être réellement
+# installé, pas seulement le venv créé.
+sync_personal_storage_pull
 # Pas de run_step ici volontairement : l'idempotence d'install_sageattention
 # vient de son propre check `import sageattention` (cf. lib/python.sh), pas
 # d'un state-file. Un run_step marquerait l'étape "faite" même en cas
