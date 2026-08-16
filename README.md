@@ -31,6 +31,8 @@ tunes everything for the GPU it detects.
 - [Presets](#-presets-extra-models-for-a-specific-workflow)
 - [Installed components](#-installed-components)
 - [Pinning a ComfyUI commit](#-pinning-a-comfyui-commit-reproducible-installs)
+- [Pre-installed Docker image](#-pre-installed-docker-image)
+- [Backing up your LoRAs/presets/outputs](#-backing-up-your-loraspresetsoutputs-without-depending-on-runpod)
 - [Installing and managing LoRAs](#-installing-and-managing-loras)
 - [Spectrum MiniMax H3](#-spectrum-minimax-h3-optional)
 - [Surviving web-terminal disconnects](#-surviving-web-terminal-disconnects-tmux)
@@ -342,7 +344,7 @@ given workflow needs it.
 
 ## 📦 Installed components
 
-* ComfyUI (default branch, so native MiniMax H3 support is always current)
+* ComfyUI (latest tagged stable release by default, so native MiniMax H3 support is always current)
 * ComfyUI-Manager
 * ComfyUI-VideoHelperSuite
 * Spectrum MiniMax H3 (optional acceleration node, see below)
@@ -353,29 +355,154 @@ given workflow needs it.
 
 ---
 
-## 🔒 Pinning a ComfyUI commit (reproducible installs)
+## 🔒 Which ComfyUI version gets installed (reproducible installs)
 
-By default (`COMFYUI_COMMIT` empty in `config.env`), a fresh install clones
-whatever the latest commit of `COMFYUI_BRANCH` (`master`) happens to be at
-install time — this keeps native MiniMax H3 support current, but it also
-means two installs on different days can end up on different ComfyUI code,
-including its `comfy-kitchen`/`comfy-aimdo` pins.
+By default (`COMFYUI_RELEASE_MODE=release` in `config.env`), a fresh install
+resolves and clones the **latest tagged stable release** of ComfyUI (a
+`vX.Y.Z` tag from https://github.com/Comfy-Org/ComfyUI/releases), not
+whatever the latest `master` commit happens to be. This keeps native MiniMax
+H3 support current while staying reproducible: the same install run today
+or next week lands on the same release, and it can't pick up an untested
+commit fresh off `master`.
 
-To reproduce a specific, known-good state (e.g. to bisect a regression, or
-to freeze a validated install), set `COMFYUI_COMMIT` in `config.env`:
+To go back to the old behaviour — always track the latest commit of a
+branch (`master` by default) — set in `config.env`:
+
+```bash
+COMFYUI_RELEASE_MODE="branch"
+COMFYUI_BRANCH="master"
+```
+
+For an even more precise pin (e.g. to bisect a regression, or to freeze an
+install at a commit more specific than a tagged release), set
+`COMFYUI_COMMIT`:
 
 ```bash
 COMFYUI_COMMIT="a1b2c3d..."
 ```
 
 `install.sh` and `update.sh` will then check out that exact commit right
-after cloning/updating ComfyUI, regardless of where `COMFYUI_BRANCH` itself
-is currently pointing. Leave it empty to keep tracking the branch as before.
-It can also be set inline for a single run:
+after cloning/updating ComfyUI, regardless of the release/branch resolved
+by `COMFYUI_RELEASE_MODE`. Leave it empty to keep tracking the resolved
+release/branch as above. It can also be set inline for a single run:
 
 ```bash
 COMFYUI_COMMIT=e1e4413 bash bootstrap.sh
 ```
+
+---
+
+## 🐳 Pre-installed Docker image
+
+RunPod releases a pod's GPU the moment you stop it — nothing guarantees a
+GPU will be available again on that same machine or even that datacenter
+("Zero GPU Pods"). The robust move is to **terminate freely** and relaunch
+on whatever pod/datacenter/provider has a GPU free — but doing that with
+the classic bash installer means recloning ComfyUI, recreating the venv,
+and reinstalling PyTorch + dependencies from scratch every time.
+
+The `Dockerfile` in this repo builds an image with everything that does
+**not** depend on the eventual GPU already baked in: system packages,
+ComfyUI (cloned at the release resolved by `COMFYUI_RELEASE_MODE`, same
+logic as the bash installer), the venv, every Python dependency **except
+PyTorch**, ComfyUI-Manager, and the required custom nodes. It deliberately
+excludes PyTorch (the right CUDA index can only be chosen once a GPU is
+actually visible, see `PYTORCH_BUILD_TABLE` in `lib/python.sh`) and the H3
+model weights (tens of GB, and the tier you want depends on the VRAM of the
+GPU you actually land on). One image works for every RunPod GPU, from a T4
+to an H100.
+
+This is a **complement** to `install.sh`, not a replacement — installing on
+a bare pod with the classic bash installer keeps working exactly as before
+if you prefer it.
+
+**Build and push:**
+
+```bash
+docker build -t <you>/minimax-h3-comfyui:latest .
+
+# Docker Hub
+docker push <you>/minimax-h3-comfyui:latest
+
+# — or — GitHub Container Registry
+docker tag <you>/minimax-h3-comfyui:latest ghcr.io/<you>/minimax-h3-comfyui:latest
+docker push ghcr.io/<you>/minimax-h3-comfyui:latest
+```
+
+**Use it as a RunPod pod image:** create a pod (or a template) with
+**Custom Container**, point it at the image you pushed above, expose port
+`8188` (HTTP), and set `HF_TOKEN` as a pod secret/environment variable as
+usual. On start, the container's entrypoint (`docker-entrypoint.sh`)
+installs PyTorch for the GPU it actually got, runs `install.sh` for
+whatever's left (H3 weights, workflows, personal storage — see below), then
+launches ComfyUI.
+
+What this buys you: pod restarts are near-instant on the install side (no
+re-clone, no re-download of dependencies). What it does **not** remove:
+downloading the H3 model weights (Hugging Face, free) still happens on
+every new container, since the model tier depends on the GPU you land on —
+and so does bringing back any personal data (LoRAs/presets/outputs) stored
+outside RunPod, if you use that (see next section).
+
+The image never contains any secret (Hugging Face/CivitAI keys stay
+environment variables injected at runtime, exactly like today) — never bake
+`HF_TOKEN` into the image itself.
+
+---
+
+## 💾 Backing up your LoRAs/presets/outputs without depending on RunPod
+
+`models/loras/`, custom presets, and generated outputs shouldn't have to
+depend on a RunPod Network Volume (paid, tied to a single datacenter). This
+project can pull them back at the start of a new pod/container and push
+them back out, independently of RunPod — see `lib/personal_storage.sh`.
+
+**Default backend: Hugging Face.** Nothing new to install — the `hf` CLI
+is already a dependency and already authenticated (see `lib/huggingface.sh`,
+already used to download the H3 weights). The same token/auth is reused,
+just against a second, private repo you create yourself (a `dataset` repo,
+e.g. `<you>/minimax-runpod-perso`) that acts as a vault for:
+
+* `models/loras/personal/` — your own LoRAs (kept separate from the
+  official Turbo LoRA, which lands directly in `models/loras/`)
+* `presets/personal/` — your own presets (kept separate from the presets
+  versioned in this repo)
+* `output/` — generated videos/images you want to keep
+
+The free Hugging Face tier gives 100 GB of private storage — plenty for
+this (not to be confused with the H3 weights storage, handled separately
+and never duplicated here).
+
+Set it up once:
+
+1. Create a **private** repo on https://huggingface.co, type **Dataset**
+   (e.g. `<you>/minimax-runpod-perso`).
+2. Add it to `config.env`:
+   ```bash
+   PERSONAL_STORAGE_HF_REPO="<you>/minimax-runpod-perso"
+   ```
+
+That's it — `install.sh` pulls this vault automatically at the very start
+of a run (before ComfyUI is even touched); run `bash sync_push.sh` any time
+you want to push your latest LoRAs/presets/outputs back (e.g. right before
+terminating a pod), and `update.sh` also pushes automatically at the end of
+a run. Leave `PERSONAL_STORAGE_HF_REPO` empty to keep this disabled — it's
+a silent no-op everywhere it's called.
+
+**Optional secondary backend: GitHub Releases**, for a set of **frozen**
+LoRAs only (content that never changes — not outputs, which accumulate, and
+GitHub isn't built for that anyway: 2 GB/file limit). No authentication
+needed for a public repo:
+
+```bash
+PERSONAL_LORAS_GITHUB_RELEASE_URL="https://github.com/<you>/<repo>/releases/tag/<tag>"
+```
+
+Every asset on that release is downloaded once into
+`models/loras/personal/` (skipped if already present). Read-only — nothing
+is ever pushed there from this project. It's independent from
+`PERSONAL_STORAGE_HF_REPO`; both can be used at once (HF for what changes,
+GitHub Releases for a frozen base of LoRAs you never push back).
 
 ---
 
@@ -502,8 +629,12 @@ the installer only warns, it doesn't block on an unrecognized card.
 ├── menu.sh                # interactive menu wrapping the scripts above
 ├── uninstall.sh           # remove ComfyUI (optionally keep models/)
 ├── install_lora.sh        # standalone LoRA install/list/remove
+├── sync_push.sh           # manual push of personal LoRAs/presets/outputs to the HF vault
 ├── config.env             # central configuration (paths, tiers, sources, ...)
 ├── requirements.txt       # project-level Python deps (on top of ComfyUI's own)
+├── Dockerfile             # pre-installed Docker image (see Pre-installed Docker image above)
+├── docker-build-steps.sh  # build-time (no-GPU) provisioning for the Docker image
+├── docker-entrypoint.sh   # container entrypoint: installs PyTorch, then runs install.sh + launch.sh
 ├── lib/
 │   ├── utils.sh           # logging, error handling, step tracking, retries
 │   ├── system.sh          # apt package installation
@@ -518,6 +649,7 @@ the installer only warns, it doesn't block on an unrecognized card.
 │   ├── workflows.sh         # copies workflow JSON matching the current selection, patches filenames per tier
 │   ├── presets.sh            # extra per-workflow model sets, nodes, symlinks (see Presets above)
 │   ├── optimization.sh      # GPU-tuned ComfyUI launch flags
+│   ├── personal_storage.sh  # LoRAs/presets/outputs backup & restore (see Backing up your... above)
 │   └── verify.sh            # check.sh backend + install summary
 ├── workflows/               # official MiniMax H3 workflow JSON files (see Workflows above)
 ├── presets/                 # preset-specific workflow JSON files (see Presets above)

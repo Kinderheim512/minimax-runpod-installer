@@ -77,12 +77,20 @@ source "${PROJECT_ROOT}/lib/workflows.sh"
 source "${PROJECT_ROOT}/lib/optimization.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/verify.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/lib/personal_storage.sh"
 
 echo -e "${C_BOLD}${C_CYAN}"
 echo "  ┌────────────────────────────────────────────────────┐"
 echo "  │  Installateur MiniMax H3 pour RunPod + ComfyUI      │"
 echo "  └────────────────────────────────────────────────────┘"
 echo -e "${C_RESET}"
+
+# Restauration du stockage perso (LoRAs/presets/outputs) — tout début de
+# l'exécution, avant toute autre étape et quel que soit le mode (--only-models
+# ou installation complète) : no-op silencieux si PERSONAL_STORAGE_HF_REPO/
+# PERSONAL_LORAS_GITHUB_RELEASE_URL sont vides (voir config.env).
+sync_personal_storage_pull
 
 if [[ "$ONLY_MODELS" == "true" ]]; then
   if [[ ! -f "${INSTALL_DIR}/main.py" ]]; then

@@ -282,6 +282,44 @@ install_comfyui_requirements() {
 }
 
 ################################################################################
+# Dépendances ComfyUI SANS PyTorch — utilisée UNIQUEMENT à la CONSTRUCTION de
+# l'image Docker pré-installée (Dockerfile), quand aucun GPU n'est visible et
+# que le bon index CUDA (PYTORCH_BUILD_TABLE) ne peut donc pas être choisi.
+# PyTorch est installé séparément, au DÉMARRAGE du conteneur, par
+# install_pytorch() (appelée depuis docker-entrypoint.sh une fois le GPU
+# réellement visible via nvidia-smi) — jamais dupliqué ici. install.sh/
+# update.sh continuent d'utiliser exclusivement install_comfyui_requirements()
+# ci-dessus (torch inclus), qui reste le SEUL chemin utilisé hors Docker.
+################################################################################
+
+install_comfyui_requirements_no_torch() {
+    log_step "Installation des dépendances ComfyUI (sans PyTorch — image Docker)"
+
+    local req="${INSTALL_DIR}/requirements.txt"
+    [[ -f "$req" ]] || {
+        log_error "requirements.txt introuvable dans ${INSTALL_DIR} (ComfyUI a-t-il bien été cloné ?)."
+        exit 1
+    }
+
+    # On retire toute ligne torch/torchvision/torchaudio (avec ou sans
+    # contrainte de version) du requirements.txt de ComfyUI avant de
+    # l'installer, plutôt que de maintenir une copie séparée du fichier dans
+    # ce dépôt : ${req} reste la seule source de vérité de ComfyUI pour ses
+    # propres dépendances, seul le filtrage est fait ici.
+    local req_no_torch
+    req_no_torch="$(mktemp)"
+    grep -viE '^[[:space:]]*(torch|torchvision|torchaudio)[[:space:]]*([<>=!~;].*)?$' "$req" > "$req_no_torch"
+
+    # shellcheck disable=SC1091
+    source "${VENV_DIR}/bin/activate"
+    retry "$DOWNLOAD_MAX_RETRIES" python -m pip install -r "$req_no_torch"
+    deactivate
+    rm -f "$req_no_torch"
+
+    log_ok "Dépendances ComfyUI installées (PyTorch volontairement exclu à ce stade — voir docker-entrypoint.sh)."
+}
+
+################################################################################
 # Dépendances additionnelles du projet (inchangé)
 ################################################################################
 

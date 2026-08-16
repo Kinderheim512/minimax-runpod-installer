@@ -10,6 +10,82 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🐳 Pre-installed Docker image (complement to `install.sh`, pod restarts near-instant)
+
+- New `Dockerfile` (+ `docker-build-steps.sh`, `docker-entrypoint.sh`) builds
+  an image with everything that does **not** depend on the eventual GPU
+  already baked in: system packages, ComfyUI (cloned at the release
+  resolved by `resolve_comfyui_target()`, same function as `install.sh` —
+  nothing duplicated), the venv, every Python dependency **except PyTorch**,
+  ComfyUI-Manager, and the required custom nodes. PyTorch and the H3 model
+  weights are deliberately excluded from the image (the right CUDA index,
+  and the right model tier, both depend on the GPU actually obtained at
+  container start) — one image serves every RunPod GPU.
+- `lib/python.sh` — new `install_comfyui_requirements_no_torch()`, used only
+  by `docker-build-steps.sh` at image build time: strips
+  `torch`/`torchvision`/`torchaudio` from ComfyUI's `requirements.txt`
+  before installing it (no GPU visible yet at that point, so
+  `PYTORCH_BUILD_TABLE` can't be resolved). `install_comfyui_requirements()`
+  itself is unchanged and remains the only path used by `install.sh`/
+  `update.sh` outside Docker.
+- `docker-entrypoint.sh` installs PyTorch for the GPU actually visible in
+  the container (via the existing `install_pytorch()`), then runs
+  `install.sh` normally for the rest (H3 weights, workflows, presets,
+  personal storage) — steps already done at image build time are marked in
+  the state file baked into the image, so `install.sh` skips straight to
+  what's left. Idempotent on container restart.
+- `install.sh` continues to work unchanged, standalone, on a bare pod — this
+  is purely additive.
+- README: new "Pre-installed Docker image" section (build/push to Docker
+  Hub or GHCR, use as a RunPod Custom Container).
+
+### 💾 Back up LoRAs/presets/outputs independently of RunPod's Network Volume
+
+- New `lib/personal_storage.sh` with `sync_personal_storage_pull()` (called
+  automatically at the very start of `install.sh`) and
+  `sync_personal_storage_push()` (called at the end of `update.sh`, and via
+  the new standalone `sync_push.sh` for a manual push at any time — e.g.
+  right before terminating a pod).
+- Default backend: Hugging Face, via a private `dataset` repo you create
+  once yourself. Reuses the exact same `hf` CLI/authentication already used
+  for the H3 weights (`lib/huggingface.sh`) — no new dependency. New
+  `PERSONAL_STORAGE_HF_REPO` in `config.env` (empty by default = disabled,
+  silent no-op).
+- Optional secondary backend: GitHub Releases, for a **frozen** set of
+  LoRAs only (never outputs — GitHub isn't built for that, 2 GB/file
+  limit). New, independent `PERSONAL_LORAS_GITHUB_RELEASE_URL` in
+  `config.env` (empty by default). Read-only: assets are downloaded once
+  (skipped if already present), nothing is ever pushed there.
+- Personal LoRAs/presets land in `models/loras/personal/` and
+  `presets/personal/` respectively — kept separate from the official Turbo
+  LoRA (`models/loras/`) and the presets versioned in this repo
+  (`presets/<name>/`), so nothing needs fragile filename-based logic to
+  tell "personal" from "official" apart.
+- README: new "Backing up your LoRAs/presets/outputs without depending on
+  RunPod" section.
+
+### 🔗 ComfyUI now installs the latest tagged release by default, not the latest `master` commit
+
+- New `COMFYUI_RELEASE_MODE` in `config.env` (default `release`): a fresh
+  install / `update.sh` resolves the latest stable `vX.Y.Z` tag from
+  `COMFYUI_REPO` (via `git ls-remote --tags`, no GitHub API call, no `jq`
+  dependency) and clones/checks out that tag instead of following
+  `COMFYUI_BRANCH`'s moving `HEAD`. Two installs on different days now land
+  on the same, tested ComfyUI release instead of potentially different
+  `master` commits. Set `COMFYUI_RELEASE_MODE="branch"` to restore the old
+  branch-following behaviour. `COMFYUI_COMMIT` (explicit commit pin) is
+  unchanged and still takes priority over whatever `COMFYUI_RELEASE_MODE`
+  resolves.
+- `lib/comfyui.sh` — target resolution centralized in one new function,
+  `resolve_comfyui_target()` (itself built on `resolve_comfyui_release_tag()`
+  for the tag lookup), called once from `clone_or_update_comfyui()`; both
+  the initial clone and `update_comfyui()` now checkout that same resolved
+  target instead of duplicating branch logic.
+- `COMFYUI_REPO` default updated to `https://github.com/Comfy-Org/ComfyUI.git`
+  (the project moved from `comfyanonymous/ComfyUI` to the `Comfy-Org`
+  organization; the old URL still redirects on GitHub, but the default now
+  points at the canonical one directly).
+
 ### 🧠 `H3_TIER` split from 3 to 5 tiers; `wizard.sh` model-tier picker; workflow auto-patch bug fixed
 
 - The official `Comfy-Org/MiniMax-H3` repo added `pruned_bf16` (~40.2 GB,

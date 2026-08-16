@@ -1,0 +1,14 @@
+# .dockerignore — exclut du contexte de build tout ce qui est propre à une
+# exécution locale (logs, état d'installation, venv déjà créé sur la machine
+# qui buildé, poids/outputs éventuels) : rien de tout ça ne doit finir dans
+# l'image, qui doit rester générique et ne jamais dépendre du GPU/de la
+# machine sur laquelle elle a été construite.
+.git
+.github
+logs/
+.minimax_installer_state
+venv/
+ComfyUI/
+.cache/
+*.log
+docs/*.pdf

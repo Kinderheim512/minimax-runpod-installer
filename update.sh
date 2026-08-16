@@ -34,6 +34,10 @@ source "${PROJECT_ROOT}/lib/nodes.sh"
 source "${PROJECT_ROOT}/lib/optimization.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/lora_auto.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/lib/huggingface.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/lib/personal_storage.sh"
 
 if [[ ! -d "${INSTALL_DIR}/.git" ]]; then
   log_error "${INSTALL_DIR} n'existe pas encore — lancez d'abord install.sh."
@@ -69,5 +73,11 @@ install_turbo_node
 install_turbo_lora
 
 compute_optimization_flags
+
+# Sauvegarde best-effort du stockage perso (LoRAs/presets/outputs) en fin de
+# mise à jour — no-op silencieux si PERSONAL_STORAGE_HF_REPO est vide (voir
+# config.env). Pour un push manuel à tout moment (typiquement juste avant de
+# terminate un pod, sans attendre un update.sh), voir : bash sync_push.sh
+sync_personal_storage_push
 
 log_ok "Mise à jour terminée."
