@@ -25,9 +25,9 @@ install_or_update_manager() {
   fi
 
   if [[ -f "${target}/requirements.txt" ]]; then
-    # shellcheck disable=SC1091
-    source "${VENV_DIR}/bin/activate"
-    pip install -r "${target}/requirements.txt" --quiet
-    deactivate
+    # cf. lib/python.sh::pip_install_requirements — filtre torch à la
+    # construction de l'image Docker (DOCKER_BUILD_NO_TORCH), transparent
+    # sinon (install.sh/update.sh classiques).
+    pip_install_requirements "${target}/requirements.txt"
   fi
 }

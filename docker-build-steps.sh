@@ -39,6 +39,14 @@ source "${PROJECT_ROOT}/lib/models.sh"
 
 log_step "Construction de l'image Docker pré-installée — étapes sans GPU"
 
+# Signale à pip_install_requirements() (lib/python.sh) de filtrer
+# torch/torchvision/torchaudio de TOUT requirements.txt tiers installé
+# pendant ce script (nœuds custom, ComfyUI-Manager) — même raison que
+# install_comfyui_requirements_no_torch() pour celui de ComfyUI lui-même :
+# aucun GPU visible ici, donc aucun moyen de choisir le bon index CUDA.
+# Jamais définie par install.sh/update.sh (usage bash classique).
+export DOCKER_BUILD_NO_TORCH=true
+
 install_system_packages
 clone_or_update_comfyui
 setup_python_venv

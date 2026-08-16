@@ -370,6 +370,53 @@ install_comfyui_requirements() {
 }
 
 ################################################################################
+# pip_install_requirements <chemin_vers_requirements.txt>
+# Point d'entrée COMMUN pour installer un requirements.txt tiers (nœud
+# custom optionnel, ComfyUI-Manager...) — utilisé par lib/nodes.sh et
+# lib/manager.sh plutôt que d'appeler `pip install -r` directement à
+# plusieurs endroits.
+#
+# Filtre torch/torchvision/torchaudio quand DOCKER_BUILD_NO_TORCH=true
+# (positionné UNIQUEMENT par docker-build-steps.sh, jamais par install.sh/
+# update.sh) : à la construction de l'image Docker, aucun GPU n'est visible
+# donc PYTORCH_BUILD_TABLE ne peut pas être résolue (même raison que
+# install_comfyui_requirements_no_torch() ci-dessus). Sans ce filtrage, un
+# nœud custom listant "torch" (même sans version précise) dans son propre
+# requirements.txt ferait télécharger, à la construction de l'image, un
+# torch générique publié sur PyPI (pas l'index CUDA choisi par ce projet) —
+# constaté en pratique avec un torch 2.13.0 PyPI tirant des sous-paquets
+# NVIDIA (cuda-bindings/cuda-toolkit/triton) eux-mêmes en conflit de version
+# entre nœuds, sans jamais faire échouer le build (juste des avertissements
+# pip et du temps/espace disque perdus) puisque install_pytorch(), au
+# démarrage du conteneur, réinstalle de toute façon le SEUL build attendu
+# par-dessus. Ce filtrage évite simplement ce gaspillage — install.sh/
+# update.sh, hors Docker, ne définissent jamais DOCKER_BUILD_NO_TORCH et
+# passent donc chaque requirements.txt tel quel, comme avant.
+################################################################################
+
+pip_install_requirements() {
+    local req="$1"
+    [[ -f "$req" ]] || return 0
+
+    local target="$req"
+    local tmp=""
+    if [[ "${DOCKER_BUILD_NO_TORCH:-false}" == "true" ]]; then
+        tmp="$(mktemp)"
+        grep -viE '^[[:space:]]*(torch|torchvision|torchaudio)[[:space:]]*([<>=!~;].*)?$' "$req" > "$tmp"
+        target="$tmp"
+    fi
+
+    # shellcheck disable=SC1091
+    source "${VENV_DIR}/bin/activate"
+    pip install -r "$target" --quiet >>"$LOG_FILE" 2>&1
+    local rc=$?
+    deactivate
+
+    [[ -n "$tmp" ]] && rm -f "$tmp"
+    return "$rc"
+}
+
+################################################################################
 # Dépendances ComfyUI SANS PyTorch — utilisée UNIQUEMENT à la CONSTRUCTION de
 # l'image Docker pré-installée (Dockerfile), quand aucun GPU n'est visible et
 # que le bon index CUDA (PYTORCH_BUILD_TABLE) ne peut donc pas être choisi.

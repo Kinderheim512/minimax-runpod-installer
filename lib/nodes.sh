@@ -48,11 +48,11 @@ _clone_or_update_node_repo() {
   fi
 
   if [[ "$allow_pip" == "true" && -f "${target}/requirements.txt" ]]; then
-    # shellcheck disable=SC1091
-    source "${VENV_DIR}/bin/activate"
-    pip install -r "${target}/requirements.txt" --quiet >>"$LOG_FILE" 2>&1 || \
+    # cf. lib/python.sh::pip_install_requirements — filtre torch à la
+    # construction de l'image Docker (DOCKER_BUILD_NO_TORCH), transparent
+    # sinon (install.sh/update.sh classiques).
+    pip_install_requirements "${target}/requirements.txt" || \
       log_warn "Dépendances de ${name} partiellement installées (non bloquant)."
-    deactivate
   fi
   log_ok "${name} prêt."
 }

@@ -10,6 +10,23 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🐛 Fix: custom-node/Manager `requirements.txt` could pull in a generic PyPI PyTorch during the Docker image build
+
+- Confirmed in practice: a custom node's unpinned `torch` line in its own
+  `requirements.txt`, installed by `lib/nodes.sh`/`lib/manager.sh` during
+  `docker-build-steps.sh` (no GPU visible at that stage), pulled a torch
+  build straight from PyPI (e.g. `2.13.0`) along with mismatched NVIDIA
+  sub-packages (`cuda-bindings`, `cuda-toolkit`, `triton`) — harmless
+  (`install_pytorch()` still overwrites it with the correct pinned build at
+  container start) but wasteful and printed confusing pip dependency-conflict
+  warnings during the build.
+- New `lib/python.sh::pip_install_requirements()` — shared entry point now
+  used by both `lib/nodes.sh` and `lib/manager.sh` instead of calling
+  `pip install -r` directly. Filters `torch`/`torchvision`/`torchaudio`
+  lines whenever `DOCKER_BUILD_NO_TORCH=true` (set only by
+  `docker-build-steps.sh`); a complete no-op outside Docker, where
+  `install.sh`/`update.sh` never set that variable.
+
 ### ⚙️ Safe, verified opt-in preference for the cu130 PyTorch build
 
 - New `PREFER_CUDA130` in `config.env` (`false` by default). When `true`,
