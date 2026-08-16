@@ -10,6 +10,27 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### ⚙️ Safe, verified opt-in preference for the cu130 PyTorch build
+
+- New `PREFER_CUDA130` in `config.env` (`false` by default). When `true`,
+  `select_pytorch_build()`/`install_pytorch()` (`lib/python.sh`) now attempt
+  the cu130 build even on pods where the CUDA runtime reported by
+  `nvidia-smi` would normally select an older build (e.g. cu126) — useful
+  since `nvidia-smi`'s "CUDA Version" field can be conservative on some
+  drivers. Never risks a broken pod: `verify_cuda` checks the attempted
+  build actually works after install, and `install_pytorch()` automatically
+  and silently falls back to the build normally associated with the
+  detected CUDA runtime if it doesn't (driver genuinely too old for cu130).
+- `install_pytorch()`'s raw install step is now factored into
+  `_install_pytorch_build()` so it can be called twice (attempted build,
+  then verified fallback) without duplicating the pip command.
+- `TORCH_VERSION_OVERRIDE`/`TORCH_CUDA_INDEX_OVERRIDE` (already existed as
+  an ad-hoc escape hatch, previously undocumented in `config.env` itself)
+  are now declared and documented there too, alongside `PREFER_CUDA130`:
+  unlike `PREFER_CUDA130`, this pair remains a strict-reproducibility
+  override with **no** automatic fallback — for pinning a build you've
+  already validated, exactly as before.
+
 ### 🐳 Pre-installed Docker image (complement to `install.sh`, pod restarts near-instant)
 
 - New `Dockerfile` (+ `docker-build-steps.sh`, `docker-entrypoint.sh`) builds

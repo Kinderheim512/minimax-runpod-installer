@@ -103,11 +103,23 @@ select_pytorch_build() {
     local detected="$1"
     SELECTED_TORCH_VERSION=""
     SELECTED_TORCH_CUDA_INDEX=""
+    # Renseigné uniquement par la branche PREFER_CUDA130 ci-dessous : build
+    # "sûr" (celui normalement associé au CUDA détecté) vers lequel
+    # install_pytorch() peut retomber automatiquement si cu130 échoue à la
+    # vérification CUDA post-installation.
+    PREFER_CUDA130_FALLBACK_VERSION=""
+    PREFER_CUDA130_FALLBACK_INDEX=""
 
     if [[ -n "${TORCH_VERSION_OVERRIDE:-}" && -n "${TORCH_CUDA_INDEX_OVERRIDE:-}" ]]; then
         SELECTED_TORCH_VERSION="$TORCH_VERSION_OVERRIDE"
         SELECTED_TORCH_CUDA_INDEX="$TORCH_CUDA_INDEX_OVERRIDE"
         log_info "Build PyTorch forcé via config.env (TORCH_VERSION_OVERRIDE) : ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX}"
+        # Échappatoire de reproductibilité stricte : aucun repli automatique
+        # ici, volontairement — si vous forcez un build précis, c'est que
+        # vous savez ce que vous faites (ou que vous voulez reproduire une
+        # installation validée à l'identique) ; on ne le contourne jamais
+        # dans son dos. Pour un cu130 "tenté puis vérifié avec repli sûr",
+        # utilisez PREFER_CUDA130=true plutôt que cet override.
     elif [[ -z "$detected" ]]; then
         log_warn "Impossible de détecter la version CUDA du pilote (nvidia-smi absent ou GPU non visible)."
         local fallback="${PYTORCH_BUILD_TABLE[-1]}"
@@ -134,6 +146,34 @@ select_pytorch_build() {
             SELECTED_TORCH_CUDA_INDEX="$(cut -d: -f3 <<< "$lowest")"
             log_warn "CUDA ${detected} est plus ancien que tous les builds connus — utilisation du plus ancien (${SELECTED_TORCH_CUDA_INDEX})."
             log_warn "Une mise à jour du pilote GPU du pod est recommandée."
+        fi
+
+        # PREFER_CUDA130 (config.env) : le champ "CUDA Version" de nvidia-smi
+        # rapporte la version CUDA MAXIMALE supportée par le pilote hôte —
+        # normalement fiable, mais quelques pilotes/nvidia-smi la rapportent
+        # de façon conservatrice. Si PREFER_CUDA130=true et que le build
+        # normalement retenu ci-dessus n'est PAS déjà cu130, on TENTE quand
+        # même cu130 (le plus performant pour MiniMax H3) plutôt que de s'en
+        # tenir aveuglément à la table — mais on mémorise le build "sûr"
+        # (celui juste calculé) comme repli : install_pytorch() y retombera
+        # automatiquement et silencieusement si la vérification CUDA après
+        # coup échoue (pilote réellement trop ancien pour cu130). Jamais de
+        # pod cassé : au pire, on revient au comportement par défaut.
+        if [[ "${PREFER_CUDA130:-false}" == "true" && "$SELECTED_TORCH_CUDA_INDEX" != "cu130" ]]; then
+            local cu130_entry=""
+            for entry in "${PYTORCH_BUILD_TABLE[@]}"; do
+                [[ "$(cut -d: -f3 <<< "$entry")" == "cu130" ]] && cu130_entry="$entry"
+            done
+            if [[ -n "$cu130_entry" ]]; then
+                PREFER_CUDA130_FALLBACK_VERSION="$SELECTED_TORCH_VERSION"
+                PREFER_CUDA130_FALLBACK_INDEX="$SELECTED_TORCH_CUDA_INDEX"
+                SELECTED_TORCH_VERSION="$(cut -d: -f2 <<< "$cu130_entry")"
+                SELECTED_TORCH_CUDA_INDEX="$(cut -d: -f3 <<< "$cu130_entry")"
+                log_warn "PREFER_CUDA130=true : tentative de PyTorch ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} malgré un CUDA détecté (${detected}) normalement associé à ${PREFER_CUDA130_FALLBACK_INDEX}."
+                log_warn "Repli automatique et vérifié sur ${PREFER_CUDA130_FALLBACK_VERSION}+${PREFER_CUDA130_FALLBACK_INDEX} si cu130 s'avère incompatible avec le pilote de ce pod."
+            else
+                log_warn "PREFER_CUDA130=true mais aucune entrée cu130 dans PYTORCH_BUILD_TABLE — ignoré."
+            fi
         fi
     fi
 
@@ -198,23 +238,20 @@ setup_python_venv() {
 # éventuellement préinstallé dans l'image de base n'est en revanche jamais
 # réutilisé "tel quel" sans vérifier qu'il correspond au build attendu pour
 # le runtime CUDA détecté.
+#
+# _install_pytorch_build(version, index_cuda) -> installe CE build précis
+# (idempotent : ne réinstalle rien si déjà en place et CUDA opérationnel).
+# Factorisée hors de install_pytorch() pour être appelable deux fois : le
+# build tenté, puis — si PREFER_CUDA130 est actif et que la vérification
+# CUDA échoue — le build de repli automatique (voir plus bas).
 ################################################################################
 
-install_pytorch() {
-    log_step "Sélection et installation de PyTorch"
+_install_pytorch_build() {
+    local version="$1" index="$2"
+    local expected="${version}+${index}"
 
-    local detected
-    detected="$(detect_cuda_runtime)"
-    select_pytorch_build "$detected"
-
-    log_info "CUDA runtime détecté : ${detected:-inconnu}"
-    log_info "Build PyTorch retenu : ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX}"
-
-    # shellcheck disable=SC1091  # cf. note dans setup_python_venv : le venv
-    # est créé au préalable par cette fonction, pas visible au lint statique.
+    # shellcheck disable=SC1091  # cf. note dans setup_python_venv.
     source "${VENV_DIR}/bin/activate"
-
-    local expected="${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX}"
 
     if python -c "
 import sys
@@ -230,21 +267,72 @@ sys.exit(0 if ok else 1)
         return 0
     fi
 
-    log_info "Installation de PyTorch ${expected} (index ${SELECTED_TORCH_CUDA_INDEX})..."
+    log_info "Installation de PyTorch ${expected} (index ${index})..."
     log_info "(le PyTorch éventuellement préinstallé dans l'image de base, s'il ne correspond pas exactement, sera remplacé)"
     if ! retry "$DOWNLOAD_MAX_RETRIES" \
         python -m pip install \
-        "torch==${SELECTED_TORCH_VERSION}" torchvision torchaudio \
-        --index-url "https://download.pytorch.org/whl/${SELECTED_TORCH_CUDA_INDEX}"
+        "torch==${version}" torchvision torchaudio \
+        --index-url "https://download.pytorch.org/whl/${index}"
     then
         deactivate
-        log_error "Échec de l'installation de PyTorch ${expected} depuis l'index ${SELECTED_TORCH_CUDA_INDEX}."
-        log_error "Si l'erreur pip ci-dessus indique qu'aucune version ne correspond (ex: 'Could not find a version that satisfies...'), l'index ${SELECTED_TORCH_CUDA_INDEX} ne publie probablement plus/pas encore ${SELECTED_TORCH_VERSION} : vérifiez https://download.pytorch.org/whl/${SELECTED_TORCH_CUDA_INDEX}/ et corrigez la ligne correspondante dans PYTORCH_BUILD_TABLE (lib/python.sh)."
+        log_error "Échec de l'installation de PyTorch ${expected} depuis l'index ${index}."
+        log_error "Si l'erreur pip ci-dessus indique qu'aucune version ne correspond (ex: 'Could not find a version that satisfies...'), l'index ${index} ne publie probablement plus/pas encore ${version} : vérifiez https://download.pytorch.org/whl/${index}/ et corrigez la ligne correspondante dans PYTORCH_BUILD_TABLE (lib/python.sh)."
         return 1
     fi
 
     deactivate
-    log_ok "PyTorch ${expected} installé (une seule fois)."
+    log_ok "PyTorch ${expected} installé."
+}
+
+install_pytorch() {
+    log_step "Sélection et installation de PyTorch"
+
+    local detected
+    detected="$(detect_cuda_runtime)"
+    select_pytorch_build "$detected"
+
+    log_info "CUDA runtime détecté : ${detected:-inconnu}"
+    log_info "Build PyTorch retenu : ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX}"
+
+    _install_pytorch_build "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX" || return 1
+
+    if verify_cuda; then
+        log_ok "PyTorch ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} installé (une seule fois) et fonctionnel."
+        return 0
+    fi
+
+    # Le build tenté ne fonctionne pas (CUDA indisponible — typiquement un
+    # pilote GPU du pod trop ancien pour ce build, cf. message pip/torch
+    # "The NVIDIA driver on your system is too old" dans ${LOG_FILE}).
+    # PREFER_CUDA130_FALLBACK_VERSION/INDEX n'est renseigné par
+    # select_pytorch_build() QUE si PREFER_CUDA130=true a fait tenter cu130
+    # à la place du build normalement associé au CUDA détecté (voir
+    # commentaire PREFER_CUDA130 dans config.env) : dans ce cas précis, on
+    # retombe automatiquement sur ce build "sûr" plutôt que de laisser le
+    # pod dans un état cassé.
+    if [[ -z "${PREFER_CUDA130_FALLBACK_VERSION:-}" ]]; then
+        log_error "CUDA indisponible après installation de PyTorch ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} — vérifiez le pilote GPU du pod (nvidia-smi) et ${LOG_FILE}."
+        return 1
+    fi
+
+    log_warn "CUDA indisponible avec ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} (pilote du pod probablement trop ancien pour ce build — détail dans ${LOG_FILE})."
+    log_warn "PREFER_CUDA130=true : repli automatique sur le build associé au CUDA détecté (${detected:-inconnu}) : ${PREFER_CUDA130_FALLBACK_VERSION}+${PREFER_CUDA130_FALLBACK_INDEX}..."
+
+    SELECTED_TORCH_VERSION="$PREFER_CUDA130_FALLBACK_VERSION"
+    SELECTED_TORCH_CUDA_INDEX="$PREFER_CUDA130_FALLBACK_INDEX"
+    # shellcheck disable=SC2034  # alias de compatibilité, cf. select_pytorch_build.
+    TORCH_VERSION="$SELECTED_TORCH_VERSION"
+    # shellcheck disable=SC2034
+    TORCH_CUDA_INDEX="$SELECTED_TORCH_CUDA_INDEX"
+
+    _install_pytorch_build "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX" || return 1
+
+    if ! verify_cuda; then
+        log_error "CUDA toujours indisponible après repli sur ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} — le pilote GPU de ce pod semble trop ancien pour tout build PyTorch connu de PYTORCH_BUILD_TABLE. Vérifiez 'nvidia-smi --query-gpu=driver_version --format=csv,noheader' et ${LOG_FILE}."
+        return 1
+    fi
+
+    log_ok "Repli automatique réussi : PyTorch ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} installé et fonctionnel."
 }
 
 ################################################################################
