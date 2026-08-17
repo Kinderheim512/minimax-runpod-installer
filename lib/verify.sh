@@ -53,6 +53,29 @@ verify_installation() {
     _v_fail "Environnement virtuel absent."
   fi
 
+  # --- comfy-kitchen (kernels accélérés FP8/NVFP4/INT8/ConvRot) ---
+  # Dépendance pip standard de ComfyUI (épinglée dans son requirements.txt
+  # amont, ex. "comfy-kitchen==0.2.31") — installée automatiquement par
+  # install_comfyui_requirements() (lib/python.sh) en même temps que le
+  # reste de requirements.txt, PAS un custom node séparé à cloner dans
+  # custom_nodes/. Fournit les kernels natifs (convrot_w4a4,
+  # int8_tensorwise, float8_e4m3fn...) dont dépendent les checkpoints
+  # int8_convrot/int4_convrot (preset dasiwa_mmh3v12, palier standard
+  # "balanced" fp8_scaled) pour tourner accéléré plutôt qu'en repli eager
+  # PyTorch, nettement plus lent. Vérifié ici plutôt qu'ajouté quelque part
+  # comme dépendance : un échec d'import connu en amont (comfy_kitchen mal
+  # reconstruit après une mise à jour partielle, cf. Comfy-Org/ComfyUI#14766)
+  # ne doit pas passer inaperçu silencieusement.
+  if [[ -x "${VENV_DIR}/bin/python" ]]; then
+    if "${VENV_DIR}/bin/python" -c "import comfy_kitchen" 2>/dev/null; then
+      local ck_version
+      ck_version="$("${VENV_DIR}/bin/python" -c 'import importlib.metadata as m; print(m.version("comfy-kitchen"))' 2>/dev/null)"
+      _v_ok "comfy-kitchen ${ck_version:-?} importable (kernels FP8/NVFP4/INT8/ConvRot accélérés)."
+    else
+      _v_warn "comfy-kitchen non importable — les checkpoints int8_convrot/int4_convrot/fp8_scaled retomberont sur des kernels eager PyTorch, plus lents. Essayez : ${VENV_DIR}/bin/python -m pip install --force-reinstall comfy-kitchen"
+    fi
+  fi
+
   # --- ComfyUI-Manager ---
   if [[ -d "${INSTALL_DIR}/custom_nodes/ComfyUI-Manager" ]]; then
     _v_ok "ComfyUI-Manager installé."
