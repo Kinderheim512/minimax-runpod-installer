@@ -269,6 +269,21 @@ sys.exit(0 if ok else 1)
 
     log_info "Installation de PyTorch ${expected} (index ${index})..."
     log_info "(le PyTorch éventuellement préinstallé dans l'image de base, s'il ne correspond pas exactement, sera remplacé)"
+
+    # Désinstallation explicite AVANT d'installer, plutôt que de laisser pip
+    # gérer un uninstall-puis-install combiné dans la même transaction —
+    # constaté en pratique (repli PREFER_CUDA130, cu130 -> cu118) : quand le
+    # build cible diffère de celui déjà en place, pip échoue silencieusement
+    # à désinstaller certaines dépendances transitives dont la version exacte
+    # change d'un build à l'autre (sympy, triton — mêmes noms de paquet,
+    # versions différentes selon le build torch), laissant des métadonnées
+    # .dist-info manquantes ("Can't uninstall '...'. No files were found to
+    # uninstall.") et un venv dans un état instable même quand l'installation
+    # se termine sans erreur bloquante. `|| true` : rien à désinstaller au
+    # tout premier install (pip répond juste "not installed", pas une erreur
+    # à traiter comme telle) — jamais bloquant.
+    python -m pip uninstall -y torch torchvision torchaudio triton sympy >/dev/null 2>&1 || true
+
     if ! retry "$DOWNLOAD_MAX_RETRIES" \
         python -m pip install \
         "torch==${version}" torchvision torchaudio \
@@ -282,6 +297,44 @@ sys.exit(0 if ok else 1)
 
     deactivate
     log_ok "PyTorch ${expected} installé."
+}
+
+################################################################################
+# bake_pytorch_best_guess() — UNIQUEMENT à la construction de l'image Docker
+# (docker-build-steps.sh), jamais appelée par install.sh/update.sh. Installe
+# par avance le build PyTorch le plus récent connu de PYTORCH_BUILD_TABLE
+# (actuellement cu130) SANS connaître le GPU réel du pod (aucun GPU visible
+# à la construction de l'image) : un pari assumé, pas une détection —
+# beaucoup de pods RunPod ont un pilote assez récent pour le supporter.
+#
+# Pourquoi c'est sûr, dans les deux cas :
+#   - Pilote du pod compatible cu130 (cas majoritaire) : au démarrage du
+#     conteneur, install_pytorch() (via docker-entrypoint.sh) retrouve ce
+#     build déjà installé ET fonctionnel — l'idempotence déjà présente dans
+#     _install_pytorch_build() ne retélécharge RIEN, le démarrage du pod
+#     saute quasiment cette étape.
+#   - Pilote du pod trop ancien (cas minoritaire) : le mécanisme
+#     PREFER_CUDA130 (voir select_pytorch_build()/install_pytorch()
+#     ci-dessus), activé par défaut UNIQUEMENT dans cette image Docker (voir
+#     Dockerfile, ENV PREFER_CUDA130), tente ce même build cu130 déjà en
+#     place — pip le trouve "déjà satisfait" (aucun retéléchargement) —,
+#     détecte via verify_cuda() qu'il ne fonctionne pas, et retombe
+#     automatiquement sur le build réellement compatible. Seul CE build de
+#     repli est téléchargé : ni plus ni moins que si rien n'avait été
+#     pré-installé. Jamais de pod cassé, jamais de perte de temps notable,
+#     dans aucun des deux cas.
+################################################################################
+
+bake_pytorch_best_guess() {
+    log_step "Pré-installation de PyTorch dans l'image (pari : le build le plus récent connu)"
+
+    local latest="${PYTORCH_BUILD_TABLE[-1]}"
+    local version index
+    version="$(cut -d: -f2 <<< "$latest")"
+    index="$(cut -d: -f3 <<< "$latest")"
+
+    log_info "Build pré-installé : ${version}+${index} — vérifié, et remplacé si besoin, au démarrage de chaque conteneur (voir PREFER_CUDA130, config.env)."
+    _install_pytorch_build "$version" "$index"
 }
 
 install_pytorch() {

@@ -23,6 +23,8 @@ LOG_FILE="${PROJECT_ROOT}/logs/launch.log"
 source "${PROJECT_ROOT}/config.env"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/utils.sh"
+# shellcheck disable=SC1091
+source "${PROJECT_ROOT}/lib/notify.sh"
 
 # Détection d'un process ComfyUI "fantôme" ------------------------------
 # But : distinguer trois situations avant de lancer, plutôt qu'une seule
@@ -176,17 +178,14 @@ if [[ ! -f "${INSTALL_DIR}/main.py" ]]; then
 fi
 
 # Garde-fou PyTorch ------------------------------------------------------
-# Dans l'image Docker pré-installée, PyTorch n'est PAS présent au build
-# (voir docker-build-steps.sh, DOCKER_BUILD_NO_TORCH) : il n'est installé
-# qu'au démarrage du conteneur par install_pytorch(), appelée depuis
-# docker-entrypoint.sh. Si ce script est lancé directement (à la main, ou
+# Dans l'image Docker pré-installée, PyTorch peut être absent/non
+# fonctionnel à ce stade si ce script est lancé directement (à la main, ou
 # via une commande de démarrage RunPod mal configurée qui court-circuite
-# l'entrypoint), le venv peut n'avoir aucun torch fonctionnel — sans ce
+# l'entrypoint) : install_pytorch() n'a alors jamais tourné. Sans ce
 # contrôle, ComfyUI plante avec une trace Python brute (ImportError/OSError)
 # qui ne dit pas à l'utilisateur quoi faire. On vérifie donc explicitement
 # ici, AVANT d'activer le venv pour de bon, que `import torch` réussit et
 # que CUDA est disponible.
-# shellcheck disable=SC1091
 if ! "${VENV_DIR}/bin/python" -c "import torch; assert torch.cuda.is_available()" >/dev/null 2>&1; then
   log_error "PyTorch absent ou non fonctionnel dans ${VENV_DIR} (CUDA indisponible ou import en échec)."
   log_error "Si vous êtes dans l'image Docker pré-installée : ne lancez jamais launch.sh directement au premier démarrage — utilisez ./docker-entrypoint.sh (ou relancez le conteneur normalement), qui installe PyTorch pour ce GPU avant de lancer ComfyUI."
@@ -233,6 +232,16 @@ else
   echo -e "  ${C_BOLD}http://<ip-publique-du-pod>:${COMFYUI_PORT}${C_RESET}"
 fi
 echo ""
+
+# Notifications ntfy.sh (lib/notify.sh) — no-op silencieux si NTFY_TOPIC est
+# vide. Lancées en arrière-plan (&) AVANT le exec ci-dessous : le exec
+# remplace ce process par celui de ComfyUI, mais n'affecte pas ces enfants
+# déjà détachés — ils continuent de tourner tant que le pod vit, et se
+# terminent avec lui (rien à nettoyer).
+notify_pod_ready_when_up &
+disown
+watch_outputs_and_notify &
+disown
 
 cd "$INSTALL_DIR"
 exec python main.py \

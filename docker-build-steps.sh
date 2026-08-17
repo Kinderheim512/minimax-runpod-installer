@@ -52,6 +52,17 @@ clone_or_update_comfyui
 setup_python_venv
 install_comfyui_requirements_no_torch
 install_extra_requirements
+
+# Précharge PyTorch (pari cu130, voir lib/python.sh::bake_pytorch_best_guess
+# pour le détail complet du raisonnement et de la sécurité du mécanisme) :
+# contrairement au reste de cette image, ceci dépend potentiellement du GPU
+# réel du pod — mais install_pytorch(), au démarrage du conteneur
+# (docker-entrypoint.sh), vérifie et corrige automatiquement si besoin (voir
+# PREFER_CUDA130, activé par défaut dans cette image, Dockerfile). Objectif :
+# rendre le démarrage quasi instantané dans le cas majoritaire où le pilote
+# du pod obtenu supporte déjà ce build.
+bake_pytorch_best_guess
+
 install_or_update_manager
 install_optional_nodes
 create_model_folders

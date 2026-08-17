@@ -34,6 +34,7 @@ tunes everything for the GPU it detects.
 - [Pre-installed Docker image](#-pre-installed-docker-image)
 - [Backing up your LoRAs/presets/outputs](#-backing-up-your-loraspresetsoutputs-without-depending-on-runpod)
 - [Installing and managing LoRAs](#-installing-and-managing-loras)
+- [Push notifications (ntfy.sh)](#-push-notifications-ntfysh)
 - [Spectrum MiniMax H3](#-spectrum-minimax-h3-optional)
 - [Surviving web-terminal disconnects](#-surviving-web-terminal-disconnects-tmux)
 - [CLI reference](#-cli-reference)
@@ -404,13 +405,27 @@ and reinstalling PyTorch + dependencies from scratch every time.
 The `Dockerfile` in this repo builds an image with everything that does
 **not** depend on the eventual GPU already baked in: system packages,
 ComfyUI (cloned at the release resolved by `COMFYUI_RELEASE_MODE`, same
-logic as the bash installer), the venv, every Python dependency **except
-PyTorch**, ComfyUI-Manager, and the required custom nodes. It deliberately
-excludes PyTorch (the right CUDA index can only be chosen once a GPU is
-actually visible, see `PYTORCH_BUILD_TABLE` in `lib/python.sh`) and the H3
-model weights (tens of GB, and the tier you want depends on the VRAM of the
-GPU you actually land on). One image works for every RunPod GPU, from a T4
-to an H100.
+logic as the bash installer), the venv, every Python dependency, ComfyUI-
+Manager, and the required custom nodes. It excludes the H3 model weights
+(tens of GB, and the tier you want depends on the VRAM of the GPU you
+actually land on — stays specific to your run). One image works for every
+RunPod GPU, from a T4 to an H100.
+
+**PyTorch is pre-installed too — a calculated bet, not a guess.** The image
+ships with the most recent known build (currently cu130). At container
+start, `install_pytorch()` checks whether this build actually works on the
+GPU the pod landed on:
+* **Driver supports it** (the common case on RunPod) → nothing to
+  download, startup is near-instant on this step.
+* **Driver is too old for it** → automatically and safely falls back to the
+  build that actually matches the detected driver (same verified fallback
+  mechanism as `PREFER_CUDA130`, see `config.env`) — the only download in
+  that case is the correct build, exactly as if nothing had been
+  pre-installed. Never a broken pod either way.
+
+This trades a larger image (a few extra GB) for near-instant PyTorch
+readiness on most pods — set `PREFER_CUDA130=false` as a pod environment
+variable if you'd rather always force strict runtime detection instead.
 
 This is a **complement** to `install.sh`, not a replacement — installing on
 a bare pod with the classic bash installer keeps working exactly as before
@@ -433,16 +448,18 @@ docker push ghcr.io/<you>/minimax-h3-comfyui:latest
 **Custom Container**, point it at the image you pushed above, expose port
 `8188` (HTTP), and set `HF_TOKEN` as a pod secret/environment variable as
 usual. On start, the container's entrypoint (`docker-entrypoint.sh`)
-installs PyTorch for the GPU it actually got, runs `install.sh` for
-whatever's left (H3 weights, workflows, personal storage — see below), then
-launches ComfyUI.
+verifies PyTorch is usable for the GPU it actually got (near-instant if the
+pre-baked build already matches, a quick swap otherwise — see above), runs
+`install.sh` for whatever's left (H3 weights, workflows, personal storage —
+see below), then launches ComfyUI.
 
 What this buys you: pod restarts are near-instant on the install side (no
-re-clone, no re-download of dependencies). What it does **not** remove:
-downloading the H3 model weights (Hugging Face, free) still happens on
-every new container, since the model tier depends on the GPU you land on —
-and so does bringing back any personal data (LoRAs/presets/outputs) stored
-outside RunPod, if you use that (see next section).
+re-clone, no re-download of dependencies, usually no PyTorch download
+either). What it does **not** remove: downloading the H3 model weights
+(Hugging Face, free) still happens on every new container, since the model
+tier depends on the GPU you land on — and so does bringing back any
+personal data (LoRAs/presets/outputs) stored outside RunPod, if you use
+that (see next section).
 
 The image never contains any secret (Hugging Face/CivitAI keys stay
 environment variables injected at runtime, exactly like today) — never bake
@@ -503,6 +520,39 @@ Every asset on that release is downloaded once into
 is ever pushed there from this project. It's independent from
 `PERSONAL_STORAGE_HF_REPO`; both can be used at once (HF for what changes,
 GitHub Releases for a frozen base of LoRAs you never push back).
+
+---
+
+## 🔔 Push notifications (ntfy.sh)
+
+Get a push notification on your phone for three events, without any
+account or token — see `lib/notify.sh`:
+
+* **Pod ready** — as soon as ComfyUI responds on its port for the first time
+* **Generation finished** — a new, fully-written file appeared in `output/`
+* **Pod inactive** — no generation for a while (default 60 min), a nudge not
+  to leave a billed GPU pod running for nothing
+
+**Setup (2 minutes):**
+
+1. Install the [ntfy app](https://ntfy.sh/) (Android/iOS) or just use the
+   web app at https://ntfy.sh/
+2. Pick a topic name that's hard to guess (anyone who knows it can both
+   subscribe *and* publish to it on the public ntfy.sh server — there's no
+   authentication by default), e.g. `minimax-h3-yourname-a94f`, and
+   subscribe to it in the app.
+3. Add it to `config.env` (or as a pod environment variable):
+   ```bash
+   NTFY_TOPIC="minimax-h3-yourname-a94f"
+   ```
+
+That's it — `launch.sh` starts both watchers automatically in the
+background alongside ComfyUI. Each of the three notifications can be
+toggled independently (`NOTIFY_ON_READY`, `NOTIFY_ON_GENERATION`,
+`NOTIFY_ON_INACTIVITY`), and the inactivity threshold is configurable
+(`NOTIFY_INACTIVITY_MINUTES`, `0` disables it). Leave `NTFY_TOPIC` empty to
+keep this entirely off — every call is a silent no-op. Self-hosting your own
+ntfy server instead of the public one: set `NTFY_SERVER` accordingly.
 
 ---
 
@@ -650,6 +700,7 @@ the installer only warns, it doesn't block on an unrecognized card.
 │   ├── presets.sh            # extra per-workflow model sets, nodes, symlinks (see Presets above)
 │   ├── optimization.sh      # GPU-tuned ComfyUI launch flags
 │   ├── personal_storage.sh  # LoRAs/presets/outputs backup & restore (see Backing up your... above)
+│   ├── notify.sh            # ntfy.sh push notifications: pod ready, generation finished, inactivity (see Push notifications above)
 │   └── verify.sh            # check.sh backend + install summary
 ├── workflows/               # official MiniMax H3 workflow JSON files (see Workflows above)
 ├── presets/                 # preset-specific workflow JSON files (see Presets above)

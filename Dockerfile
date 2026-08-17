@@ -15,18 +15,21 @@
 # l'identique, pour qui ne veut pas utiliser cette image.
 #
 # Rien dans cette image ne dépend du GPU sur lequel elle finira par
-# tourner : PAS de PyTorch (l'index CUDA à choisir dépend de nvidia-smi, cf.
-# PYTORCH_BUILD_TABLE dans lib/python.sh, indisponible à la construction de
-# l'image), PAS de poids H3 (plusieurs dizaines de Go, et le palier dépend
-# de la VRAM du GPU obtenu — resterait de toute façon spécifique à l'usage).
-# Une seule image sert donc à tous les GPU RunPod (T4 comme H100).
+# tourner, à UNE exception assumée près : PyTorch (voir plus bas,
+# PREFER_CUDA130) est pré-installé avec le build le plus récent connu
+# (cu130) — un pari, pas une détection, vérifié et corrigé automatiquement
+# au démarrage du conteneur si le pilote du pod ne le supporte pas. PAS de
+# poids H3 en revanche (plusieurs dizaines de Go, et le palier dépend de la
+# VRAM du GPU obtenu — resterait de toute façon spécifique à l'usage). Une
+# seule image sert donc à (quasi) tous les GPU RunPod (T4 comme H100),
+# PyTorch inclus dans la majorité des cas.
 #
-# Base Ubuntu simple (pas nvidia/cuda) : les wheels PyTorch installés au
-# démarrage du conteneur embarquent déjà leur propre runtime CUDA — un
-# toolkit CUDA système complet n'est nécessaire que pour la compilation
-# optionnelle de SageAttention, et install_sageattention() (lib/python.sh)
-# sait déjà l'installer à la demande, au démarrage, avec la version exacte
-# attendue par le torch réellement installé (voir ce fichier pour le détail).
+# Base Ubuntu simple (pas nvidia/cuda) : les wheels PyTorch embarquent déjà
+# leur propre runtime CUDA — un toolkit CUDA système complet n'est
+# nécessaire que pour la compilation optionnelle de SageAttention, et
+# install_sageattention() (lib/python.sh) sait déjà l'installer à la
+# demande, au démarrage, avec la version exacte attendue par le torch
+# réellement installé (voir ce fichier pour le détail).
 FROM ubuntu:22.04
 
 # Pas de prompts apt interactifs pendant le build.
@@ -43,6 +46,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 # besoin d'un Network Volume).
 ENV INSTALL_DIR=/opt/ComfyUI
 ENV PROJECT_ROOT=/opt/minimax-runpod-installer
+
+# PyTorch (build le plus récent connu, actuellement cu130) est pré-installé
+# dans cette image — voir docker-build-steps.sh::bake_pytorch_best_guess()
+# pour le détail. PREFER_CUDA130=true active, par défaut UNIQUEMENT dans
+# cette image (jamais dans config.env, jamais pour install.sh/update.sh sur
+# pod nu), le mécanisme de vérification-avec-repli déjà en place
+# (lib/python.sh) : au démarrage du conteneur, ce build préchargé est
+# réutilisé tel quel si le pilote GPU du pod le permet (démarrage quasi
+# instantané), ou remplacé automatiquement par le build compatible sinon —
+# jamais de pod cassé. Peut être désactivée en surchargeant cette variable
+# d'environnement au niveau du pod (PREFER_CUDA130=false) pour revenir à la
+# détection stricte habituelle.
+ENV PREFER_CUDA130=true
 
 WORKDIR ${PROJECT_ROOT}
 

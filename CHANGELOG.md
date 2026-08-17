@@ -10,22 +10,85 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
-### 🐛 Fix: `launch.sh` crashed with a raw Python traceback when PyTorch was missing/broken
+### 🐛 Fix: switching PyTorch builds (`PREFER_CUDA130` fallback) could corrupt `sympy`/`triton` metadata
 
-- Reproduced on the pre-built Docker image: running `./launch.sh` directly
-  (bypassing `docker-entrypoint.sh`) starts ComfyUI against a venv where
-  PyTorch was never installed (it's intentionally excluded at build time,
-  see `DOCKER_BUILD_NO_TORCH` below) — resulted in an unhandled
-  `ImportError`/`OSError` from `import torch` deep inside `main.py`.
-- `launch.sh` now checks `import torch; torch.cuda.is_available()` in the
-  target venv before activating it for real, and exits with a clear
-  actionable message (run `docker-entrypoint.sh` instead, or `install.sh`)
-  instead of letting ComfyUI crash raw.
-- Also widened the `DOCKER_BUILD_NO_TORCH` filter regex in
-  `pip_install_requirements()` (`lib/python.sh`) to also catch
-  `torch[extra]` and `torch @ <url>` forms, which the previous regex let
-  through — a custom node using either form could still leave a partial,
-  mismatched torch install in the baked image.
+- Confirmed in practice: when `install_pytorch()` falls back from cu130 to
+  the actually-compatible build (driver too old for cu130), letting pip
+  handle the uninstall-then-install of the new build as one combined
+  transaction could silently fail to properly uninstall `sympy`/`triton`
+  (same package names, different pinned versions between the two torch
+  builds) — leaving `.dist-info` metadata missing
+  (`Can't uninstall '...'. No files were found to uninstall.`) and the venv
+  in a subtly broken state even though the install itself reported success.
+- `_install_pytorch_build()` (`lib/python.sh`) now explicitly uninstalls
+  `torch`/`torchvision`/`torchaudio`/`triton`/`sympy` first (best-effort,
+  never blocking — a no-op on the very first install) before installing the
+  target build fresh, avoiding pip's own combined-transaction failure mode.
+  Affects both the `PREFER_CUDA130` fallback path and the pre-baked-PyTorch
+  path (below) whenever the baked build turns out incompatible with the
+  pod's actual driver.
+
+### 🐛 Fixes: personal-storage pull ordering, launch-time PyTorch guard, wider torch-filter regex
+
+- **Real bug, fixed**: `sync_personal_storage_pull()` was called at the very
+  top of `install.sh`, before the Hugging Face CLI (`huggingface_hub`,
+  installed by `install_extra_requirements`) was even present in the venv —
+  on any fresh pod, the personal-storage restore silently failed every
+  single time (`_personal_storage_hf_ready()` warned and bailed out), even
+  with `PERSONAL_STORAGE_HF_REPO` correctly set. Since `update.sh` only
+  pushes (never pulls), nothing ever caught this later. Fixed by moving the
+  call to right after `install_extra_requirements` in both `install.sh`
+  branches (`--only-models` and the full install) — the earliest point
+  where the HF CLI is guaranteed present in both. Comments in
+  `lib/personal_storage.sh` updated to match.
+- `launch.sh`: new guard right before starting ComfyUI — verifies
+  `import torch` succeeds and CUDA is actually available, with a clear
+  message pointing at `docker-entrypoint.sh`/`bash install.sh` instead of a
+  raw Python traceback, in case this script is ever run directly before
+  PyTorch has been installed (e.g. a misconfigured RunPod start command
+  bypassing the entrypoint).
+- `lib/python.sh`: `pip_install_requirements()`'s torch-filter regex (Docker
+  build stage only) now also matches `torch[extra]>=2.0` (extras in
+  brackets) and `torch @ https://...` (direct URL installs) — valid
+  `requirements.txt` syntax the previous regex missed.
+
+### ⚡ PyTorch pre-installed in the Docker image (near-instant startup on most pods)
+
+- `docker-build-steps.sh` now bakes PyTorch into the image at build time via
+  new `lib/python.sh::bake_pytorch_best_guess()`, using the most recent
+  known build from `PYTORCH_BUILD_TABLE` (currently cu130) — a calculated
+  bet, not a detection (no GPU visible at image build time). Trades a
+  larger image for skipping PyTorch's download entirely on pods whose
+  driver already supports it.
+- `Dockerfile` sets `PREFER_CUDA130=true` by default (only in the image,
+  never in `config.env`, never for the bash-on-bare-pod path): at container
+  start, `install_pytorch()` reuses this pre-baked build as-is if the pod's
+  actual driver supports it (near-instant), or automatically and safely
+  falls back to the build that matches the detected driver otherwise (same
+  verified-fallback mechanism introduced for `PREFER_CUDA130` below) — only
+  the correct build gets downloaded in that case, exactly as if nothing had
+  been pre-installed. Never a broken pod either way. Overridable per-pod
+  (`PREFER_CUDA130=false`) to force strict detection instead.
+- README's "Pre-installed Docker image" section updated accordingly.
+
+### 🔔 Push notifications (ntfy.sh): pod ready, generation finished, pod inactive
+
+- New `lib/notify.sh` — `notify()` (generic push via ntfy.sh, no account/
+  token needed) plus two background watchers started automatically by
+  `launch.sh` alongside ComfyUI:
+  `notify_pod_ready_when_up()` (pings once ComfyUI responds on its port for
+  the first time) and `watch_outputs_and_notify()` (one poll loop over
+  `output/` covering both "generation finished", per new stable file, and
+  "pod inactive for N minutes", a reminder not to leave a billed GPU pod
+  running for nothing).
+- New `config.env` variables, all opt-in: `NTFY_TOPIC` (empty = fully
+  disabled, silent no-op everywhere), `NTFY_SERVER` (self-hosting support),
+  `NOTIFY_ON_READY`/`NOTIFY_ON_GENERATION`/`NOTIFY_ON_INACTIVITY` (each
+  independently toggleable), `NOTIFY_INACTIVITY_MINUTES`,
+  `NOTIFY_OUTPUT_POLL_SECONDS`.
+- Detection by polling (not `inotifywait`), on purpose: no new system
+  dependency for an opt-in feature.
+- README: new "Push notifications (ntfy.sh)" section.
 
 ### 🐛 Fix: custom-node/Manager `requirements.txt` could pull in a generic PyPI PyTorch during the Docker image build
 
