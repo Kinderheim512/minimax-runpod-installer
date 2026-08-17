@@ -208,6 +208,45 @@ _personal_storage_pull_github_release_loras() {
 # c'est un socle de LoRAs figés, lecture seule (voir commentaire
 # PERSONAL_LORAS_GITHUB_RELEASE_URL dans config.env) — on ne pousse jamais
 # dessus depuis ce projet.
+# _personal_storage_hf_upload <dossier_local> <chemin_dans_le_repo>
+# Enrobe `hf upload` avec la même logique de tentatives que retry()
+# (lib/utils.sh), SAUF pour une erreur 403 (permission refusée) : celle-ci
+# ne se résout jamais toute seule en réessayant (token en lecture seule, ou
+# sans accès en écriture au dépôt) — retenter 5 fois ne fait que perdre du
+# temps et polluer les logs. On détecte ce cas précis dans la sortie de `hf`
+# et on abandonne immédiatement avec un message actionnable.
+# Retourne : 0 succès, 1 échec (épuisement des tentatives), 2 échec
+# permanent (403 — inutile de réessayer, y compris pour les autres dossiers
+# à pousser : voir l'appelant, sync_personal_storage_push()).
+_personal_storage_hf_upload() {
+  local local_dir="$1" path_in_repo="$2"
+  local attempt=1 out
+
+  while (( attempt <= DOWNLOAD_MAX_RETRIES )); do
+    if out="$("$HF_CLI" upload "$PERSONAL_STORAGE_HF_REPO" "$local_dir" "$path_in_repo" --repo-type dataset 2>&1)"; then
+      echo "$out" >> "$LOG_FILE"
+      return 0
+    fi
+
+    echo "$out" >> "$LOG_FILE"
+
+    if grep -qi '403 Forbidden\|correct permissions' <<< "$out"; then
+      log_error "Permission refusée par Hugging Face (403) sur ${PERSONAL_STORAGE_HF_REPO}/${path_in_repo} — votre HF_TOKEN n'a probablement pas les droits d'écriture."
+      log_error "Créez un token avec la permission \"Write\" sur https://huggingface.co/settings/tokens, mettez à jour HF_TOKEN, puis relancez bash sync_push.sh."
+      return 2
+    fi
+
+    if (( attempt >= DOWNLOAD_MAX_RETRIES )); then
+      log_error "Échec après ${DOWNLOAD_MAX_RETRIES} tentatives : hf upload ${PERSONAL_STORAGE_HF_REPO} ${local_dir} ${path_in_repo} --repo-type dataset"
+      return 1
+    fi
+
+    log_warn "Tentative ${attempt}/${DOWNLOAD_MAX_RETRIES} échouée, nouvelle tentative dans 5s..."
+    sleep 5
+    ((attempt++))
+  done
+}
+
 sync_personal_storage_push() {
   log_step "Stockage perso (LoRAs/presets/outputs) — sauvegarde"
 
@@ -222,24 +261,33 @@ sync_personal_storage_push() {
 
   # shellcheck disable=SC1091
   source "${VENV_DIR}/bin/activate"
-  local ok="true"
+  local ok="true" rc
   log_info "Envoi vers le coffre HF ${PERSONAL_STORAGE_HF_REPO} (peut prendre du temps selon le volume d'outputs)..."
+
   if [[ -n "$(ls -A "$(PERSONAL_STORAGE_LORAS_DIR)" 2>/dev/null)" ]]; then
-    retry "$DOWNLOAD_MAX_RETRIES" "$HF_CLI" upload "$PERSONAL_STORAGE_HF_REPO" "$(PERSONAL_STORAGE_LORAS_DIR)" loras \
-      --repo-type dataset >>"$LOG_FILE" 2>&1 || ok="false"
+    _personal_storage_hf_upload "$(PERSONAL_STORAGE_LORAS_DIR)" loras; rc=$?
+    [[ "$rc" -ne 0 ]] && ok="false"
   fi
-  if [[ -n "$(ls -A "$(PERSONAL_STORAGE_PRESETS_DIR)" 2>/dev/null)" ]]; then
-    retry "$DOWNLOAD_MAX_RETRIES" "$HF_CLI" upload "$PERSONAL_STORAGE_HF_REPO" "$(PERSONAL_STORAGE_PRESETS_DIR)" presets \
-      --repo-type dataset >>"$LOG_FILE" 2>&1 || ok="false"
+  # rc=2 (403) : même token, même dépôt pour les trois — inutile de retenter
+  # presets/outputs, l'erreur sera strictement identique. On s'arrête net.
+  if [[ "$ok" == "true" || "${rc:-0}" -ne 2 ]]; then
+    if [[ -n "$(ls -A "$(PERSONAL_STORAGE_PRESETS_DIR)" 2>/dev/null)" ]]; then
+      _personal_storage_hf_upload "$(PERSONAL_STORAGE_PRESETS_DIR)" presets; rc=$?
+      [[ "$rc" -ne 0 ]] && ok="false"
+    fi
   fi
-  if [[ -n "$(ls -A "$(PERSONAL_STORAGE_OUTPUTS_DIR)" 2>/dev/null)" ]]; then
-    retry "$DOWNLOAD_MAX_RETRIES" "$HF_CLI" upload "$PERSONAL_STORAGE_HF_REPO" "$(PERSONAL_STORAGE_OUTPUTS_DIR)" outputs \
-      --repo-type dataset >>"$LOG_FILE" 2>&1 || ok="false"
+  if [[ "$ok" == "true" || "${rc:-0}" -ne 2 ]]; then
+    if [[ -n "$(ls -A "$(PERSONAL_STORAGE_OUTPUTS_DIR)" 2>/dev/null)" ]]; then
+      _personal_storage_hf_upload "$(PERSONAL_STORAGE_OUTPUTS_DIR)" outputs; rc=$?
+      [[ "$rc" -ne 0 ]] && ok="false"
+    fi
   fi
   deactivate
 
   if [[ "$ok" == "true" ]]; then
     log_ok "Sauvegarde du stockage perso terminée (${PERSONAL_STORAGE_HF_REPO})."
+  elif [[ "${rc:-0}" -eq 2 ]]; then
+    log_warn "Sauvegarde du stockage perso interrompue (permission refusée) — corrigez HF_TOKEN puis relancez 'bash sync_push.sh'."
   else
     log_warn "Sauvegarde du stockage perso incomplète — consultez ${LOG_FILE}. Relancez 'bash sync_push.sh' pour réessayer."
   fi

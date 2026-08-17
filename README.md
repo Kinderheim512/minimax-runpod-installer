@@ -559,7 +559,8 @@ ntfy server instead of the public one: set `NTFY_SERVER` accordingly.
 ## 🎨 Installing and managing LoRAs
 
 ```bash
-bash install_lora.sh "https://..."                 # install (skips if already present)
+bash install_lora.sh "https://..."                  # install (skips if already present)
+bash install_lora.sh --personal "https://..."       # install into models/loras/personal/ (backed up by sync_push.sh)
 bash install_lora.sh --force "https://..."          # reinstall
 bash install_lora.sh --list                         # list installed LoRAs with sizes
 bash install_lora.sh --remove some.safetensors
@@ -568,8 +569,13 @@ bash install_lora.sh --remove some.safetensors
 Hugging Face, CivitAI (`civitai.com` / `civitai.red`), and any direct
 `.safetensors` URL are supported. No authentication is needed for public
 files; set `CIVITAI_API_KEY` for restricted CivitAI content. LoRAs land in
-`ComfyUI/models/loras/`. See [RECOMMENDED_LORAS.md](RECOMMENDED_LORAS.md)
-for a tested example (MiniMax H3 Turbo, 4-step sampling).
+`ComfyUI/models/loras/` by default — use `--personal` (combinable with
+`--force`, `--filename`, `--list`, `--remove`) to install into
+`ComfyUI/models/loras/personal/` instead, the only LoRA folder that gets
+backed up automatically (see
+[Backing up your LoRAs/presets/outputs](#-backing-up-your-loraspresetsoutputs-without-depending-on-runpod)
+above). See [RECOMMENDED_LORAS.md](RECOMMENDED_LORAS.md) for a tested
+example (MiniMax H3 Turbo, 4-step sampling).
 
 Run these from inside the project directory — if unsure where that is:
 

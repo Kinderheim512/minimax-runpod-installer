@@ -10,68 +10,23 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
-### 🐛 Fix: SageAttention could never compile — `cuda-toolkit-*` isn't installable via apt without NVIDIA's own repo
+### ✨ `install_lora.sh --personal` — install LoRAs straight into the backed-up folder
 
-- Confirmed in practice: the Docker image is built `FROM ubuntu:22.04` (bare,
-  deliberate — see `Dockerfile`), which does **not** include NVIDIA's own apt
-  repository. `install_sageattention()` and `bake_sageattention_best_guess()`
-  (`lib/python.sh`) both tried to `apt-get install cuda-toolkit-<version>`
-  without it — this always failed, not because the requested version was
-  unavailable, but because `cuda-toolkit-*` packages aren't part of Ubuntu's
-  default archives at all. Affected both the image build step (SageAttention
-  never got pre-baked) and every container startup on that image (the
-  fallback `apt-get install` retried the same doomed thing).
-- New `ensure_nvidia_cuda_apt_repo()` (`lib/system.sh`): installs NVIDIA's
-  official `cuda-keyring` package (detects Ubuntu 20.04/22.04/24.04,
-  x86_64/arm64) if not already present, before any `cuda-toolkit-*` install
-  is attempted. Idempotent, best-effort — a detection or network failure
-  logs a warning and lets the existing fallback (skip SageAttention, H3
-  stays functional without it) take over exactly as before, never blocking.
-  Called from both `install_sageattention()` and
-  `bake_sageattention_best_guess()`.
-- `update.sh` was missing `source lib/system.sh` entirely despite calling
-  `install_sageattention()` — would have failed with "command not found"
-  the first time that code path was reached after this fix. Added.
-
-### 🐛 Fix: `setup_python_venv()` upgraded setuptools past what an already-installed torch requires
-
-- Confirmed in practice: on a pod where `install.sh` runs again with torch
-  already installed, `setup_python_venv()` unconditionally upgraded
-  `setuptools` to the latest version, which pip then flagged as
-  incompatible with torch's own declared constraint (`setuptools<82`) —
-  displayed as a scary-looking `ERROR:` line. Harmless in practice (a later
-  step reinstalling ComfyUI's `requirements.txt`, which depends on torch,
-  always brought setuptools back down to a compatible version), but
-  confusing.
-- `setup_python_venv()` now checks whether torch is already importable in
-  the venv; if so, it reads torch's actual `setuptools` requirement from its
-  own package metadata (same dynamic-constraint technique already used for
-  Triton in `install_sageattention()`) and installs exactly that, instead of
-  blindly upgrading to latest. No behavior change on a first install (no
-  torch yet) — the ERROR line just doesn't happen anymore on repeat runs.
-
-### 🐛 Fix: `wizard.sh` runs unprotected against a RunPod web terminal disconnect
-
-- Confirmed in practice: `wizard.sh` called `install.sh` as a direct child
-  of the shell that started it, with no tmux involved (tmux only appeared
-  at the very end, for `launch.sh --tmux`). RunPod's web terminal can
-  disconnect during a long-running step — most likely during the longest
-  one, the PyTorch `PREFER_CUDA130` fallback download (cu130 attempt, then
-  a second full download of the compatible build). When that happened,
-  `install.sh` died with the terminal (SIGHUP), which looked like a crash
-  tied to the fallback logic itself but wasn't — the fallback logic is
-  correct; the run just had nothing left protecting it from the
-  disconnect.
-- `wizard.sh` now self-wraps in tmux: on start, if it isn't already
-  running inside tmux, it relaunches itself inside a new `minimax-install`
-  session (deliberately a different session than the `minimax` one
-  `launch.sh --tmux` uses for ComfyUI) and attaches you to it, before
-  asking any question. `bash wizard.sh` stays the only command needed —
-  nothing to remember to type differently. See `TMUX.md`.
-- Same gap still exists in `bootstrap.sh`'s own direct call to
-  `install.sh`/`update.sh` (only its final `launch.sh --tmux` step is
-  protected) — not addressed here; see `TMUX.md` for a manual workaround
-  if using `bootstrap.sh` directly.
+- New `--personal` flag on `install_lora.sh`, usable with install, `--list`,
+  and `--remove`: targets `models/loras/personal/` instead of
+  `models/loras/` — the only folder `lib/personal_storage.sh` actually backs
+  up to your HF vault. Without it, behavior is unchanged (installs into
+  `models/loras/`, same folder as the official Turbo LoRA, never
+  auto-backed-up). Fixes the gap where a LoRA installed via
+  `install_lora.sh` had no way to end up somewhere `sync_push.sh` would
+  pick it up.
+- `lib/personal_storage.sh`: `sync_personal_storage_push()`'s `hf upload`
+  calls now short-circuit immediately on a 403 (permission-denied) response
+  instead of exhausting all retries — a read-only `HF_TOKEN` can never
+  succeed by retrying, so failing fast (with a message pointing at
+  https://huggingface.co/settings/tokens) avoids wasting ~25s per upload
+  and skips the remaining uploads too (same token, same repo — they'd fail
+  identically).
 
 ### 🐛 Fix: switching PyTorch builds (`PREFER_CUDA130` fallback) could corrupt `sympy`/`triton` metadata
 

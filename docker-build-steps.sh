@@ -63,16 +63,6 @@ install_extra_requirements
 # du pod obtenu supporte déjà ce build.
 bake_pytorch_best_guess
 
-# Pré-compile SageAttention contre ce même torch "meilleur pari" (voir
-# lib/python.sh::bake_sageattention_best_guess pour le détail complet du
-# raisonnement) : DOIT rester après bake_pytorch_best_guess ci-dessus (lit
-# torch.version.cuda). Comme pour PyTorch, install_sageattention() au
-# démarrage du conteneur vérifie et recompile si besoin — jamais de pod
-# cassé si ce pari ne correspond pas au driver réellement obtenu.
-# SAGEATTENTION_BAKE_IN_IMAGE=false (config.env) pour désactiver et gagner
-# 10-20 min sur chaque build d'image.
-bake_sageattention_best_guess
-
 install_or_update_manager
 install_optional_nodes
 create_model_folders

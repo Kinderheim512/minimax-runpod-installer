@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
 # install_lora.sh — gestionnaire de LoRA pour ComfyUI (MiniMax H3).
 #
-# Installe un LoRA depuis une URL directe dans models/loras/, liste les LoRA
-# déjà installés, ou en supprime un. Sources officiellement supportées :
+# Installe un LoRA depuis une URL directe dans models/loras/ (ou
+# models/loras/personal/ avec --personal), liste les LoRA déjà installés,
+# ou en supprime un. Sources officiellement supportées :
 #   - Hugging Face  (ex: https://huggingface.co/.../resolve/main/mylora.safetensors)
 #   - CivitAI       (https://civitai.com/... et https://civitai.red/...)
 #   - toute URL directe pointant vers un fichier .safetensors
 # Aucune authentification n'est requise pour les dépôts/LoRA publics sur ces
 # trois sources.
+#
+# --personal :
+#   Installe (ou liste/supprime) dans models/loras/personal/ au lieu de
+#   models/loras/ — ce sous-dossier est le SEUL que lib/personal_storage.sh
+#   sauvegarde automatiquement vers votre coffre HF perso (voir
+#   PERSONAL_STORAGE_HF_REPO, config.env, et sync_push.sh). Sans ce flag,
+#   comportement historique inchangé : installation dans models/loras/ (là
+#   où atterrit aussi le Turbo LoRA officiel MiniMax H3), jamais sauvegardé
+#   automatiquement. ComfyUI scanne les deux dossiers de la même façon
+#   (récursif) : un LoRA dans models/loras/personal/ reste normalement
+#   sélectionnable dans l'interface, où qu'il soit.
 #
 # Authentification CivitAI (optionnelle) :
 #   Si la variable d'environnement CIVITAI_API_KEY est définie et non vide,
@@ -20,16 +32,19 @@
 #
 # Usage :
 #   ./install_lora.sh <URL>                    installe (ou saute si déjà présent)
+#   ./install_lora.sh --personal <URL>          installe dans models/loras/personal/ (sauvegardé par sync_push.sh)
 #   ./install_lora.sh --force <URL>             réinstalle même si déjà présent
 #   ./install_lora.sh --filename <nom> <URL>    force un nom local explicite
 #   ./install_lora.sh --list                    liste les LoRA installés (avec taille)
+#   ./install_lora.sh --list --personal         idem, mais dans models/loras/personal/ uniquement
 #   ./install_lora.sh --remove <fichier>        supprime un LoRA (confirmation demandée)
+#   ./install_lora.sh --remove --personal <fichier>  idem, dans models/loras/personal/
 #   ./install_lora.sh --help                    aide détaillée
 #
 # Exemples :
 #   bash install_lora.sh https://huggingface.co/username/repo/resolve/main/mylora.safetensors
-#   bash install_lora.sh https://civitai.com/api/download/models/123456
-#   bash install_lora.sh https://civitai.red/api/download/models/3193337?fileId=3074134
+#   bash install_lora.sh --personal https://civitai.com/api/download/models/123456
+#   bash install_lora.sh --personal https://civitai.red/api/download/models/3193337?fileId=3074134
 #   bash install_lora.sh --force https://civitai.com/api/download/models/123456
 #   bash install_lora.sh --filename my_turbo_lora.safetensors https://civitai.com/api/download/models/123456
 #   bash install_lora.sh --list
@@ -37,22 +52,25 @@
 #   CIVITAI_API_KEY=xxxxx bash install_lora.sh https://civitai.com/api/download/models/123456
 #
 # --filename <nom> :
-#   Impose le nom du fichier local dans models/loras/, quelle que soit
-#   l'URL fournie (extension .safetensors garantie automatiquement si
-#   absente). Sans ce flag, comportement historique inchangé : nom déduit
-#   de l'URL directe, ou de l'en-tête Content-Disposition pour CivitAI. Un
-#   nom explicite évite aussi une requête réseau superflue (curl -I) rien
-#   que pour déterminer le nom quand il est déjà connu à l'avance.
+#   Impose le nom du fichier local dans le dossier cible (models/loras/ ou
+#   models/loras/personal/ selon --personal), quelle que soit l'URL fournie
+#   (extension .safetensors garantie automatiquement si absente). Sans ce
+#   flag, comportement historique inchangé : nom déduit de l'URL directe, ou
+#   de l'en-tête Content-Disposition pour CivitAI. Un nom explicite évite
+#   aussi une requête réseau superflue (curl -I) rien que pour déterminer le
+#   nom quand il est déjà connu à l'avance.
 #
 # Script utilitaire additionnel : il ne modifie ni config.env, ni install.sh,
-# ni le flux d'installation existant (lib/*.sh non touchés). Il n'a besoin
-# d'aucun outil/SDK Hugging Face (pas de `hf`/`huggingface-cli`, pas de
-# token) — uniquement curl (et python3, en option, pour décoder les URL),
-# y compris pour les LoRA hébergés sur huggingface.co : un simple lien
-# `resolve/main/...` est un fichier statique téléchargeable via curl, au
-# même titre qu'un lien CivitAI ou tout autre lien .safetensors direct. La
-# commande historique `bash install_lora.sh <URL>` continue de fonctionner
-# exactement comme avant.
+# ni le flux d'installation existant (lib/*.sh non touchés, y compris
+# lib/personal_storage.sh — --personal se contente d'écrire dans le dossier
+# que cette dernière sait déjà lire). Il n'a besoin d'aucun outil/SDK
+# Hugging Face (pas de `hf`/`huggingface-cli`, pas de token) — uniquement
+# curl (et python3, en option, pour décoder les URL), y compris pour les
+# LoRA hébergés sur huggingface.co : un simple lien `resolve/main/...` est
+# un fichier statique téléchargeable via curl, au même titre qu'un lien
+# CivitAI ou tout autre lien .safetensors direct. La commande historique
+# `bash install_lora.sh <URL>` continue de fonctionner exactement comme
+# avant.
 
 set -Eeuo pipefail
 
@@ -75,6 +93,9 @@ fi
 
 INSTALL_DIR="${INSTALL_DIR:-/workspace/ComfyUI}"
 LORA_DIR="${INSTALL_DIR}/models/loras"
+# Même sous-dossier que lib/personal_storage.sh::PERSONAL_STORAGE_LORAS_DIR()
+# — ne pas diverger de ce chemin, c'est ce que sync_push.sh sauvegarde.
+PERSONAL_LORA_DIR="${LORA_DIR}/personal"
 DOWNLOAD_MAX_RETRIES="${DOWNLOAD_MAX_RETRIES:-5}"
 
 usage() {
@@ -84,11 +105,20 @@ Usage : $0 [OPTIONS] <URL>
 Gestionnaire de LoRA pour ComfyUI — installe, liste ou supprime les LoRA
 présents dans :
   ${LORA_DIR}
+  ${PERSONAL_LORA_DIR}  (avec --personal)
 
 Sources supportées (aucune authentification requise pour du contenu public) :
   - Hugging Face : lien direct .../resolve/main/fichier.safetensors
   - CivitAI      : civitai.com et civitai.red
   - toute URL directe pointant vers un fichier .safetensors
+
+--personal :
+  Installe (ou liste/supprime) dans ${PERSONAL_LORA_DIR}
+  au lieu de ${LORA_DIR} — c'est le SEUL sous-dossier
+  sauvegardé automatiquement vers votre coffre HF perso (voir
+  PERSONAL_STORAGE_HF_REPO dans config.env, et sync_push.sh). Utilisez ce
+  flag pour tout LoRA que vous voulez retrouver sur votre prochain pod sans
+  le retélécharger. Combinable avec --force, --filename, --list, --remove.
 
 Authentification CivitAI (optionnelle) :
   Si la variable d'environnement CIVITAI_API_KEY est définie, elle est
@@ -109,6 +139,14 @@ Installation :
         $0 https://civitai.com/api/download/models/123456
         $0 https://civitai.red/api/download/models/3193337?fileId=3074134
 
+  $0 --personal <URL>
+      Installe dans ${PERSONAL_LORA_DIR} — sauvegardé
+      automatiquement par sync_push.sh / au prochain "update.sh" (voir
+      PERSONAL_STORAGE_HF_REPO, config.env).
+
+      Exemple :
+        $0 --personal https://civitai.com/api/download/models/123456
+
   $0 --force <URL>
       Force le retéléchargement même si le LoRA est déjà installé.
 
@@ -116,29 +154,32 @@ Installation :
         $0 --force https://civitai.com/api/download/models/123456
 
   $0 --filename <nom.safetensors> <URL>
-      Impose le nom local du fichier dans ${LORA_DIR}, au lieu du nom
+      Impose le nom local du fichier dans le dossier cible, au lieu du nom
       déduit de l'URL / de l'en-tête Content-Disposition. Combinable avec
-      --force. L'extension .safetensors est garantie même si omise.
+      --force et --personal. L'extension .safetensors est garantie même si
+      omise.
 
       Exemple :
         $0 --filename my_turbo_lora.safetensors https://civitai.com/api/download/models/123456
 
 Consultation :
-  $0 --list
-      Affiche tous les LoRA installés, numérotés, avec la taille de chacun
-      (MB, ou GB au-delà de 1 Go) ainsi que le nombre total et la taille
-      totale.
+  $0 --list [--personal]
+      Affiche tous les LoRA installés dans le dossier concerné, numérotés,
+      avec la taille de chacun (MB, ou GB au-delà de 1 Go) ainsi que le
+      nombre total et la taille totale.
 
-      Exemple :
+      Exemples :
         $0 --list
+        $0 --list --personal
 
 Suppression :
-  $0 --remove <fichier.safetensors>
-      Supprime un LoRA précis (confirmation demandée). Ne supprime jamais
-      le dossier models/loras/ lui-même, uniquement le fichier indiqué.
+  $0 --remove [--personal] <fichier.safetensors>
+      Supprime un LoRA précis du dossier concerné (confirmation demandée).
+      Ne supprime jamais le dossier lui-même, uniquement le fichier indiqué.
 
-      Exemple :
+      Exemples :
         $0 --remove anime_style.safetensors
+        $0 --remove --personal H3-GalaxyAce.safetensors
 
 Autres :
   -h, --help
@@ -154,9 +195,10 @@ check_comfyui_installed() {
 }
 
 create_lora_folder() {
-  if [[ ! -d "$LORA_DIR" ]]; then
-    log_info "Création du dossier ${LORA_DIR}"
-    mkdir -p "$LORA_DIR"
+  local dir="$1"
+  if [[ ! -d "$dir" ]]; then
+    log_info "Création du dossier ${dir}"
+    mkdir -p "$dir"
   fi
 }
 
@@ -348,22 +390,23 @@ format_size() {
   }'
 }
 
-# list_loras
-# Affiche tous les fichiers .safetensors présents dans models/loras/, numérotés,
+# list_loras <dossier>
+# Affiche tous les fichiers .safetensors présents dans <dossier>, numérotés,
 # avec leur taille individuelle ainsi que le nombre total et la taille totale.
 # Ne touche à rien, lecture seule.
 list_loras() {
-  create_lora_folder
+  local dir="$1"
+  create_lora_folder "$dir"
 
   local files=()
   while IFS= read -r -d '' f; do
     files+=("$f")
-  done < <(find "$LORA_DIR" -maxdepth 1 -type f -name '*.safetensors' -print0 | sort -z)
+  done < <(find "$dir" -maxdepth 1 -type f -name '*.safetensors' -print0 | sort -z)
 
-  echo "Installed LoRAs"
+  echo "Installed LoRAs (${dir})"
 
   if [[ ${#files[@]} -eq 0 ]]; then
-    echo "  (aucun LoRA installé dans ${LORA_DIR})"
+    echo "  (aucun LoRA installé dans ${dir})"
     return 0
   fi
 
@@ -383,13 +426,13 @@ list_loras() {
   printf "Total Size  : %s\n" "$(format_size "$total_bytes")"
 }
 
-# remove_lora <fichier>
-# Supprime UNIQUEMENT le fichier indiqué dans models/loras/, après
-# confirmation interactive. Ne supprime jamais le dossier lui-même, et
-# rejette tout nom contenant un séparateur de chemin (protection contre une
-# tentative de sortir de models/loras/).
+# remove_lora <dossier> <fichier>
+# Supprime UNIQUEMENT le fichier indiqué dans <dossier>, après confirmation
+# interactive. Ne supprime jamais le dossier lui-même, et rejette tout nom
+# contenant un séparateur de chemin (protection contre une tentative de
+# sortir du dossier).
 remove_lora() {
-  local requested="$1"
+  local dir="$1" requested="$2"
 
   if [[ "$requested" == */* ]]; then
     log_error "Nom de fichier invalide : ${requested} (indiquez uniquement le nom du fichier, sans chemin)."
@@ -397,10 +440,10 @@ remove_lora() {
   fi
 
   local filename; filename="$(basename -- "$requested")"
-  local target="${LORA_DIR}/${filename}"
+  local target="${dir}/${filename}"
 
   if [[ ! -f "$target" ]]; then
-    log_error "LoRA introuvable : ${filename} (recherché dans ${LORA_DIR})"
+    log_error "LoRA introuvable : ${filename} (recherché dans ${dir})"
     exit 1
   fi
 
@@ -427,14 +470,14 @@ print_banner() {
 }
 
 install_lora() {
-  local url="$1" force="$2" filename_override="${3:-}"
+  local url="$1" force="$2" filename_override="${3:-}" dir="$4"
 
   check_comfyui_installed
-  create_lora_folder
+  create_lora_folder "$dir"
 
   local filename dest_file
   filename="$(determine_lora_filename "$url" "$filename_override")"
-  dest_file="${LORA_DIR}/${filename}"
+  dest_file="${dir}/${filename}"
 
   if [[ -n "$filename_override" ]]; then
     log_info "Nom de fichier imposé (--filename) : ${filename}"
@@ -486,6 +529,7 @@ install_lora() {
 main() {
   local action="install"
   local force="false"
+  local personal="false"
   local remove_target=""
   local filename_override=""
   local positional=()
@@ -515,6 +559,10 @@ main() {
         force="true"
         shift
         ;;
+      --personal)
+        personal="true"
+        shift
+        ;;
       --filename)
         shift
         if [[ $# -lt 1 ]]; then
@@ -537,12 +585,15 @@ main() {
     esac
   done
 
+  local target_dir="$LORA_DIR"
+  [[ "$personal" == "true" ]] && target_dir="$PERSONAL_LORA_DIR"
+
   case "$action" in
     list)
-      list_loras
+      list_loras "$target_dir"
       ;;
     remove)
-      remove_lora "$remove_target"
+      remove_lora "$target_dir" "$remove_target"
       ;;
     install)
       if [[ ${#positional[@]} -ne 1 ]]; then
@@ -558,7 +609,10 @@ main() {
       fi
 
       print_banner
-      install_lora "$lora_url" "$force" "$filename_override"
+      install_lora "$lora_url" "$force" "$filename_override" "$target_dir"
+      if [[ "$personal" == "true" ]]; then
+        log_info "Installé dans le dossier perso — sera sauvegardé par 'bash sync_push.sh' (si PERSONAL_STORAGE_HF_REPO est configuré, voir config.env)."
+      fi
       ;;
   esac
 }
