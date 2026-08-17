@@ -282,11 +282,22 @@ install_preset_symlinks() {
 }
 
 # install_preset_workflows <presets_csv>
-# Copie le workflow ComfyUI associé à chaque preset actif (H3_PRESET_WORKFLOWS,
-# config.env) dans ${INSTALL_DIR}/user/default/workflows — jamais via
-# install_workflows() (lib/workflows.sh), dont la ré-écriture de noms de
-# fichier par palier (_patch_workflow_tier_filenames) ne doit jamais
+# Installe le workflow ComfyUI associé à chaque preset actif
+# (H3_PRESET_WORKFLOWS, config.env) dans ${INSTALL_DIR}/user/default/workflows
+# — jamais via install_workflows() (lib/workflows.sh), dont la ré-écriture de
+# noms de fichier par palier (_patch_workflow_tier_filenames) ne doit jamais
 # s'appliquer aux noms de fichiers figés d'un preset.
+#
+# Pour un preset déclarant une URL dans H3_PRESET_WORKFLOW_CIVITAI_URLS
+# (config.env, optionnel) : le workflow est d'abord téléchargé directement
+# depuis CivitAI, TOUJOURS en priorité sur la copie locale — l'auteur tiers
+# du template (ex. darksidewalker pour dasiwa_mmh3v12) le met à jour
+# régulièrement, et la copie versionnée dans presets/<nom>/ deviendrait sinon
+# obsolète à chaque mise à jour amont. En cas d'échec (réseau, CivitAI
+# indisponible, contenu invalide) : repli silencieux sur la copie locale
+# bundlée (comportement historique) — jamais d'échec bloquant pour ce seul
+# détail. Un preset sans URL déclarée ici garde exactement l'ancien
+# comportement (copie locale uniquement).
 install_preset_workflows() {
   local presets_csv="$1"
   [[ -z "$presets_csv" ]] && return 0
@@ -297,7 +308,7 @@ install_preset_workflows() {
   local -a names=()
   IFS=',' read -ra names <<< "$presets_csv"
 
-  local name rel src target
+  local name rel src target civitai_url
   for name in "${names[@]}"; do
     [[ -z "$name" ]] && continue
     rel="${H3_PRESET_WORKFLOWS[$name]:-}"
@@ -305,17 +316,83 @@ install_preset_workflows() {
       log_warn "Preset '${name}' : aucun workflow associé (H3_PRESET_WORKFLOWS) — modèles installés, mais pas de workflow prêt à l'emploi."
       continue
     fi
+    target="${dest}/$(basename "$rel")"
+
+    civitai_url="${H3_PRESET_WORKFLOW_CIVITAI_URLS[$name]:-}"
+    if [[ -n "$civitai_url" ]]; then
+      log_step "Preset '${name}' — récupération de la dernière version du workflow sur CivitAI"
+      if _download_preset_workflow_from_civitai "$civitai_url" "$target"; then
+        log_ok "Workflow du preset '${name}' téléchargé depuis CivitAI (dernière version) : $(basename "$rel")."
+        continue
+      fi
+      log_warn "Preset '${name}' : téléchargement CivitAI du workflow échoué, repli sur la copie locale bundlée."
+    fi
+
     src="${PROJECT_ROOT}/${rel}"
     if [[ ! -f "$src" ]]; then
       log_warn "Preset '${name}' : workflow introuvable (${src}) — modèles installés, mais workflow non copié."
       continue
     fi
-    target="${dest}/$(basename "$rel")"
     cp -f "$src" "$target"
     if [[ -f "$target" ]]; then
-      log_ok "Workflow du preset '${name}' installé : $(basename "$rel")."
+      log_ok "Workflow du preset '${name}' installé (copie locale) : $(basename "$rel")."
     else
       log_warn "Échec de copie du workflow du preset '${name}' (${src} -> ${target})."
     fi
   done
+}
+
+# _download_preset_workflow_from_civitai <url> <dest_file>
+# Télécharge un workflow ComfyUI (fichier .json) depuis une URL de
+# téléchargement direct CivitAI ("civitai.com/api/download/models/..." ou
+# "civitai.red/..."), avec la même authentification optionnelle que
+# install_lora.sh (CIVITAI_API_KEY, en-tête "Authorization: Bearer ..." —
+# jamais requise pour un fichier public) et une vérification de contenu :
+# écriture dans un fichier temporaire, validé (JSON syntaxiquement correct,
+# jamais une page d'erreur HTML déguisée) avant de ne remplacer <dest_file>
+# qu'à ce moment-là — pour ne jamais laisser un workflow fonctionnel
+# préexistant dans un état cassé suite à un téléchargement raté ou une
+# réponse invalide (connexion CivitAI requise, 404, erreur Cloudflare...).
+# Retourne 0 en cas de succès, 1 sinon. Usage exclusivement en repli non
+# bloquant, voir install_preset_workflows() ci-dessus.
+_download_preset_workflow_from_civitai() {
+  local url="$1" dest_file="$2"
+  local tmp_file; tmp_file="$(mktemp "${dest_file}.XXXXXX")"
+
+  local -a auth_args=()
+  [[ -n "${CIVITAI_API_KEY:-}" ]] && auth_args=(-H "Authorization: Bearer ${CIVITAI_API_KEY}")
+
+  local http_code
+  http_code="$(curl -sS -L --retry 3 --retry-delay 3 "${auth_args[@]}" -o "$tmp_file" -w '%{http_code}' "$url" 2>/dev/null || true)"
+
+  if [[ ! "$http_code" =~ ^2 ]] || [[ ! -s "$tmp_file" ]]; then
+    log_warn "CivitAI : échec du téléchargement du workflow (code HTTP : ${http_code:-inconnu})."
+    rm -f -- "$tmp_file" 2>/dev/null || true
+    return 1
+  fi
+
+  if ! _is_valid_workflow_json "$tmp_file"; then
+    log_warn "CivitAI : contenu reçu invalide (pas un JSON de workflow exploitable)."
+    rm -f -- "$tmp_file" 2>/dev/null || true
+    return 1
+  fi
+
+  mv -f -- "$tmp_file" "$dest_file"
+}
+
+# _is_valid_workflow_json <fichier>
+# Vérifie que <fichier> est un JSON syntaxiquement valide (python3, toujours
+# disponible sur ce projet — voir lib/python.sh) plutôt qu'une page d'erreur
+# HTML déguisée. Contrôle volontairement minimal : aucune vérification de la
+# structure interne du workflow (nœuds attendus, etc.), CivitAI n'exposant
+# aucune garantie de schéma au-delà de "c'est un fichier JSON".
+_is_valid_workflow_json() {
+  local file="$1"
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$file" >/dev/null 2>&1
+    return $?
+  fi
+  # Repli sans python3 (ne devrait pas arriver sur ce projet) : au moins
+  # écarter une page HTML évidente.
+  ! head -c 512 -- "$file" 2>/dev/null | grep -qi '<!doctype html\|<html[ >]'
 }

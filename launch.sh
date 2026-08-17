@@ -9,7 +9,12 @@
 #                              simplement si elle existe déjà. Ne duplique
 #                              jamais la logique de lancement ci-dessous : le
 #                              mode tmux ne fait qu'appeler ce même script à
-#                              l'intérieur de la session.
+#                              l'intérieur de la session. Si ce script tourne
+#                              déjà DANS une session tmux (quelle qu'elle
+#                              soit — ex: wizard.sh lancé à la main dans une
+#                              session tmux existante), --tmux ne crée/attache
+#                              rien : ComfyUI est lancé directement dans le
+#                              pane courant (voir launch_in_tmux()).
 
 set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -128,6 +133,27 @@ launch_in_tmux() {
   if ! command -v tmux >/dev/null 2>&1; then
     echo "[ERREUR] tmux est introuvable (il devrait pourtant être installé automatiquement)." >&2
     exit 1
+  fi
+
+  # DÉJÀ DANS TMUX — si ce script (via wizard.sh --tmux) tourne alors qu'on
+  # est déjà à l'intérieur d'une session tmux (peu importe son nom), inutile
+  # d'en créer/attacher une autre : on est déjà protégé contre une
+  # déconnexion SSH. Sans ce court-circuit, si CETTE session courante
+  # s'appelle justement "$TMUX_SESSION_NAME" (ex: l'utilisateur a lui-même
+  # créé/attaché une session "minimax" puis y a lancé wizard.sh dedans),
+  # "tmux has-session -t minimax" ci-dessous renvoie "vrai" à tort — non pas
+  # parce qu'une instance précédente y fait déjà tourner ComfyUI, mais parce
+  # que c'est NOTRE PROPRE session courante. Le script partait alors dans la
+  # branche "déjà existante" -> attach_tmux_if_interactive() ->
+  # "tmux switch-client" vers cette même session (no-op) -> exit immédiat,
+  # SANS JAMAIS atteindre le lancement réel de ComfyUI plus bas dans ce
+  # fichier. On retourne simplement ici : le flux retombe dans le corps
+  # principal du script (après le bloc "--tmux" ci-dessous), qui lance
+  # ComfyUI au premier plan dans le pane courant — exactement ce qu'il faut
+  # puisqu'on est déjà dans tmux.
+  if [[ -n "${TMUX:-}" ]]; then
+    echo "[INFO] Déjà dans une session tmux — lancement de ComfyUI directement ici (pas de session imbriquée)."
+    return 0
   fi
 
   if tmux has-session -t "$TMUX_SESSION_NAME" 2>/dev/null; then

@@ -35,6 +35,16 @@ FROM ubuntu:22.04
 # Pas de prompts apt interactifs pendant le build.
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Locale UTF-8 — sans ça, les caractères accentués (français, dans tous les
+# logs de ce projet) s'affichent corrompus dans le terminal (un "_" à la
+# place de chaque caractère type é/à/ç), y compris à l'intérieur d'une
+# session tmux : Ubuntu ne configure aucune locale par défaut dans une image
+# minimale. C.UTF-8 est toujours disponible sans paquet supplémentaire
+# (contrairement à en_US.UTF-8, qui demanderait `locale-gen` + le paquet
+# `locales`) — inutile d'alourdir l'image pour ça.
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
 # INSTALL_DIR dédié à l'image (différent du défaut /workspace/ComfyUI utilisé
 # par install.sh sur pod nu) : sur RunPod, un Network Volume attaché est
 # monté sur /workspace et EN ÉCRASERAIT le contenu pré-installé par cette
