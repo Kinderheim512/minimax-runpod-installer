@@ -468,6 +468,8 @@ PYEOF
 
     log_info "Compilation de SageAttention dans l'image pour CUDA ${torch_cuda_norm}, architectures ${SAGEATTENTION_ARCH_LIST} (TORCH_CUDA_ARCH_LIST explicite — aucun GPU visible pendant le build, cf. SAGEATTENTION_ARCH_LIST dans config.env). Peut prendre 10-20 min."
     local build_rc=0
+    # shellcheck disable=SC2030,SC2031  # export scopé au sous-shell : voulu,
+    # pas une fuite de portée accidentelle (jamais exporté au shell appelant).
     (
         cd "$SAGEATTENTION_CACHE_DIR" || exit 1
         export CUDA_HOME="$matched_cuda_home"
@@ -908,6 +910,8 @@ PYEOF
   # errexit — ici une simple affectation, qui ne peut pas échouer).
   log_info "Compilation de SageAttention (10-20 min selon le pod, MAX_JOBS=${SAGEATTENTION_BUILD_JOBS})..."
   local build_rc=0
+  # shellcheck disable=SC2030,SC2031  # export scopé au sous-shell : voulu,
+  # pas une fuite de portée accidentelle (jamais exporté au shell appelant).
   (
     cd "$SAGEATTENTION_CACHE_DIR" || exit 1
     # CUDA_HOME/PATH scopés à ce sous-shell de compilation uniquement (donc
