@@ -26,11 +26,25 @@ pick up exactly where you left off.
   fresh `bash bootstrap.sh` always ends with ComfyUI running inside a
   persistent tmux session named `minimax`, not in the foreground of your
   current shell.
-- `install.sh` itself does **not** start tmux — only `launch.sh --tmux`
-  (and therefore `bootstrap.sh`, and menu option 6) does. If you call
-  `install.sh` directly and it happens to run long enough that your
-  terminal disconnects, see [Protecting `install.sh` manually](#protecting-installsh-manually)
-  below.
+- `install.sh` itself does **not** start tmux. `launch.sh --tmux` (and
+  therefore `launch.sh --tmux` at the end of `bootstrap.sh`, and menu
+  option 6) does. If you call `install.sh` directly and it happens to run
+  long enough that your terminal disconnects, see
+  [Protecting `install.sh` manually](#protecting-installsh-manually) below.
+- `wizard.sh` **does** self-wrap in tmux (session `minimax-install`,
+  deliberately separate from the `minimax` session `launch.sh --tmux`
+  uses for ComfyUI): as soon as it starts, if it isn't already running
+  inside tmux, it re-launches itself inside a new `minimax-install`
+  session and attaches you to it — before asking any of its interactive
+  questions. This protects the whole wizard + `install.sh` flow (models,
+  the PyTorch cu130 -> compatible-build fallback, SageAttention
+  compilation...) against a RunPod web terminal disconnect. `bash
+  wizard.sh` remains the only command you need to run either way.
+  `bootstrap.sh` does **not** have this same protection yet for its own
+  direct call to `install.sh`/`update.sh` — only its final `launch.sh
+  --tmux` step is covered. If you use `bootstrap.sh` directly (not
+  through `wizard.sh`) and want the install phase itself protected too,
+  wrap it manually the same way as described just below.
 - Using tmux at all remains optional: `bash launch.sh` (no flag) still
   launches ComfyUI directly in the foreground, exactly as before.
 

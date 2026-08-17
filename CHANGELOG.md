@@ -10,6 +10,29 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🐛 Fix: `wizard.sh` runs unprotected against a RunPod web terminal disconnect
+
+- Confirmed in practice: `wizard.sh` called `install.sh` as a direct child
+  of the shell that started it, with no tmux involved (tmux only appeared
+  at the very end, for `launch.sh --tmux`). RunPod's web terminal can
+  disconnect during a long-running step — most likely during the longest
+  one, the PyTorch `PREFER_CUDA130` fallback download (cu130 attempt, then
+  a second full download of the compatible build). When that happened,
+  `install.sh` died with the terminal (SIGHUP), which looked like a crash
+  tied to the fallback logic itself but wasn't — the fallback logic is
+  correct; the run just had nothing left protecting it from the
+  disconnect.
+- `wizard.sh` now self-wraps in tmux: on start, if it isn't already
+  running inside tmux, it relaunches itself inside a new `minimax-install`
+  session (deliberately a different session than the `minimax` one
+  `launch.sh --tmux` uses for ComfyUI) and attaches you to it, before
+  asking any question. `bash wizard.sh` stays the only command needed —
+  nothing to remember to type differently. See `TMUX.md`.
+- Same gap still exists in `bootstrap.sh`'s own direct call to
+  `install.sh`/`update.sh` (only its final `launch.sh --tmux` step is
+  protected) — not addressed here; see `TMUX.md` for a manual workaround
+  if using `bootstrap.sh` directly.
+
 ### 🐛 Fix: switching PyTorch builds (`PREFER_CUDA130` fallback) could corrupt `sympy`/`triton` metadata
 
 - Confirmed in practice: when `install_pytorch()` falls back from cu130 to

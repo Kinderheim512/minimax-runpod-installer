@@ -14,6 +14,75 @@
 set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Protection tmux -------------------------------------------------------
+# install.sh peut prendre très longtemps (téléchargements de modèles,
+# repli PyTorch cu130 -> build compatible, compilation SageAttention...).
+# Le terminal web RunPod peut se déconnecter pendant ce temps (cf.
+# TMUX.md) ; sans protection, install.sh tourne comme processus enfant du
+# shell qui a lancé wizard.sh et meurt avec lui (SIGHUP) si ce terminal
+# disparaît — d'où des installations qui "plantent" systématiquement au
+# même endroit (la phase la plus longue) sans rapport avec la logique de
+# repli PyTorch elle-même, qui fonctionne correctement.
+#
+# Nom de session DÉLIBÉRÉMENT différent de "minimax" (utilisée par
+# launch.sh --tmux pour ComfyUI lui-même) : les deux sessions ont des
+# rôles différents et ne doivent jamais se marcher dessus — si "minimax"
+# tourne déjà (ComfyUI actif), ce wrapper ne doit pas s'y attacher à sa
+# place.
+WIZARD_TMUX_SESSION_NAME="minimax-install"
+
+_wizard_attach_tmux_if_interactive() {
+  # Même logique que attach_tmux_if_interactive() dans launch.sh (non
+  # factorisée entre les deux scripts : chacun reste autonome / lisible
+  # isolément, et la logique est courte).
+  #
+  # CAS IMBRIQUÉ : si ce script tourne déjà DANS un client tmux attaché à
+  # une AUTRE session (ex. le terminal web RunPod ouvre lui-même une
+  # session par défaut), un "tmux attach-session" classique refuse de
+  # s'imbriquer et échoue silencieusement à cause du "exec" -> on utilise
+  # "switch-client" à la place, qui change simplement la session affichée
+  # par le client tmux courant.
+  if [[ -n "${TMUX:-}" ]]; then
+    exec tmux switch-client -t "$WIZARD_TMUX_SESSION_NAME"
+  fi
+
+  if [[ -t 0 && -t 1 ]]; then
+    exec tmux attach-session -t "$WIZARD_TMUX_SESSION_NAME"
+  fi
+
+  # Pas de TTY (curl | bash, Start Command RunPod non interactif...) :
+  # wizard.sh a de toute façon besoin d'un terminal interactif pour ses
+  # questions (read -r -p) et échouerait plus loin — on laisse la session
+  # tourner en arrière-plan et on indique comment s'y rattacher, plutôt
+  # que de faire échouer un exec sans TTY.
+  echo "[INFO] Pas de terminal interactif détecté — la session tmux '${WIZARD_TMUX_SESSION_NAME}' continue de tourner en arrière-plan."
+  echo "[INFO] Pour vous y rattacher : tmux attach -t ${WIZARD_TMUX_SESSION_NAME}"
+  exit 0
+}
+
+# Ne se déclenche que si CE script n'est pas déjà celui qui tourne dans la
+# session (évite une boucle infinie : la session lance "bash wizard.sh",
+# qui ré-atteint ce bloc, voit $TMUX défini -> passe simplement à la
+# suite du script au lieu de re-créer une session).
+if [[ -z "${TMUX:-}" && "${WIZARD_SKIP_TMUX_WRAP:-false}" != "true" ]]; then
+  if command -v tmux >/dev/null 2>&1; then
+    if tmux has-session -t "$WIZARD_TMUX_SESSION_NAME" 2>/dev/null; then
+      echo "[INFO] Session tmux '${WIZARD_TMUX_SESSION_NAME}' déjà existante — attache..."
+      _wizard_attach_tmux_if_interactive
+    fi
+    echo "[INFO] Lancement de l'assistant dans une session tmux ('${WIZARD_TMUX_SESSION_NAME}') pour survivre à une déconnexion du terminal RunPod..."
+    # WIZARD_SKIP_TMUX_WRAP=true : la session relance ce même script sans
+    # reboucler sur ce bloc (cf. condition ci-dessus). "$@" propage les
+    # éventuels arguments de cet appel de wizard.sh à celui qui tourne
+    # dans la session.
+    tmux new-session -d -s "$WIZARD_TMUX_SESSION_NAME" \
+      "WIZARD_SKIP_TMUX_WRAP=true bash \"${BASH_SOURCE[0]}\" $*; exec bash"
+    _wizard_attach_tmux_if_interactive
+  else
+    echo "[ATTENTION] tmux introuvable — l'assistant va tourner sans protection contre une déconnexion du terminal (il devrait pourtant être installé automatiquement, cf. lib/system.sh)."
+  fi
+fi
+
 ask_choice() {
   # ask_choice <titre> <var_résultat> <valeur_par_défaut> <option1> [option2...]
   # Chaque "optionN" est de la forme "valeur|description".
