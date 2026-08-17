@@ -58,7 +58,7 @@ ENV INSTALL_DIR=/opt/ComfyUI
 ENV PROJECT_ROOT=/opt/minimax-runpod-installer
 
 # PyTorch (build le plus récent connu, actuellement cu130) est pré-installé
-# dans cette image — voir docker-build-steps.sh::bake_pytorch_best_guess()
+# dans cette image — voir docker-build-steps-heavy.sh::bake_pytorch_best_guess()
 # pour le détail. PREFER_CUDA130=true active, par défaut UNIQUEMENT dans
 # cette image (jamais dans config.env, jamais pour install.sh/update.sh sur
 # pod nu), le mécanisme de vérification-avec-repli déjà en place
@@ -72,21 +72,45 @@ ENV PREFER_CUDA130=true
 
 WORKDIR ${PROJECT_ROOT}
 
-# Le repo entier est copié tel quel : docker-build-steps.sh a besoin de
-# config.env et de tout lib/*.sh (résolution de version ComfyUI, table
-# PyTorch pour référence future, listes de paquets/nœuds...) exactement comme
-# install.sh — voir le commentaire d'en-tête de docker-build-steps.sh sur le
-# principe "ne jamais dupliquer la logique existante".
-COPY . ${PROJECT_ROOT}
+# --- Étape 1/2 : fichiers dont dépendent les étapes COÛTEUSES uniquement ---
+# (apt, clone ComfyUI, venv/dépendances, PyTorch, wheel SageAttention — voir
+# docker-build-steps-heavy.sh pour le détail et le raisonnement complet du
+# découpage). Grâce au cache de layers Docker (content-based avec
+# Buildx/BuildKit, cf. .github/workflows/docker-build.yml), tant qu'aucun de
+# CES fichiers précis ne change, ce COPY et le RUN qui suit sont réutilisés
+# tels quels — même si le commit qui déclenche le build modifie n'importe
+# quel autre fichier du dépôt (README, docs, presets, workflows, ou même
+# lib/manager.sh / lib/nodes.sh / lib/models.sh). C'est le levier principal
+# pour ne pas repayer apt+CUDA+PyTorch+SageAttention (de loin les étapes les
+# plus longues) à chaque commit — voir aussi le filtre `paths-ignore` du
+# workflow, qui évite même de déclencher le build pour les commits qui ne
+# touchent à rien de pertinent pour l'image.
+COPY config.env requirements.txt docker-build-steps-heavy.sh ${PROJECT_ROOT}/
+COPY lib/utils.sh lib/system.sh lib/comfyui.sh lib/python.sh ${PROJECT_ROOT}/lib/
 
 # Conversion CRLF -> LF (même geste que install.sh en tout début d'exécution,
-# utile si l'image est construite depuis un clone Windows) + droits d'exec.
+# utile si l'image est construite depuis un clone Windows) + droits d'exec —
+# limité à ce qui vient d'être copié, pas au reste du dépôt (pas encore
+# présent à ce stade).
 RUN find "${PROJECT_ROOT}" -name "*.sh" -exec sed -i 's/\r$//' {} \; \
     && find "${PROJECT_ROOT}" -name "*.sh" -exec chmod +x {} \;
 
-# Étapes sans GPU (système, ComfyUI, venv, dépendances hors PyTorch, nœuds
-# custom) — voir docker-build-steps.sh, qui réutilise lib/*.sh à l'identique
-# de install.sh plutôt que de dupliquer la moindre commande git/pip ici.
-RUN ./docker-build-steps.sh
+RUN ./docker-build-steps-heavy.sh
+
+# --- Étape 2/2 : reste du dépôt, pour les étapes bon marché uniquement ----
+# docker-build-steps-light.sh a besoin du reste du dépôt (presets,
+# workflows, lib/manager.sh, lib/nodes.sh, lib/models.sh...) — voir le
+# commentaire d'en-tête de chaque docker-build-steps-*.sh sur le principe
+# "ne jamais dupliquer la logique existante". Ce second COPY invalide bien
+# le cache à partir d'ici à CHAQUE commit qui touche un seul de ces
+# fichiers (presets, workflows, README, lib/manager.sh...), mais ce qui
+# suit (docker-build-steps-light.sh) est volontairement rapide — c'est
+# l'étape 1/2 ci-dessus qui protège le gros du temps de build.
+COPY . ${PROJECT_ROOT}
+
+RUN find "${PROJECT_ROOT}" -name "*.sh" -exec sed -i 's/\r$//' {} \; \
+    && find "${PROJECT_ROOT}" -name "*.sh" -exec chmod +x {} \;
+
+RUN ./docker-build-steps-light.sh
 
 ENTRYPOINT ["/opt/minimax-runpod-installer/docker-entrypoint.sh"]

@@ -10,6 +10,53 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### ⚡ Docker image build: split into two layers so most commits stop re-running apt/CUDA/PyTorch/SageAttention
+
+- `docker-build-steps.sh` split into `docker-build-steps-heavy.sh` (system
+  packages, ComfyUI clone, venv/dependencies, PyTorch, SageAttention wheel —
+  the expensive steps) and `docker-build-steps-light.sh` (ComfyUI-Manager,
+  optional custom nodes, model folders — the cheap ones).
+- `Dockerfile` now `COPY`s only the files the heavy steps actually need
+  (`config.env`, `requirements.txt`, `docker-build-steps-heavy.sh`,
+  `lib/utils.sh`, `lib/system.sh`, `lib/comfyui.sh`, `lib/python.sh`)
+  *before* running them, then `COPY . .` (the rest of the repo) only before
+  the light steps. With Docker/Buildx's content-based layer cache, a commit
+  that doesn't touch any of those specific files — e.g. `lib/manager.sh`,
+  `lib/nodes.sh`, `lib/models.sh`, a preset, a workflow JSON, or the docs —
+  reuses the cached heavy layer entirely instead of repeating apt install,
+  CUDA toolkit setup, PyTorch download, and SageAttention compilation
+  (previously the single biggest chunk of build time, re-run on every push
+  regardless of what changed).
+- `.github/workflows/docker-build.yml`: added `paths-ignore` (`**/*.md`,
+  `docs/**`, `.github/workflows/ci.yml`) so doc-only commits don't trigger
+  the image build workflow at all, on top of the layer-cache fix above.
+- Every doc comment and file reference to the old single
+  `docker-build-steps.sh` (`README.md`, `TROUBLESHOOTING.md`,
+  `docker-entrypoint.sh`, `lib/python.sh`, `lib/personal_storage.sh`)
+  updated to point at the correct one of the two new scripts.
+
+### 🐛 Fix: SageAttention toolkit match required an exact CUDA minor version, blocking compilation entirely
+
+- `_sage_find_matching_nvcc()` (`lib/python.sh`) required the installed
+  `nvcc` to match `torch.version.cuda` down to the exact minor version
+  (e.g. `13.0`), not just the major branch. In practice, NVIDIA's apt repo
+  only keeps the latest minor of a CUDA major branch installable
+  (`cuda-toolkit-13-0` disappears once `13.1`/`13.2` ships; only
+  `cuda-toolkit-13` remains) — so this exact-match check started rejecting
+  every toolkit it found, silently skipping SageAttention both during the
+  Docker image build (`bake_sageattention_wheel()`) and at container
+  startup (`install_sageattention()`), with no wheel and no source-compiled
+  module ever installed.
+- Relaxed the check to compare only the CUDA major branch (NVIDIA
+  guarantees minor-version compatibility for compiling/running extensions
+  within the same major branch). The original regression this exact check
+  was meant to prevent (torch cu118 compiled against a 12.4 toolkit) was
+  actually a major-branch mismatch (11 vs 12), which this looser check
+  still catches and refuses.
+- `_sage_find_matching_nvcc()` now returns `path:actual_nvcc_version`
+  instead of just the path, so log messages report the real toolkit
+  version found instead of assuming it matches torch's exactly.
+
 ### ✨ `install_lora.sh --personal` — install LoRAs straight into the backed-up folder
 
 - New `--personal` flag on `install_lora.sh`, usable with install, `--list`,

@@ -481,7 +481,9 @@ just against a second, private repo you create yourself (a `dataset` repo,
 e.g. `<you>/minimax-runpod-perso`) that acts as a vault for:
 
 * `models/loras/personal/` — your own LoRAs (kept separate from the
-  official Turbo LoRA, which lands directly in `models/loras/`)
+  official Turbo LoRA, which lands directly in `models/loras/`). See
+  [Installing and managing LoRAs](#-installing-and-managing-loras) below —
+  a LoRA installed without `--personal` is **not** included here.
 * `presets/personal/` — your own presets (kept separate from the presets
   versioned in this repo)
 * `output/` — generated videos/images you want to keep
@@ -559,23 +561,47 @@ ntfy server instead of the public one: set `NTFY_SERVER` accordingly.
 ## 🎨 Installing and managing LoRAs
 
 ```bash
-bash install_lora.sh "https://..."                  # install (skips if already present)
-bash install_lora.sh --personal "https://..."       # install into models/loras/personal/ (backed up by sync_push.sh)
-bash install_lora.sh --force "https://..."          # reinstall
-bash install_lora.sh --list                         # list installed LoRAs with sizes
-bash install_lora.sh --remove some.safetensors
+bash install_lora.sh "https://..."                            # install (skips if already present)
+bash install_lora.sh --personal "https://..."                 # install into models/loras/personal/ (backed up by sync_push.sh)
+bash install_lora.sh --force "https://..."                    # reinstall even if already present
+bash install_lora.sh --filename my_lora.safetensors "https://..."   # force a local filename
+bash install_lora.sh --list                                   # list installed LoRAs with sizes
+bash install_lora.sh --list --personal                        # same, personal/ folder only
+bash install_lora.sh --remove some.safetensors                # delete one (asks for confirmation)
+bash install_lora.sh --remove --personal some.safetensors     # same, from personal/
+
+CIVITAI_API_KEY=xxxxx bash install_lora.sh "https://civitai.com/api/download/models/123456"
 ```
 
-Hugging Face, CivitAI (`civitai.com` / `civitai.red`), and any direct
-`.safetensors` URL are supported. No authentication is needed for public
-files; set `CIVITAI_API_KEY` for restricted CivitAI content. LoRAs land in
-`ComfyUI/models/loras/` by default — use `--personal` (combinable with
-`--force`, `--filename`, `--list`, `--remove`) to install into
-`ComfyUI/models/loras/personal/` instead, the only LoRA folder that gets
-backed up automatically (see
+Hugging Face (`.../resolve/main/....safetensors`), CivitAI (`civitai.com` /
+`civitai.red`), and any direct `.safetensors` URL are supported. No
+authentication is needed for public files; set `CIVITAI_API_KEY` (env var,
+or once in `config.env`) for restricted/gated CivitAI content.
+
+**Two destination folders, and it matters which one you use:**
+
+| Folder | How to target it | Backed up by `sync_push.sh`? |
+|---|---|---|
+| `ComfyUI/models/loras/` | default, no flag | ❌ **No** |
+| `ComfyUI/models/loras/personal/` | `--personal` | ✅ Yes |
+
+Both are scanned recursively by ComfyUI, so a LoRA works in the interface
+either way — the folder only decides whether it survives a pod
+termination. If you want a LoRA to still be there on your next pod without
+re-downloading it, you **must** use `--personal` at install time (or move
+the file into `models/loras/personal/` afterwards and re-run
+`bash sync_push.sh`). Forgetting `--personal` is the single most common
+reason a LoRA "disappears" after switching pods — it never left this pod's
+disk to begin with. As a safety net, every `bash sync_push.sh` (and every
+`update.sh` run) now warns you by name about any `.safetensors` sitting in
+`models/loras/` that won't be included in the backup, so you don't have to
+notice it's missing after the fact.
+
+See
 [Backing up your LoRAs/presets/outputs](#-backing-up-your-loraspresetsoutputs-without-depending-on-runpod)
-above). See [RECOMMENDED_LORAS.md](RECOMMENDED_LORAS.md) for a tested
-example (MiniMax H3 Turbo, 4-step sampling).
+above for how `PERSONAL_STORAGE_HF_REPO` is set up, and
+[RECOMMENDED_LORAS.md](RECOMMENDED_LORAS.md) for a tested example (MiniMax
+H3 Turbo, 4-step sampling).
 
 Run these from inside the project directory — if unsure where that is:
 
@@ -689,7 +715,8 @@ the installer only warns, it doesn't block on an unrecognized card.
 ├── config.env             # central configuration (paths, tiers, sources, ...)
 ├── requirements.txt       # project-level Python deps (on top of ComfyUI's own)
 ├── Dockerfile             # pre-installed Docker image (see Pre-installed Docker image above)
-├── docker-build-steps.sh  # build-time (no-GPU) provisioning for the Docker image
+├── docker-build-steps-heavy.sh  # build-time (no-GPU): apt/CUDA/ComfyUI clone/venv/deps/PyTorch/SageAttention wheel
+├── docker-build-steps-light.sh  # build-time (no-GPU): ComfyUI-Manager/custom nodes/model folders (split from the above for Docker layer caching)
 ├── docker-entrypoint.sh   # container entrypoint: installs PyTorch, then runs install.sh + launch.sh
 ├── lib/
 │   ├── utils.sh           # logging, error handling, step tracking, retries

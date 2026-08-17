@@ -301,7 +301,7 @@ sys.exit(0 if ok else 1)
 
 ################################################################################
 # bake_pytorch_best_guess() — UNIQUEMENT à la construction de l'image Docker
-# (docker-build-steps.sh), jamais appelée par install.sh/update.sh. Installe
+# (docker-build-steps-heavy.sh), jamais appelée par install.sh/update.sh. Installe
 # par avance le build PyTorch le plus récent connu de PYTORCH_BUILD_TABLE
 # (actuellement cu130) SANS connaître le GPU réel du pod (aucun GPU visible
 # à la construction de l'image) : un pari assumé, pas une détection —
@@ -339,7 +339,7 @@ bake_pytorch_best_guess() {
 
 ################################################################################
 # bake_sageattention_wheel() — UNIQUEMENT à la construction de l'image Docker
-# (docker-build-steps.sh), appelée juste après bake_pytorch_best_guess().
+# (docker-build-steps-heavy.sh), appelée juste après bake_pytorch_best_guess().
 # Compile SageAttention UNE SEULE FOIS dans l'environnement contrôlé du build
 # et produit une wheel .whl réutilisable, au lieu de laisser chaque
 # conteneur la recompiler depuis les sources à chaque démarrage (10-20 min,
@@ -352,7 +352,7 @@ bake_pytorch_best_guess() {
 # aucune régression dans ce cas.
 #
 # Best-effort et non bloquant, comme install_sageattention() : un échec ici
-# ne doit jamais faire échouer le build de l'image (docker-build-steps.sh
+# ne doit jamais faire échouer le build de l'image (docker-build-steps-heavy.sh
 # tourne sous `set -e`) — seulement priver le conteneur de la wheel
 # pré-compilée, auquel cas install_sageattention() recompile normalement au
 # démarrage, comme avant ce mécanisme.
@@ -387,25 +387,33 @@ bake_sageattention_wheel() {
     torch_minor="$(cut -d. -f2 <<< "$torch_cuda")"
     cuda_index="cu${torch_major}${torch_minor}"
 
-    # --- toolkit CUDA correspondant exactement (même logique de vérification
-    # stricte que install_sageattention(), voir _sage_find_matching_nvcc) ---
-    local matched_cuda_home=""
-    matched_cuda_home="$(_sage_find_matching_nvcc "${torch_major}.${torch_minor}" "/usr/local/cuda-${torch_major}.${torch_minor}" /usr/local/cuda-"${torch_major}".*)" || true
+    # --- toolkit CUDA de la même branche majeure (même logique de vérification
+    # que install_sageattention(), voir _sage_find_matching_nvcc) ---
+    local matched_cuda_home="" matched_nvcc_ver="" _match=""
+    _match="$(_sage_find_matching_nvcc "${torch_major}" "/usr/local/cuda-${torch_major}.${torch_minor}" /usr/local/cuda-"${torch_major}".*)" || true
+    if [[ -n "$_match" ]]; then
+        matched_cuda_home="${_match%%:*}"
+        matched_nvcc_ver="${_match##*:}"
+    fi
     if [[ -z "$matched_cuda_home" ]] && require_cmd apt-get; then
         local toolkit_pkg="cuda-toolkit-${torch_major}-${torch_minor}"
         apt-get update -y >>"$LOG_FILE" 2>&1 || log_warn "apt-get update a échoué — on tente quand même l'installation du toolkit CUDA."
         if ! retry "$DOWNLOAD_MAX_RETRIES" apt-get install -y "$toolkit_pkg" >>"$LOG_FILE" 2>&1; then
-            log_warn "${toolkit_pkg} indisponible — repli sur cuda-toolkit-${torch_major} (vérifié ci-dessous, jamais supposé correct)."
+            log_warn "${toolkit_pkg} indisponible — repli sur cuda-toolkit-${torch_major} (branche majeure, vérifiée ci-dessous — la compatibilité mineure est garantie par NVIDIA, cf. commentaire de _sage_find_matching_nvcc)."
             retry "$DOWNLOAD_MAX_RETRIES" apt-get install -y "cuda-toolkit-${torch_major}" >>"$LOG_FILE" 2>&1 || true
         fi
-        matched_cuda_home="$(_sage_find_matching_nvcc "${torch_major}.${torch_minor}" "/usr/local/cuda-${torch_major}.${torch_minor}" /usr/local/cuda-"${torch_major}".*)" || true
+        _match="$(_sage_find_matching_nvcc "${torch_major}" "/usr/local/cuda-${torch_major}.${torch_minor}" /usr/local/cuda-"${torch_major}".*)" || true
+        if [[ -n "$_match" ]]; then
+            matched_cuda_home="${_match%%:*}"
+            matched_nvcc_ver="${_match##*:}"
+        fi
     fi
     if [[ -z "$matched_cuda_home" ]]; then
-        log_warn "Aucun nvcc ${torch_major}.${torch_minor} disponible pendant le build de l'image — pré-compilation de SageAttention sautée (le conteneur tentera la compilation depuis les sources au démarrage)."
+        log_warn "Aucun nvcc de la branche CUDA ${torch_major}.x disponible pendant le build de l'image — pré-compilation de SageAttention sautée (le conteneur tentera la compilation depuis les sources au démarrage)."
         deactivate
         return 0
     fi
-    log_ok "Toolkit CUDA ${torch_major}.${torch_minor} disponible pour la pré-compilation (${matched_cuda_home}/bin/nvcc)."
+    log_ok "Toolkit CUDA disponible pour la pré-compilation : ${matched_cuda_home}/bin/nvcc (release ${matched_nvcc_ver}, même branche majeure que torch ${torch_major}.${torch_minor})."
 
     # --- Triton : même contrainte exacte que install_sageattention() -------
     if python -c "import triton" 2>/dev/null; then
@@ -453,12 +461,19 @@ PYEOF
     local build_rc=0
     (
         cd "$src_dir" || exit 1
-        export CUDA_HOME="$matched_cuda_home"
-        export PATH="${matched_cuda_home}/bin:${PATH}"
-        export TORCH_CUDA_ARCH_LIST="$SAGEATTENTION_ARCH_LIST"
-        export EXT_PARALLEL=4
-        export NVCC_APPEND_FLAGS="--threads 8"
-        export MAX_JOBS="$SAGEATTENTION_BUILD_JOBS"
+        # Variables passées en préfixe de LA SEULE commande qui en a besoin
+        # (portée strictement limitée à cette invocation pip, jamais
+        # "exportées" au sens shell du terme) plutôt qu'avec `export` séparé
+        # — évite les faux positifs ShellCheck SC2030/SC2031 (qui suppose
+        # sinon qu'on cherche à faire persister ces variables au-delà de ce
+        # sous-shell, alors que le sous-shell n'existe ici que pour isoler
+        # le `cd`).
+        CUDA_HOME="$matched_cuda_home" \
+        PATH="${matched_cuda_home}/bin:${PATH}" \
+        TORCH_CUDA_ARCH_LIST="$SAGEATTENTION_ARCH_LIST" \
+        EXT_PARALLEL=4 \
+        NVCC_APPEND_FLAGS="--threads 8" \
+        MAX_JOBS="$SAGEATTENTION_BUILD_JOBS" \
         python -m pip wheel . -w "$wheel_dir" --no-build-isolation --no-deps
     ) >>"$LOG_FILE" 2>&1 || build_rc=$?
 
@@ -567,7 +582,7 @@ install_comfyui_requirements() {
 # plusieurs endroits.
 #
 # Filtre torch/torchvision/torchaudio quand DOCKER_BUILD_NO_TORCH=true
-# (positionné UNIQUEMENT par docker-build-steps.sh, jamais par install.sh/
+# (positionné UNIQUEMENT par docker-build-steps-heavy.sh, jamais par install.sh/
 # update.sh) : à la construction de l'image Docker, aucun GPU n'est visible
 # donc PYTORCH_BUILD_TABLE ne peut pas être résolue (même raison que
 # install_comfyui_requirements_no_torch() ci-dessus). Sans ce filtrage, un
@@ -685,27 +700,40 @@ install_extra_requirements() {
 # ne correspond pas au torch réellement installé, et SageAttention se
 # compilerait contre le mauvais jeu d'en-têtes/bibliothèques CUDA — c'est
 # exactement ce qui a produit l'échec observé (torch cu118 compilé avec un
-# toolkit 12.4). On ne fait donc plus jamais confiance à un nvcc "trouvé dans
-# le PATH" : sa version réelle (`nvcc --version`) est vérifiée et comparée à
-# torch.version.cuda AVANT de lancer quoi que ce soit.
+# toolkit 12.4, deux branches MAJEURES différentes : 11 vs 12). On ne fait
+# donc jamais confiance à un nvcc "trouvé dans le PATH" : sa version réelle
+# (`nvcc --version`) est vérifiée AVANT de lancer quoi que ce soit.
+#
+# En revanche, la comparaison ne porte que sur la branche MAJEURE (12, 13...),
+# pas sur la mineure exacte : NVIDIA garantit la "CUDA Minor Version
+# Compatibility" (compiler/exécuter une extension avec un toolkit d'une
+# mineure différente mais de la même majeure que celle de torch fonctionne).
+# Exiger l'égalité stricte de la mineure a été tenté puis abandonné : le
+# dépôt apt NVIDIA ne conserve en général que la dernière mineure connue
+# d'une branche majeure (ex: `cuda-toolkit-13-0` peut disparaître dès que
+# 13.1/13.2 sort, seul `cuda-toolkit-13` reste installable) — l'égalité
+# stricte finissait donc par rejeter systématiquement un toolkit pourtant
+# valide, empêchant toute compilation (wheel ET source) en boucle.
 ################################################################################
 
-# _sage_find_matching_nvcc <torch_cuda_norm> <candidate_cuda_home...>
+# _sage_find_matching_nvcc <torch_major> <candidate_cuda_home...>
 # Cherche, parmi les répertoires candidats donnés, un toolkit CUDA versionné
-# dont le nvcc rapporte EXACTEMENT <torch_cuda_norm> (comparaison stricte de
-# major.minor : ni inférieur ni supérieur ne convient, cf. objectif de
-# compilation cohérente). Si trouvé, affiche le chemin du CUDA_HOME candidat
-# sur stdout et retourne 0 ; sinon retourne 1 sans rien afficher. Ne modifie
-# jamais PATH/CUDA_HOME du shell appelant — se contente d'appeler chaque nvcc
-# par son chemin absolu.
+# dont le nvcc rapporte la même branche MAJEURE que <torch_major> (la mineure
+# n'a pas besoin de correspondre, cf. commentaire ci-dessus). Si trouvé,
+# affiche sur stdout "chemin_cuda_home:version_nvcc_reelle" (ex.
+# "/usr/local/cuda-13:13.2") et retourne 0 ; sinon retourne 1 sans rien
+# afficher. Ne modifie jamais PATH/CUDA_HOME du shell appelant — se contente
+# d'appeler chaque nvcc par son chemin absolu.
 _sage_find_matching_nvcc() {
-  local want="$1"; shift
-  local d ver
+  local want_major="$1"; shift
+  local d ver ver_major
   for d in "$@"; do
     [[ -x "${d}/bin/nvcc" ]] || continue
     ver="$("${d}/bin/nvcc" --version 2>/dev/null | grep -oE 'release [0-9]+\.[0-9]+' | grep -oE '[0-9]+\.[0-9]+' | head -n1)"
-    if [[ "$ver" == "$want" ]]; then
-      printf '%s\n' "$d"
+    [[ -n "$ver" ]] || continue
+    ver_major="$(cut -d. -f1 <<< "$ver")"
+    if [[ "$ver_major" == "$want_major" ]]; then
+      printf '%s:%s\n' "$d" "$ver"
       return 0
     fi
   done
@@ -794,16 +822,21 @@ install_sageattention() {
   # sur l'image de base : on scanne explicitement tous les /usr/local/cuda-*
   # de la même branche majeure et on vérifie CHACUN par sa version réelle,
   # jamais par son seul nom de répertoire).
-  local matched_cuda_home=""
-  matched_cuda_home="$(_sage_find_matching_nvcc "$torch_cuda_norm" "/usr/local/cuda-${torch_cuda_norm}" /usr/local/cuda-"${torch_major}".*)" || true
+  local matched_cuda_home="" matched_nvcc_ver=""
+  local _match=""
+  _match="$(_sage_find_matching_nvcc "$torch_major" "/usr/local/cuda-${torch_cuda_norm}" /usr/local/cuda-"${torch_major}".*)" || true
+  if [[ -n "$_match" ]]; then
+    matched_cuda_home="${_match%%:*}"
+    matched_nvcc_ver="${_match##*:}"
+  fi
 
   if [[ -n "$matched_cuda_home" ]]; then
-    log_ok "Toolkit CUDA ${torch_cuda_norm} déjà présent et vérifié (${matched_cuda_home}/bin/nvcc) — cohérent avec torch, pas de réinstallation."
+    log_ok "Toolkit CUDA branche ${torch_major}.x déjà présent et vérifié (${matched_cuda_home}/bin/nvcc, release ${matched_nvcc_ver}) — cohérent avec torch CUDA ${torch_cuda_norm}, pas de réinstallation."
   elif require_cmd apt-get; then
     local toolkit_pkg="cuda-toolkit-${torch_cuda_norm/./-}"
     local sudo_cmd=""
     [[ "$(id -u)" -ne 0 ]] && require_cmd sudo && sudo_cmd="sudo"
-    log_info "Aucun nvcc correspondant à CUDA ${torch_cuda_norm} (build torch) trouvé — installation de ${toolkit_pkg} (peut prendre plusieurs minutes, ~3-4 Go)."
+    log_info "Aucun nvcc de la branche CUDA ${torch_major}.x (build torch) trouvé — installation de ${toolkit_pkg} (peut prendre plusieurs minutes, ~3-4 Go)."
     if ! $sudo_cmd apt-get update -y >>"$LOG_FILE" 2>&1; then
       log_warn "apt-get update a échoué — on tente quand même l'installation du toolkit CUDA."
     fi
@@ -828,21 +861,26 @@ install_sageattention() {
     fi
     # Étape 2b : re-scan après l'installation apt — jamais de confiance dans
     # le simple fait que `apt-get install` ait réussi : seule la version
-    # réellement rapportée par ce nvcc précis fait foi.
-    matched_cuda_home="$(_sage_find_matching_nvcc "$torch_cuda_norm" "/usr/local/cuda-${torch_cuda_norm}" /usr/local/cuda-"${torch_major}".*)" || true
+    # réellement rapportée par ce nvcc précis fait foi (branche majeure
+    # vérifiée, cf. commentaire d'en-tête de _sage_find_matching_nvcc).
+    _match="$(_sage_find_matching_nvcc "$torch_major" "/usr/local/cuda-${torch_cuda_norm}" /usr/local/cuda-"${torch_major}".*)" || true
+    if [[ -n "$_match" ]]; then
+      matched_cuda_home="${_match%%:*}"
+      matched_nvcc_ver="${_match##*:}"
+    fi
   else
-    log_warn "apt-get indisponible — recherche d'un toolkit déjà présent sur le pod correspondant exactement à CUDA ${torch_cuda_norm}."
+    log_warn "apt-get indisponible — recherche d'un toolkit déjà présent sur le pod de la branche CUDA ${torch_major}.x."
   fi
 
   if [[ -z "$matched_cuda_home" ]]; then
-    log_warn "Aucun nvcc dont la version réelle correspond exactement à torch.version.cuda=${torch_cuda_norm} n'a pu être installé ou localisé."
-    log_warn "Compiler SageAttention avec un nvcc d'une autre version produirait un échec opaque (ou pire, un module qui s'importe mais plante à l'exécution) — compilation annulée par précaution."
+    log_warn "Aucun nvcc de la branche CUDA ${torch_major}.x (build torch : ${torch_cuda_norm}) n'a pu être installé ou localisé."
+    log_warn "Compiler SageAttention avec un nvcc d'une autre branche MAJEURE produirait un échec opaque (ou pire, un module qui s'importe mais plante à l'exécution) — compilation annulée par précaution."
     log_warn "H3 reste pleinement fonctionnel sans SageAttention, juste plus lent / plus gourmand en VRAM. Si plusieurs toolkits sont installés sur ce pod, vérifiez /usr/local/cuda-*."
     deactivate
     return 0
   fi
 
-  log_ok "nvcc cohérent sélectionné : ${matched_cuda_home}/bin/nvcc (release ${torch_cuda_norm}) — correspond exactement à torch.version.cuda=${torch_cuda_norm}."
+  log_ok "nvcc cohérent sélectionné : ${matched_cuda_home}/bin/nvcc (release ${matched_nvcc_ver}) — même branche majeure que torch.version.cuda=${torch_cuda_norm} (compatibilité mineure garantie par NVIDIA)."
   log_info "CUDA_HOME/PATH pour la compilation seront positionnés localement au sous-shell de build (aucune modification permanente de l'environnement du script)."
 
   # --- Triton (dépendance de compilation/exécution) -----------------------
@@ -918,15 +956,20 @@ PYEOF
   local build_rc=0
   (
     cd "$SAGEATTENTION_CACHE_DIR" || exit 1
-    # CUDA_HOME/PATH scopés à ce sous-shell de compilation uniquement (donc
-    # au process pip/nvcc qu'il lance) — jamais exportés dans le shell parent
-    # d'install.sh/update.sh, qui continue avec son PATH d'origine après le
-    # retour de install_sageattention().
-    export CUDA_HOME="$matched_cuda_home"
-    export PATH="${matched_cuda_home}/bin:${PATH}"
-    export EXT_PARALLEL=4
-    export NVCC_APPEND_FLAGS="--threads 8"
-    export MAX_JOBS="$SAGEATTENTION_BUILD_JOBS"
+    # Variables passées en préfixe de LA SEULE commande qui en a besoin
+    # (portée strictement limitée à cette invocation pip, jamais
+    # "exportées" au sens shell du terme) plutôt qu'avec `export` séparé —
+    # évite les faux positifs ShellCheck SC2030/SC2031 (qui suppose sinon
+    # qu'on cherche à faire persister ces variables au-delà de ce
+    # sous-shell, alors que le sous-shell n'existe ici que pour isoler le
+    # `cd`, jamais exportées dans le shell parent d'install.sh/update.sh,
+    # qui continue avec son PATH d'origine après le retour de
+    # install_sageattention()).
+    CUDA_HOME="$matched_cuda_home" \
+    PATH="${matched_cuda_home}/bin:${PATH}" \
+    EXT_PARALLEL=4 \
+    NVCC_APPEND_FLAGS="--threads 8" \
+    MAX_JOBS="$SAGEATTENTION_BUILD_JOBS" \
     pip install -e . --no-build-isolation
   ) >>"$LOG_FILE" 2>&1 || build_rc=$?
 

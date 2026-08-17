@@ -216,7 +216,7 @@ and more VRAM-hungry — but if you want it working:
 - **The reliable fix is to stop compiling on the pod at all.** The Docker
   image (see `Dockerfile`) can pre-compile SageAttention into a wheel
   *once*, at image build time, via `bake_sageattention_wheel()`
-  (`lib/python.sh`, called from `docker-build-steps.sh` right after
+  (`lib/python.sh`, called from `docker-build-steps-heavy.sh` right after
   `bake_pytorch_best_guess`). Every container started from that image then
   installs the pre-built wheel directly — no compiler, no 10-20 minute
   wait, nothing to fail. This only kicks in if:

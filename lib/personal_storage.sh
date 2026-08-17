@@ -50,7 +50,7 @@ _personal_storage_hf_ready() {
   # ci-dessous ne trouverait ni 'hf' ni 'huggingface-cli' et cette fonction
   # échouerait quand même. Ce garde reste utile en défense : dans l'image
   # Docker pré-installée, venv + CLI HF sont déjà baked dans l'image (voir
-  # docker-build-steps.sh), donc ce cas ne se présente normalement jamais ;
+  # docker-build-steps-heavy.sh), donc ce cas ne se présente normalement jamais ;
   # il ne sert que de filet de sécurité si cette fonction venait à être
   # appelée depuis un autre contexte à l'avenir.
   if [[ ! -f "${VENV_DIR}/bin/activate" ]]; then
