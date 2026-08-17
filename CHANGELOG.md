@@ -10,6 +10,46 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🐛 Fix: SageAttention could never compile — `cuda-toolkit-*` isn't installable via apt without NVIDIA's own repo
+
+- Confirmed in practice: the Docker image is built `FROM ubuntu:22.04` (bare,
+  deliberate — see `Dockerfile`), which does **not** include NVIDIA's own apt
+  repository. `install_sageattention()` and `bake_sageattention_best_guess()`
+  (`lib/python.sh`) both tried to `apt-get install cuda-toolkit-<version>`
+  without it — this always failed, not because the requested version was
+  unavailable, but because `cuda-toolkit-*` packages aren't part of Ubuntu's
+  default archives at all. Affected both the image build step (SageAttention
+  never got pre-baked) and every container startup on that image (the
+  fallback `apt-get install` retried the same doomed thing).
+- New `ensure_nvidia_cuda_apt_repo()` (`lib/system.sh`): installs NVIDIA's
+  official `cuda-keyring` package (detects Ubuntu 20.04/22.04/24.04,
+  x86_64/arm64) if not already present, before any `cuda-toolkit-*` install
+  is attempted. Idempotent, best-effort — a detection or network failure
+  logs a warning and lets the existing fallback (skip SageAttention, H3
+  stays functional without it) take over exactly as before, never blocking.
+  Called from both `install_sageattention()` and
+  `bake_sageattention_best_guess()`.
+- `update.sh` was missing `source lib/system.sh` entirely despite calling
+  `install_sageattention()` — would have failed with "command not found"
+  the first time that code path was reached after this fix. Added.
+
+### 🐛 Fix: `setup_python_venv()` upgraded setuptools past what an already-installed torch requires
+
+- Confirmed in practice: on a pod where `install.sh` runs again with torch
+  already installed, `setup_python_venv()` unconditionally upgraded
+  `setuptools` to the latest version, which pip then flagged as
+  incompatible with torch's own declared constraint (`setuptools<82`) —
+  displayed as a scary-looking `ERROR:` line. Harmless in practice (a later
+  step reinstalling ComfyUI's `requirements.txt`, which depends on torch,
+  always brought setuptools back down to a compatible version), but
+  confusing.
+- `setup_python_venv()` now checks whether torch is already importable in
+  the venv; if so, it reads torch's actual `setuptools` requirement from its
+  own package metadata (same dynamic-constraint technique already used for
+  Triton in `install_sageattention()`) and installs exactly that, instead of
+  blindly upgrading to latest. No behavior change on a first install (no
+  torch yet) — the ERROR line just doesn't happen anymore on repeat runs.
+
 ### 🐛 Fix: `wizard.sh` runs unprotected against a RunPod web terminal disconnect
 
 - Confirmed in practice: `wizard.sh` called `install.sh` as a direct child

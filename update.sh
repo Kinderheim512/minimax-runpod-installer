@@ -23,6 +23,12 @@ enable_error_trap
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/gpu.sh"
 # shellcheck disable=SC1091
+# lib/system.sh : fournit ensure_nvidia_cuda_apt_repo(), appelée par
+# install_sageattention() (lib/python.sh, sourcé juste après) — absente
+# jusqu'ici de update.sh alors que ce script appelle bien install_sageattention()
+# plus bas, ce qui aurait échoué avec "commande introuvable".
+source "${PROJECT_ROOT}/lib/system.sh"
+# shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/python.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/comfyui.sh"

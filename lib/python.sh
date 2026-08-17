@@ -225,7 +225,40 @@ setup_python_venv() {
     # shellcheck disable=SC1091  # ${VENV_DIR}/bin/activate n'existe pas encore
     # au moment du lint : il est créé par `venv` juste au-dessus, à l'exécution.
     source "${VENV_DIR}/bin/activate"
-    python -m pip install --upgrade pip setuptools wheel
+
+    # setuptools : upgrade vers la dernière version PAR DÉFAUT, sauf si torch
+    # est déjà installé dans ce venv (cas d'un install.sh relancé sur un pod
+    # existant) — auquel cas on respecte la contrainte que torch déclare
+    # lui-même dans ses métadonnées (ex: "setuptools<82"), plutôt que
+    # d'upgrader aveuglément puis de laisser pip constater le conflit et
+    # l'afficher comme une ERROR trompeuse (elle n'empêchait rien : quelques
+    # étapes plus loin, l'install de requirements.txt — qui dépend de torch —
+    # retombait de toute façon sur une version compatible). Même technique
+    # que la lecture dynamique de la contrainte Triton plus bas dans ce
+    # fichier (install_sageattention) : jamais de version figée en dur ici,
+    # reste correcte quel que soit le torch réellement installé.
+    local setuptools_req=""
+    if python -c "import torch" 2>/dev/null; then
+        setuptools_req="$(python - <<'PYEOF'
+from importlib.metadata import requires, PackageNotFoundError
+try:
+    reqs = requires("torch") or []
+except PackageNotFoundError:
+    reqs = []
+for r in reqs:
+    if r.split(";")[0].strip().lower().startswith("setuptools"):
+        print(r.split(";")[0].strip())
+        break
+PYEOF
+)"
+    fi
+
+    if [[ -n "$setuptools_req" ]]; then
+        log_info "torch déjà présent dans ce venv — setuptools installé selon sa propre contrainte (${setuptools_req}) plutôt que la dernière version, pour éviter un conflit pip cosmétique mais trompeur."
+        python -m pip install --upgrade pip wheel "$setuptools_req"
+    else
+        python -m pip install --upgrade pip setuptools wheel
+    fi
     deactivate
 
     log_ok "Environnement virtuel prêt."
@@ -415,6 +448,10 @@ bake_sageattention_best_guess() {
     matched_cuda_home="$(_sage_find_matching_nvcc "$torch_cuda_norm" "/usr/local/cuda-${torch_cuda_norm}" /usr/local/cuda-"${torch_major}".*)" || true
     if [[ -z "$matched_cuda_home" ]] && require_cmd apt-get; then
         local toolkit_pkg="cuda-toolkit-${torch_cuda_norm/./-}"
+        # cf. commentaire équivalent dans install_sageattention() : sans le
+        # dépôt apt officiel NVIDIA, cuda-toolkit-* est introuvable pour apt
+        # quelle que soit la version demandée.
+        ensure_nvidia_cuda_apt_repo || true
         apt-get update -y >>"$LOG_FILE" 2>&1 || true
         if retry "$DOWNLOAD_MAX_RETRIES" apt-get install -y "$toolkit_pkg" >>"$LOG_FILE" 2>&1; then
             matched_cuda_home="$(_sage_find_matching_nvcc "$torch_cuda_norm" "/usr/local/cuda-${torch_cuda_norm}" /usr/local/cuda-"${torch_major}".*)" || true
@@ -797,6 +834,13 @@ install_sageattention() {
     local toolkit_pkg="cuda-toolkit-${torch_cuda_norm/./-}"
     local sudo_cmd=""
     [[ "$(id -u)" -ne 0 ]] && require_cmd sudo && sudo_cmd="sudo"
+    # cuda-toolkit-* n'existe que via le dépôt apt officiel NVIDIA, absent
+    # des dépôts Ubuntu standards — sans lui, l'install ci-dessous échoue
+    # toujours, quelle que soit la version demandée (cf. lib/system.sh pour
+    # le détail). Best-effort : si l'ajout échoue (réseau, distro non
+    # reconnue), on tente quand même l'install au cas où le dépôt serait
+    # déjà présent sous une forme non détectée par ensure_nvidia_cuda_apt_repo().
+    ensure_nvidia_cuda_apt_repo || true
     log_info "Aucun nvcc correspondant à CUDA ${torch_cuda_norm} (build torch) trouvé — installation de ${toolkit_pkg} (peut prendre plusieurs minutes, ~3-4 Go)."
     if ! $sudo_cmd apt-get update -y >>"$LOG_FILE" 2>&1; then
       log_warn "apt-get update a échoué — on tente quand même l'installation du toolkit CUDA."
