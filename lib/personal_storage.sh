@@ -247,6 +247,41 @@ _personal_storage_hf_upload() {
   done
 }
 
+# _personal_storage_warn_non_personal_loras
+# Avertit (log_warn, non bloquant) si des LoRA existent dans models/loras/
+# (racine, PAS models/loras/personal/) au moment d'un push — ce dossier
+# n'est jamais sauvegardé par sync_personal_storage_push() (voir le
+# commentaire d'en-tête de ce fichier), donc un LoRA installé via
+# `install_lora.sh <URL>` sans --personal y reste invisible pour ce
+# mécanisme sans aucun message d'erreur nulle part, ce qui peut faire
+# croire à tort que "la sauvegarde perso ne fonctionne pas pour les LoRA"
+# alors qu'elle fonctionne exactement comme prévu, juste pas sur ce
+# dossier. Le Turbo LoRA officiel MiniMax H3 (MINIMAX_H3_TURBO_LORA_FILENAME,
+# config.env) est délibérément exclu de cet avertissement : il atterrit là
+# par conception (lib/lora_auto.sh) et est retéléchargeable à volonté depuis
+# Hugging Face — il n'a jamais eu vocation à être sauvegardé perso.
+_personal_storage_warn_non_personal_loras() {
+  local root_dir="${INSTALL_DIR}/models/loras"
+  [[ -d "$root_dir" ]] || return 0
+
+  local turbo_name="${MINIMAX_H3_TURBO_LORA_FILENAME:-}"
+  local -a stray=()
+  local f name
+  while IFS= read -r -d '' f; do
+    name="$(basename "$f")"
+    [[ -n "$turbo_name" && "$name" == "$turbo_name" ]] && continue
+    stray+=("$name")
+  done < <(find "$root_dir" -maxdepth 1 -type f -name '*.safetensors' -print0 2>/dev/null)
+
+  if [[ ${#stray[@]} -gt 0 ]]; then
+    log_warn "${#stray[@]} LoRA présent(s) dans ${root_dir} (hors personal/) ne seront PAS sauvegardés — seul ${root_dir}/personal/ est envoyé vers le coffre HF :"
+    for name in "${stray[@]}"; do
+      log_warn "    - ${name}"
+    done
+    log_warn "  Pour les inclure : bash install_lora.sh --personal <URL> (nouveaux téléchargements), ou déplacez-les manuellement : mv \"${root_dir}/<fichier>\" \"${root_dir}/personal/\" puis relancez bash sync_push.sh."
+  fi
+}
+
 sync_personal_storage_push() {
   log_step "Stockage perso (LoRAs/presets/outputs) — sauvegarde"
 
@@ -258,6 +293,8 @@ sync_personal_storage_push() {
   _personal_storage_hf_ready || return 0
 
   mkdir -p "$(PERSONAL_STORAGE_LORAS_DIR)" "$(PERSONAL_STORAGE_PRESETS_DIR)" "$(PERSONAL_STORAGE_OUTPUTS_DIR)"
+
+  _personal_storage_warn_non_personal_loras
 
   # shellcheck disable=SC1091
   source "${VENV_DIR}/bin/activate"

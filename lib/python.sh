@@ -337,6 +337,143 @@ bake_pytorch_best_guess() {
     _install_pytorch_build "$version" "$index"
 }
 
+################################################################################
+# bake_sageattention_wheel() — UNIQUEMENT à la construction de l'image Docker
+# (docker-build-steps.sh), appelée juste après bake_pytorch_best_guess().
+# Compile SageAttention UNE SEULE FOIS dans l'environnement contrôlé du build
+# et produit une wheel .whl réutilisable, au lieu de laisser chaque
+# conteneur la recompiler depuis les sources à chaque démarrage (10-20 min,
+# et c'est ce chemin qui échoue le plus souvent selon l'état du pod : nvcc
+# absent, RAM insuffisante, réseau...). install_sageattention() (lib/python.sh,
+# appelée par install.sh au démarrage du conteneur) installe directement
+# cette wheel si son index CUDA correspond au torch réellement retenu à ce
+# moment-là ; sinon (repli PREFER_CUDA130 sur un pilote pod trop ancien) elle
+# recompile normalement — exactement comme sur un pod nu sans image Docker,
+# aucune régression dans ce cas.
+#
+# Best-effort et non bloquant, comme install_sageattention() : un échec ici
+# ne doit jamais faire échouer le build de l'image (docker-build-steps.sh
+# tourne sous `set -e`) — seulement priver le conteneur de la wheel
+# pré-compilée, auquel cas install_sageattention() recompile normalement au
+# démarrage, comme avant ce mécanisme.
+#
+# Aucun GPU visible à la construction de l'image : TORCH_CUDA_ARCH_LIST est
+# donc fixé explicitement (SAGEATTENTION_ARCH_LIST, config.env) plutôt que
+# déduit de nvidia-smi, pour produire une wheel "fat binary" couvrant
+# Ampere à Blackwell au lieu de deviner une seule architecture.
+################################################################################
+bake_sageattention_wheel() {
+    log_step "Pré-compilation de SageAttention dans l'image (wheel réutilisable, aucune compilation au démarrage du pod)"
+
+    # Réglage dédié à cette étape de build, volontairement indépendant de
+    # SAGE_ATTENTION (qui contrôle l'exécution, pas la construction de
+    # l'image) — voir le commentaire complet dans config.env.
+    if [[ "${SAGEATTENTION_DOCKER_BAKE:-true}" == "false" ]]; then
+        log_info "SAGEATTENTION_DOCKER_BAKE=false — pré-compilation sautée (le conteneur compilera depuis les sources au démarrage si SAGE_ATTENTION=auto/true)."
+        return 0
+    fi
+
+    # shellcheck disable=SC1091  # cf. note dans setup_python_venv.
+    source "${VENV_DIR}/bin/activate"
+
+    local torch_cuda="" torch_major="" torch_minor="" cuda_index=""
+    torch_cuda="$(python -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)"
+    if [[ -z "$torch_cuda" ]]; then
+        log_warn "torch.version.cuda introuvable dans le venv — pré-compilation de SageAttention sautée (le conteneur compilera depuis les sources au démarrage, comme avant ce mécanisme)."
+        deactivate
+        return 0
+    fi
+    torch_major="$(cut -d. -f1 <<< "$torch_cuda")"
+    torch_minor="$(cut -d. -f2 <<< "$torch_cuda")"
+    cuda_index="cu${torch_major}${torch_minor}"
+
+    # --- toolkit CUDA correspondant exactement (même logique de vérification
+    # stricte que install_sageattention(), voir _sage_find_matching_nvcc) ---
+    local matched_cuda_home=""
+    matched_cuda_home="$(_sage_find_matching_nvcc "${torch_major}.${torch_minor}" "/usr/local/cuda-${torch_major}.${torch_minor}" /usr/local/cuda-"${torch_major}".*)" || true
+    if [[ -z "$matched_cuda_home" ]] && require_cmd apt-get; then
+        local toolkit_pkg="cuda-toolkit-${torch_major}-${torch_minor}"
+        apt-get update -y >>"$LOG_FILE" 2>&1 || log_warn "apt-get update a échoué — on tente quand même l'installation du toolkit CUDA."
+        if ! retry "$DOWNLOAD_MAX_RETRIES" apt-get install -y "$toolkit_pkg" >>"$LOG_FILE" 2>&1; then
+            log_warn "${toolkit_pkg} indisponible — repli sur cuda-toolkit-${torch_major} (vérifié ci-dessous, jamais supposé correct)."
+            retry "$DOWNLOAD_MAX_RETRIES" apt-get install -y "cuda-toolkit-${torch_major}" >>"$LOG_FILE" 2>&1 || true
+        fi
+        matched_cuda_home="$(_sage_find_matching_nvcc "${torch_major}.${torch_minor}" "/usr/local/cuda-${torch_major}.${torch_minor}" /usr/local/cuda-"${torch_major}".*)" || true
+    fi
+    if [[ -z "$matched_cuda_home" ]]; then
+        log_warn "Aucun nvcc ${torch_major}.${torch_minor} disponible pendant le build de l'image — pré-compilation de SageAttention sautée (le conteneur tentera la compilation depuis les sources au démarrage)."
+        deactivate
+        return 0
+    fi
+    log_ok "Toolkit CUDA ${torch_major}.${torch_minor} disponible pour la pré-compilation (${matched_cuda_home}/bin/nvcc)."
+
+    # --- Triton : même contrainte exacte que install_sageattention() -------
+    if python -c "import triton" 2>/dev/null; then
+        log_ok "Triton déjà présent ($(python -c 'import triton; print(triton.__version__)' 2>/dev/null))."
+    else
+        local triton_req=""
+        triton_req="$(python - <<'PYEOF'
+from importlib.metadata import requires, PackageNotFoundError
+try:
+    reqs = requires("torch") or []
+except PackageNotFoundError:
+    reqs = []
+for r in reqs:
+    if r.split(";")[0].strip().lower().startswith("triton"):
+        print(r.split(";")[0].strip())
+        break
+PYEOF
+)"
+        if [[ -n "$triton_req" ]]; then
+            python -m pip install --quiet "$triton_req" >>"$LOG_FILE" 2>&1 || \
+                log_warn "Échec d'installation de ${triton_req} — la pré-compilation risque d'échouer (non bloquant)."
+        else
+            log_warn "Contrainte Triton introuvable dans les métadonnées de torch — pré-compilation tentée sans garantie."
+        fi
+    fi
+
+    # --- clone (cache partagé avec install_sageattention(), pas de double
+    # téléchargement si le cache existe déjà pour une raison quelconque) ----
+    local src_dir="${SAGEATTENTION_CACHE_DIR:-${PROJECT_ROOT}/.cache/SageAttention}"
+    mkdir -p "$(dirname "$src_dir")" 2>>"$LOG_FILE" || true
+    if [[ ! -d "${src_dir}/.git" ]]; then
+        log_info "Clonage de SageAttention (${SAGEATTENTION_REPO})..."
+        if ! retry "$DOWNLOAD_MAX_RETRIES" git clone "$SAGEATTENTION_REPO" "$src_dir" >>"$LOG_FILE" 2>&1; then
+            log_warn "Échec du clonage de SageAttention pendant le build — pré-compilation sautée."
+            deactivate
+            return 0
+        fi
+    fi
+
+    local wheel_dir="${SAGEATTENTION_WHEEL_CACHE_DIR:-${PROJECT_ROOT}/.cache/sageattention-wheel}"
+    rm -rf "$wheel_dir"
+    mkdir -p "$wheel_dir"
+
+    log_info "Compilation de la wheel SageAttention pour ${cuda_index} (archs cibles : ${SAGEATTENTION_ARCH_LIST}) — pas de GPU requis pour cette étape, seulement nvcc."
+    local build_rc=0
+    (
+        cd "$src_dir" || exit 1
+        export CUDA_HOME="$matched_cuda_home"
+        export PATH="${matched_cuda_home}/bin:${PATH}"
+        export TORCH_CUDA_ARCH_LIST="$SAGEATTENTION_ARCH_LIST"
+        export EXT_PARALLEL=4
+        export NVCC_APPEND_FLAGS="--threads 8"
+        export MAX_JOBS="$SAGEATTENTION_BUILD_JOBS"
+        python -m pip wheel . -w "$wheel_dir" --no-build-isolation --no-deps
+    ) >>"$LOG_FILE" 2>&1 || build_rc=$?
+
+    if [[ "$build_rc" -ne 0 ]] || ! find "$wheel_dir" -maxdepth 1 -name '*.whl' 2>/dev/null | grep -q .; then
+        log_warn "Échec de pré-compilation de SageAttention pendant le build de l'image (code ${build_rc}) — le conteneur recompilera depuis les sources au démarrage, comme avant ce mécanisme (détail : ${LOG_FILE})."
+        rm -rf "$wheel_dir"
+        deactivate
+        return 0
+    fi
+
+    echo "$cuda_index" > "${wheel_dir}/cuda_index.txt"
+    log_ok "Wheel SageAttention pré-compilée pour ${cuda_index} : $(find "$wheel_dir" -maxdepth 1 -name '*.whl' -printf '%f\n' 2>/dev/null | head -n1) — les conteneurs démarrés depuis cette image l'installeront directement, sans compiler."
+    deactivate
+}
+
 install_pytorch() {
     log_step "Sélection et installation de PyTorch"
 
@@ -623,6 +760,34 @@ install_sageattention() {
   torch_minor="$(cut -d. -f2 <<< "$torch_cuda")"
   torch_cuda_norm="${torch_major}.${torch_minor}"
   log_info "Torch installé dans le venv : CUDA ${torch_cuda_norm} (torch.version.cuda) — c'est la seule référence utilisée ci-dessous pour choisir le toolkit de compilation."
+
+  # --- 1bis) wheel pré-compilée dans l'image Docker, si présente ET cohérente
+  # avec le torch réellement retenu (voir bake_sageattention_wheel() et
+  # SAGEATTENTION_WHEEL_CACHE_DIR, config.env). Absente sur un pod nu sans
+  # image Docker : on passe alors directement à la compilation habituelle
+  # ci-dessous, comportement strictement inchangé dans ce cas.
+  local baked_dir="${SAGEATTENTION_WHEEL_CACHE_DIR:-${PROJECT_ROOT}/.cache/sageattention-wheel}"
+  local baked_index_file="${baked_dir}/cuda_index.txt"
+  local current_index="cu${torch_major}${torch_minor}"
+  if [[ -f "$baked_index_file" ]]; then
+    local baked_index=""
+    baked_index="$(cat "$baked_index_file" 2>/dev/null)"
+    if [[ "$baked_index" == "$current_index" ]]; then
+      local baked_whl=""
+      baked_whl="$(find "$baked_dir" -maxdepth 1 -name '*.whl' 2>/dev/null | head -n1)"
+      if [[ -n "$baked_whl" ]]; then
+        log_info "Wheel SageAttention pré-compilée dans l'image trouvée (${baked_whl##*/}, ${baked_index}) — installation directe, sans compilation."
+        if python -m pip install --quiet "$baked_whl" >>"$LOG_FILE" 2>&1 && python -c "import sageattention" 2>/dev/null; then
+          log_ok "SageAttention installé depuis la wheel pré-compilée — aucune compilation nécessaire sur ce pod."
+          deactivate
+          return 0
+        fi
+        log_warn "Échec d'installation de la wheel pré-compilée (${baked_whl##*/}) — bascule sur la compilation depuis les sources ci-dessous."
+      fi
+    else
+      log_info "Wheel pré-compilée présente dans l'image mais pour un autre index CUDA (${baked_index:-inconnu} != ${current_index}, probablement un repli PREFER_CUDA130) — ignorée, compilation depuis les sources."
+    fi
+  fi
 
   # --- 2) toolkit CUDA cohérent avec torch_cuda_norm, PAS avec le driver --
   # Étape 2a : peut-être déjà présent tel quel (toolkits multiples possibles

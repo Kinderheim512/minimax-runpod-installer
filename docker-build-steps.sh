@@ -63,6 +63,16 @@ install_extra_requirements
 # du pod obtenu supporte déjà ce build.
 bake_pytorch_best_guess
 
+# Pré-compile SageAttention en wheel réutilisable (voir lib/python.sh
+# ::bake_sageattention_wheel pour le détail complet) : évite qu'un conteneur
+# démarré depuis cette image ait à recompiler SageAttention depuis les
+# sources à chaque fois — c'est ce chemin qui échoue le plus souvent selon
+# l'état du pod. Best-effort et non bloquant : si ça échoue pendant le build
+# (ex: nvcc indisponible dans ce contexte CI), install_sageattention()
+# recompilera normalement au démarrage du conteneur, comme avant ce
+# mécanisme — aucune régression possible.
+bake_sageattention_wheel
+
 install_or_update_manager
 install_optional_nodes
 create_model_folders

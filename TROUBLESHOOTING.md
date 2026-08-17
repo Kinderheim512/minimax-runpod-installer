@@ -190,6 +190,61 @@ CUDA is still unavailable afterwards:
 
 ---
 
+## SageAttention fails to compile (or is skipped every time)
+
+`PatchSageAttentionKJ` / `MiniMaxH3MemoryEfficientSageAttentionPatch` fail
+with `No module named 'sageattention'`, or `logs/install.log` shows
+`SageAttention compilation failed`. This is expected to be non-blocking —
+H3 keeps working without it (`--use-pytorch-cross-attention`), just slower
+and more VRAM-hungry — but if you want it working:
+
+- **Compiling from source on a bare pod is inherently flaky.** It needs an
+  `nvcc` whose version matches `torch.version.cuda` *exactly* (not just the
+  driver's CUDA version — see the comment above
+  `install_sageattention()` in `lib/python.sh`), plus `build-essential`,
+  Triton, and 10-20 minutes of CPU time. Any of these being off (wrong
+  toolkit installed by `apt`, low RAM causing the compiler to get `Killed`,
+  a flaky network during `git clone`) makes it skip with a `log_warn`,
+  never a hard failure. Check `logs/install.log` for the actual reason.
+  - `Killed` during compilation → OOM in the compiler, not VRAM. Lower
+    `SAGEATTENTION_BUILD_JOBS` in `config.env` (default `32`).
+  - "no nvcc matching torch.version.cuda" → multiple CUDA toolkits are
+    present on the pod but none matches exactly; the script refuses to
+    compile against a mismatched toolkit on purpose (see the cu118/CUDA
+    12.4 post-mortem referenced in `lib/python.sh`) rather than produce a
+    module that imports but crashes at runtime.
+- **The reliable fix is to stop compiling on the pod at all.** The Docker
+  image (see `Dockerfile`) can pre-compile SageAttention into a wheel
+  *once*, at image build time, via `bake_sageattention_wheel()`
+  (`lib/python.sh`, called from `docker-build-steps.sh` right after
+  `bake_pytorch_best_guess`). Every container started from that image then
+  installs the pre-built wheel directly — no compiler, no 10-20 minute
+  wait, nothing to fail. This only kicks in if:
+  - `SAGEATTENTION_DOCKER_BAKE` (default `true`) wasn't set to `false` when
+    the image was built.
+  - The container ends up on the same CUDA index (`cuXXX`) the wheel was
+    baked for. If the pod's driver is too old for the baked-in PyTorch
+    build and `PREFER_CUDA130` falls back to a different `cuXXX` build (see
+    the previous section), the wheel no longer matches and
+    `install_sageattention()` transparently falls back to compiling from
+    source — you'll see `"ignorée, compilation depuis les sources"` (or the
+    English-log equivalent) in `logs/install.log` when this happens.
+  - `SAGE_ATTENTION` (runtime) isn't set to `false` — that disables the
+    whole step, baked wheel or not.
+- Don't hand-install a wheel downloaded from GitHub/Hugging Face
+  (woct0rdho, Kijai, Panchovix, etc.) unless you've checked it was built
+  against the *exact* torch version and CUDA index this project installs
+  (see `PYTORCH_BUILD_TABLE` in `lib/python.sh`, currently torch 2.12.0 /
+  cu130 on recent drivers). Those community wheels are usually pinned to a
+  specific torch nightly build and/or Windows — a mismatched one can
+  import successfully and still crash or silently corrupt output at
+  runtime, which is harder to diagnose than a clean compile failure.
+- To rebuild the wheel with a newer/patched `SageAttention` source without
+  rebuilding everything else, set `SAGEATTENTION_UPDATE=true` in
+  `config.env` before the next Docker image build.
+
+---
+
 ## Disk full during model download
 
 Use a larger RunPod volume, or install a smaller `H3_TIER` and/or fewer
