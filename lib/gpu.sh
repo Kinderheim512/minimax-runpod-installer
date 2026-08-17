@@ -80,6 +80,54 @@ detect_gpu() {
   export GPU_NAME GPU_VRAM_GB GPU_DRIVER GPU_CUDA_VERSION GPU_TIER_RECOMMENDED
 }
 
+################################################################################
+# warn_if_cuda130_likely_incompatible() — à appeler juste après detect_gpu(),
+# AVANT toute tentative d'installation PyTorch (lib/python.sh télécharge
+# ~1-2 Go rien que pour le build cu130 avant de pouvoir constater l'échec au
+# runtime). But : épargner ce temps perdu quand l'échec est quasi certain,
+# sans jamais bloquer un contexte automatisé (Docker, --yes, pas de TTY) où
+# personne n'est là pour répondre à une question.
+#
+# N'agit que si PREFER_CUDA130=true (config.env) ET qu'aucun override manuel
+# explicite (TORCH_VERSION_OVERRIDE/TORCH_CUDA_INDEX_OVERRIDE) n'est déjà en
+# place — dans ce dernier cas l'utilisateur a délibérément figé un build
+# précis, ce garde-fou n'a rien à ajouter.
+#
+# Comparaison de version via `sort -V` (et non une comparaison de chaîne
+# naïve) pour rester correcte sur des séquences multi-segments comme
+# "570.195.03" vs "580.65.06".
+################################################################################
+warn_if_cuda130_likely_incompatible() {
+  [[ "${PREFER_CUDA130:-false}" == "true" ]] || return 0
+  [[ -z "${TORCH_VERSION_OVERRIDE:-}" && -z "${TORCH_CUDA_INDEX_OVERRIDE:-}" ]] || return 0
+  [[ -n "$GPU_DRIVER" ]] || return 0
+
+  local threshold="${CUDA130_MIN_DRIVER_VERSION:-580.65.06}"
+  local smallest
+  smallest="$(printf '%s\n%s\n' "$GPU_DRIVER" "$threshold" | sort -V | head -n1)"
+
+  # Si GPU_DRIVER n'est PAS le plus petit des deux (ou est égal au seuil),
+  # il est >= threshold : rien à signaler.
+  [[ "$smallest" == "$GPU_DRIVER" && "$GPU_DRIVER" != "$threshold" ]] || return 0
+
+  log_warn "PREFER_CUDA130=true, mais le driver NVIDIA détecté (${GPU_DRIVER}) est en dessous du seuil connu pour cu130 (${threshold}+ requis, cf. CUDA130_MIN_DRIVER_VERSION dans config.env)."
+  log_warn "L'installation cu130 va quasi certainement échouer (CUDA indisponible au runtime), puis basculer automatiquement sur le build associé au CUDA réellement détecté (${GPU_CUDA_VERSION:-inconnu}) — ce qui fonctionne, mais fait perdre le temps de télécharger et désinstaller le build cu130 pour rien."
+  log_warn "Pour obtenir un driver ≥ ${threshold} dès le départ : sur RunPod, dans l'écran de déploiement, section \"Filters\", spécifiez une version CUDA ≥ 13.0 avant de louer le pod — ce filtre porte sur le matériel alloué, pas sur ce template/config.env."
+
+  # Contexte non-interactif (Docker, install.sh --yes, stdin fermé/pas de
+  # TTY) : jamais de prompt bloquant, on continue comme avant (comportement
+  # inchangé pour docker-entrypoint.sh et les runs automatisés).
+  if [[ "${ASSUME_YES:-false}" == "true" || ! -t 0 ]]; then
+    log_warn "Contexte non-interactif détecté — poursuite automatique avec repli cu130 -> ${GPU_CUDA_VERSION:-build détecté} (comme configuré)."
+    return 0
+  fi
+
+  if ! confirm "Continuer quand même avec ce pod (repli automatique cu130 -> build compatible) ?"; then
+    log_error "Installation interrompue à votre demande. Relouez un pod avec un driver ≥ ${threshold} (filtre CUDA Version côté RunPod) puis relancez wizard.sh/install.sh."
+    exit 1
+  fi
+}
+
 SYSTEM_RAM_LIMIT_GB=0
 SYSTEM_RAM_TOTAL_GB=0
 SYSTEM_RAM_LIMIT_SOURCE=""

@@ -272,8 +272,8 @@ sys.exit(0 if ok else 1)
 
     # Désinstallation explicite AVANT d'installer, plutôt que de laisser pip
     # gérer un uninstall-puis-install combiné dans la même transaction —
-    # constaté en pratique (repli PREFER_CUDA130, cu130 -> cu118) : quand le
-    # build cible diffère de celui déjà en place, pip échoue silencieusement
+    # constaté en pratique (repli PREFER_CUDA130, cu130 -> cu126/cu118) : quand
+    # le build cible diffère de celui déjà en place, pip échoue silencieusement
     # à désinstaller certaines dépendances transitives dont la version exacte
     # change d'un build à l'autre (sympy, triton — mêmes noms de paquet,
     # versions différentes selon le build torch), laissant des métadonnées
@@ -284,8 +284,35 @@ sys.exit(0 if ok else 1)
     # à traiter comme telle) — jamais bloquant.
     python -m pip uninstall -y torch torchvision torchaudio triton sympy >/dev/null 2>&1 || true
 
+    # Filet de sécurité en plus du `pip uninstall` ci-dessus, pas à sa place :
+    # constaté sur des pods où le venv arrivait déjà dans un état partiellement
+    # corrompu (dist-info manquant/tronqué suite à un échec précédent — voir
+    # les warnings "No metadata found"/"Can't uninstall" plus haut dans les
+    # logs d'install). Dans ce cas, `pip uninstall` peut ne rien trouver à
+    # supprimer alors que des fichiers de l'ancien build restent bel et bien
+    # sur disque. Or pip considère par défaut `torch==${version}` comme déjà
+    # satisfait par un `${version}+<autre-index>` en place (les segments de
+    # version locale, +cu130/+cu126/..., sont ignorés en comparaison d'égalité
+    # — piège PEP 440 bien connu avec les wheels PyTorch) : sans nettoyage
+    # disque réel ici, un `pip install torch==${version}` peut donc sauter
+    # silencieusement la réinstallation et laisser un torch de la MAUVAISE
+    # variante CUDA en place (symptôme observé : `import torch` "réussit" mais
+    # `torch.__version__` n'existe même plus, signe d'un module à moitié
+    # réinstallé). site-packages résolu dynamiquement (pas de chemin
+    # python3.10 en dur) pour rester correct si la version de Python change.
+    local _sp
+    _sp="$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])' 2>/dev/null || true)"
+    if [[ -n "$_sp" && -d "$_sp" ]]; then
+        find "$_sp" -maxdepth 1 \
+            \( -iname 'torch' -o -iname 'torchvision' -o -iname 'torchaudio' -o -iname 'triton' -o -iname 'sympy' \
+               -o -iname 'torch-*.dist-info' -o -iname 'torchvision-*.dist-info' -o -iname 'torchaudio-*.dist-info' \
+               -o -iname 'triton-*.dist-info' -o -iname 'sympy-*.dist-info' \
+               -o -iname 'torch.libs' \) \
+            -exec rm -rf {} + 2>/dev/null || true
+    fi
+
     if ! retry "$DOWNLOAD_MAX_RETRIES" \
-        python -m pip install \
+        python -m pip install --force-reinstall \
         "torch==${version}" torchvision torchaudio \
         --index-url "https://download.pytorch.org/whl/${index}"
     then
@@ -335,6 +362,136 @@ bake_pytorch_best_guess() {
 
     log_info "Build pré-installé : ${version}+${index} — vérifié, et remplacé si besoin, au démarrage de chaque conteneur (voir PREFER_CUDA130, config.env)."
     _install_pytorch_build "$version" "$index"
+}
+
+################################################################################
+# bake_sageattention_best_guess() — UNIQUEMENT à la construction de l'image
+# Docker (docker-build-steps.sh), jamais appelée par install.sh/update.sh.
+# Même principe que bake_pytorch_best_guess() ci-dessus, pour la même raison
+# (10-20 min de compilation économisées au premier démarrage d'un conteneur
+# quand le pari tombe juste — cf. SAGEATTENTION_BAKE_IN_IMAGE, config.env) :
+# compile SageAttention contre le build torch déjà pré-installé par
+# bake_pytorch_best_guess() (doit donc être appelée APRÈS elle), SANS GPU
+# physique visible pendant le build.
+#
+# Différence clé avec install_sageattention() (runtime, inchangée) : pas de
+# GPU présent ici pour l'auto-détection de compute capability habituelle —
+# TORCH_CUDA_ARCH_LIST (SAGEATTENTION_ARCH_LIST, config.env) est donc fixé
+# explicitement pour couvrir plusieurs architectures d'un coup, plutôt que
+# de dépendre d'un device local.
+#
+# Pourquoi c'est sûr dans tous les cas, comme pour PyTorch : au démarrage
+# d'un conteneur, install_sageattention() teste `import sageattention` AVANT
+# toute décision — si ce module pré-compilé ne correspond pas au torch/CUDA
+# réellement en place sur ce pod (pari perdu), l'import échoue simplement et
+# la fonction recompile normalement, exactement comme si rien n'avait été
+# pré-installé. Jamais de pod cassé ; au pire, le temps de compilation perdu
+# pendant CE build d'image.
+################################################################################
+bake_sageattention_best_guess() {
+    log_step "Pré-compilation de SageAttention dans l'image (pari : même torch que bake_pytorch_best_guess)"
+
+    if [[ "${SAGEATTENTION_BAKE_IN_IMAGE:-true}" != "true" ]]; then
+        log_info "SAGEATTENTION_BAKE_IN_IMAGE=false — pré-compilation sautée (sera tentée normalement au premier démarrage du conteneur, selon SAGE_ATTENTION)."
+        return 0
+    fi
+
+    # shellcheck disable=SC1091  # cf. note dans setup_python_venv.
+    source "${VENV_DIR}/bin/activate"
+
+    local torch_cuda=""
+    torch_cuda="$(python -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)"
+    if [[ -z "$torch_cuda" ]]; then
+        log_warn "torch.version.cuda indisponible (bake_pytorch_best_guess a-t-elle bien tourné avant ?) — pré-compilation de SageAttention sautée."
+        deactivate
+        return 0
+    fi
+    local torch_major torch_minor torch_cuda_norm
+    torch_major="$(cut -d. -f1 <<< "$torch_cuda")"
+    torch_minor="$(cut -d. -f2 <<< "$torch_cuda")"
+    torch_cuda_norm="${torch_major}.${torch_minor}"
+
+    local matched_cuda_home=""
+    matched_cuda_home="$(_sage_find_matching_nvcc "$torch_cuda_norm" "/usr/local/cuda-${torch_cuda_norm}" /usr/local/cuda-"${torch_major}".*)" || true
+    if [[ -z "$matched_cuda_home" ]] && require_cmd apt-get; then
+        local toolkit_pkg="cuda-toolkit-${torch_cuda_norm/./-}"
+        apt-get update -y >>"$LOG_FILE" 2>&1 || true
+        if retry "$DOWNLOAD_MAX_RETRIES" apt-get install -y "$toolkit_pkg" >>"$LOG_FILE" 2>&1; then
+            matched_cuda_home="$(_sage_find_matching_nvcc "$torch_cuda_norm" "/usr/local/cuda-${torch_cuda_norm}" /usr/local/cuda-"${torch_major}".*)" || true
+        else
+            local major_pkg="cuda-toolkit-${torch_major}"
+            log_warn "${toolkit_pkg} indisponible — repli sur ${major_pkg} (version réelle vérifiée avant toute compilation, jamais supposée)."
+            retry "$DOWNLOAD_MAX_RETRIES" apt-get install -y "$major_pkg" >>"$LOG_FILE" 2>&1 || true
+            matched_cuda_home="$(_sage_find_matching_nvcc "$torch_cuda_norm" "/usr/local/cuda-${torch_cuda_norm}" /usr/local/cuda-"${torch_major}".*)" || true
+        fi
+    fi
+    if [[ -z "$matched_cuda_home" ]]; then
+        log_warn "Aucun nvcc CUDA ${torch_cuda_norm} disponible pendant la construction de l'image — pré-compilation de SageAttention sautée (sera tentée normalement au démarrage du conteneur)."
+        deactivate
+        return 0
+    fi
+    log_ok "nvcc cohérent sélectionné pour le build : ${matched_cuda_home}/bin/nvcc (release ${torch_cuda_norm})."
+
+    if ! python -c "import triton" 2>/dev/null; then
+        local triton_req=""
+        triton_req="$(python - <<'PYEOF'
+from importlib.metadata import requires, PackageNotFoundError
+try:
+    reqs = requires("torch") or []
+except PackageNotFoundError:
+    reqs = []
+for r in reqs:
+    if r.split(";")[0].strip().lower().startswith("triton"):
+        print(r.split(";")[0].strip())
+        break
+PYEOF
+)"
+        if [[ -n "$triton_req" ]]; then
+            python -m pip install --quiet "$triton_req" >>"$LOG_FILE" 2>&1 || \
+                log_warn "Échec d'installation de ${triton_req} — la pré-compilation risque d'échouer (non bloquant)."
+        fi
+    fi
+
+    if ! mkdir -p "$(dirname "$SAGEATTENTION_CACHE_DIR")" 2>>"$LOG_FILE"; then
+        log_warn "Impossible de créer $(dirname "$SAGEATTENTION_CACHE_DIR") — pré-compilation sautée."
+        deactivate
+        return 0
+    fi
+    if [[ ! -d "${SAGEATTENTION_CACHE_DIR}/.git" ]]; then
+        log_info "Clonage de SageAttention (${SAGEATTENTION_REPO})..."
+        if ! retry "$DOWNLOAD_MAX_RETRIES" git clone "$SAGEATTENTION_REPO" "$SAGEATTENTION_CACHE_DIR" >>"$LOG_FILE" 2>&1; then
+            log_warn "Échec du clonage de SageAttention — pré-compilation sautée."
+            deactivate
+            return 0
+        fi
+    fi
+
+    log_info "Compilation de SageAttention dans l'image pour CUDA ${torch_cuda_norm}, architectures ${SAGEATTENTION_ARCH_LIST} (TORCH_CUDA_ARCH_LIST explicite — aucun GPU visible pendant le build, cf. SAGEATTENTION_ARCH_LIST dans config.env). Peut prendre 10-20 min."
+    local build_rc=0
+    (
+        cd "$SAGEATTENTION_CACHE_DIR" || exit 1
+        export CUDA_HOME="$matched_cuda_home"
+        export PATH="${matched_cuda_home}/bin:${PATH}"
+        export EXT_PARALLEL=4
+        export NVCC_APPEND_FLAGS="--threads 8"
+        export MAX_JOBS="$SAGEATTENTION_BUILD_JOBS"
+        export TORCH_CUDA_ARCH_LIST="$SAGEATTENTION_ARCH_LIST"
+        pip install -e . --no-build-isolation
+    ) >>"$LOG_FILE" 2>&1 || build_rc=$?
+
+    if [[ "$build_rc" -ne 0 ]]; then
+        log_warn "Échec de pré-compilation de SageAttention dans l'image (code ${build_rc}) — non bloquant, sera retenté normalement au démarrage du conteneur (consultez ${LOG_FILE})."
+        deactivate
+        return 0
+    fi
+
+    if python -c "import sageattention" 2>/dev/null; then
+        log_ok "SageAttention pré-compilé dans l'image (CUDA ${torch_cuda_norm}, archs ${SAGEATTENTION_ARCH_LIST}) — vérifié et remplacé si besoin au démarrage de chaque conteneur (voir install_sageattention())."
+    else
+        log_warn "Pré-compilation terminée sans erreur mais le module ne s'importe pas dans cet environnement de build — sera de toute façon revérifié/recompilé si besoin au démarrage du conteneur (non bloquant)."
+    fi
+
+    deactivate
 }
 
 install_pytorch() {

@@ -92,6 +92,7 @@ if [[ "$ONLY_MODELS" == "true" ]]; then
     exit 1
   fi
   detect_gpu
+  warn_if_cuda130_likely_incompatible
   detect_system_ram
 nvidia-smi || {
     log_error "GPU NVIDIA non détecté."
@@ -138,6 +139,7 @@ fi
 
 run_step "system_packages"    install_system_packages    "$FORCE"
 detect_gpu
+warn_if_cuda130_likely_incompatible
 detect_system_ram
 if ! command -v git-lfs >/dev/null 2>&1; then
     apt-get install -y git-lfs
