@@ -396,6 +396,7 @@ bake_sageattention_wheel() {
         matched_nvcc_ver="${_match##*:}"
     fi
     if [[ -z "$matched_cuda_home" ]] && require_cmd apt-get; then
+        _sage_ensure_nvidia_cuda_apt_repo || true
         local toolkit_pkg="cuda-toolkit-${torch_major}-${torch_minor}"
         apt-get update -y >>"$LOG_FILE" 2>&1 || log_warn "apt-get update a échoué — on tente quand même l'installation du toolkit CUDA."
         if ! retry "$DOWNLOAD_MAX_RETRIES" apt-get install -y "$toolkit_pkg" >>"$LOG_FILE" 2>&1; then
@@ -740,6 +741,98 @@ _sage_find_matching_nvcc() {
   return 1
 }
 
+# _sage_ensure_nvidia_cuda_apt_repo
+# Les paquets "cuda-toolkit-*" ne sont JAMAIS servis par les dépôts Ubuntu
+# par défaut (archive.ubuntu.com/security.ubuntu.com) — seul le dépôt apt
+# officiel NVIDIA (developer.download.nvidia.com) les fournit. L'image de
+# base de ce projet est ubuntu:22.04 nue (voir Dockerfile), qui ne
+# configure PAS ce dépôt : sans cette fonction, tout `apt-get install
+# cuda-toolkit-X-Y` échoue systématiquement avec "Unable to locate
+# package", quelle que soit la version demandée ou le nombre de tentatives
+# (c'est un dépôt manquant, pas un nom de paquet incorrect ni un problème
+# réseau transitoire — retry ne peut donc jamais corriger ça seul).
+#
+# Idempotent : si le dépôt est déjà configuré (pod avec une image
+# nvidia/cuda de base, ou exécution précédente de cette fonction), ne fait
+# rien. Best-effort et non bloquant comme le reste de ce fichier : en cas
+# d'échec (offline, distro non reconnue...), log un warning et laisse
+# l'appelant constater ensuite que cuda-toolkit reste introuvable via son
+# propre repli habituel — ne fait jamais échouer l'installation globale.
+_sage_ensure_nvidia_cuda_apt_repo() {
+  require_cmd apt-get || return 0
+
+  # Déjà configuré ? (paquet cuda-keyring installé, ou fichier de dépôt
+  # NVIDIA déjà présent) — rien à faire.
+  if dpkg -s cuda-keyring >/dev/null 2>&1 \
+    || ls /etc/apt/sources.list.d/*cuda*.list >/dev/null 2>&1 \
+    || ls /etc/apt/sources.list.d/*cuda*.sources >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if ! require_cmd curl && ! require_cmd wget; then
+    log_warn "Ni curl ni wget disponibles — impossible de configurer le dépôt apt CUDA de NVIDIA."
+    return 1
+  fi
+
+  # distro : "ubuntuMMYY" (ex: ubuntu2204), à partir de /etc/os-release.
+  # arch   : x86_64 -> x86_64, aarch64/arm64 -> sbsa (nom utilisé par NVIDIA
+  #          pour les dépôts CUDA ARM serveur).
+  local distro="" ver_id="" arch="" nvidia_arch=""
+  if [[ -f /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    ver_id="$(. /etc/os-release && echo "$VERSION_ID")"
+  fi
+  if [[ -z "$ver_id" ]]; then
+    log_warn "Impossible de déterminer la version d'Ubuntu (/etc/os-release absent ou incomplet) — dépôt apt CUDA NVIDIA non configuré."
+    return 1
+  fi
+  distro="ubuntu${ver_id//./}"
+
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64) nvidia_arch="x86_64" ;;
+    aarch64|arm64) nvidia_arch="sbsa" ;;
+    *)
+      log_warn "Architecture ${arch} non reconnue pour le dépôt apt CUDA NVIDIA — installation sautée."
+      return 1
+      ;;
+  esac
+
+  local keyring_url="https://developer.download.nvidia.com/compute/cuda/repos/${distro}/${nvidia_arch}/cuda-keyring_1.1-1_all.deb"
+  local keyring_deb="/tmp/cuda-keyring_1.1-1_all.deb"
+
+  log_info "Dépôt apt CUDA NVIDIA absent (paquets cuda-toolkit-* introuvables sans lui sur une image Ubuntu nue) — configuration depuis ${keyring_url}."
+
+  local sudo_cmd=""
+  [[ "$(id -u)" -ne 0 ]] && require_cmd sudo && sudo_cmd="sudo"
+
+  if require_cmd curl; then
+    retry "$DOWNLOAD_MAX_RETRIES" curl -fsSL -o "$keyring_deb" "$keyring_url" >>"$LOG_FILE" 2>&1
+  else
+    retry "$DOWNLOAD_MAX_RETRIES" wget -q -O "$keyring_deb" "$keyring_url" >>"$LOG_FILE" 2>&1
+  fi
+
+  if [[ ! -s "$keyring_deb" ]]; then
+    log_warn "Échec du téléchargement de cuda-keyring (${distro}/${nvidia_arch}) — dépôt apt CUDA NVIDIA non configuré, cuda-toolkit-* restera introuvable."
+    rm -f "$keyring_deb"
+    return 1
+  fi
+
+  if ! $sudo_cmd dpkg -i "$keyring_deb" >>"$LOG_FILE" 2>&1; then
+    log_warn "Échec de l'installation de cuda-keyring — dépôt apt CUDA NVIDIA non configuré, cuda-toolkit-* restera introuvable."
+    rm -f "$keyring_deb"
+    return 1
+  fi
+  rm -f "$keyring_deb"
+
+  if ! $sudo_cmd apt-get update -y >>"$LOG_FILE" 2>&1; then
+    log_warn "apt-get update a échoué après l'ajout du dépôt CUDA NVIDIA — on tente quand même la suite."
+  fi
+
+  log_ok "Dépôt apt CUDA NVIDIA configuré (${distro}/${nvidia_arch}) — cuda-toolkit-* devrait maintenant être installable."
+  return 0
+}
+
 install_sageattention() {
   log_step "SageAttention (accélération / réduction VRAM des nœuds H3)"
 
@@ -836,6 +929,7 @@ install_sageattention() {
     local toolkit_pkg="cuda-toolkit-${torch_cuda_norm/./-}"
     local sudo_cmd=""
     [[ "$(id -u)" -ne 0 ]] && require_cmd sudo && sudo_cmd="sudo"
+    _sage_ensure_nvidia_cuda_apt_repo || true
     log_info "Aucun nvcc de la branche CUDA ${torch_major}.x (build torch) trouvé — installation de ${toolkit_pkg} (peut prendre plusieurs minutes, ~3-4 Go)."
     if ! $sudo_cmd apt-get update -y >>"$LOG_FILE" 2>&1; then
       log_warn "apt-get update a échoué — on tente quand même l'installation du toolkit CUDA."
