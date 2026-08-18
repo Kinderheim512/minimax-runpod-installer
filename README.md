@@ -128,14 +128,14 @@ default:
 
 | Question | Options |
 |-|-|
-| Preset | None (standard tiers) · `dasiwa_mmh3v12` **(default)** · `aistudynow` · `minimaxh3auto_v5` |
+| Preset | None (standard tiers) · `dasiwa_mmh3v12` **(default)** · `muse_director_seedhunt` |
 | Model tier *(skipped if the preset replaces it)* | `auto` **(default)** · `light` · `pruned` · `pruned_scaled` · `balanced` · `max` |
 | Turbo LoRA | On **(default)** · Off |
 | SageAttention | On **(default)** · Off |
 | Spectrum | On **(default)** · Off |
 
-A preset that fully replaces the standard tier (currently only
-`dasiwa_mmh3v12` — see [Presets](#-presets-extra-models-for-a-specific-workflow))
+A preset that fully replaces the standard tier (currently `dasiwa_mmh3v12` and
+`muse_director_seedhunt` — see [Presets](#-presets-extra-models-for-a-specific-workflow))
 skips the tier question entirely, since it wouldn't do anything. Sample run:
 
 ```
@@ -146,9 +146,8 @@ skips the tier question entirely, since it wouldn't do anything. Sample run:
 Preset (jeu de modèles/workflow) :
  1) Aucun — installation standard uniquement
  2) dasiwa_mmh3v12 — DaSiWa MythicAlchemy (remplace le palier standard)  [défaut]
- 3) aistudynow — checkpoint expérimental W4A8 (additif)
- 4) minimaxh3auto_v5 (additif)
-Choix [1-4, Entrée = défaut] :
+ 3) muse_director_seedhunt — Director/Seed Hunt, poids pruned (remplace le palier standard)
+Choix [1-3, Entrée = défaut] :
 → 'dasiwa_mmh3v12' fournit son propre jeu de poids et son propre workflow.
 Turbo LoRA MiniMax H3 (génération accélérée) :
  1) Activé (téléchargement + custom node auto)  [défaut]
@@ -295,30 +294,30 @@ active. Set `H3_PRESETS=""` in `config.env` (or `--preset=` on the command
 line) to opt back into the standard `H3_TIER` weights instead.
 
 ```bash
-bash install.sh --preset=aistudynow                # full install + this preset
-bash install.sh --only-models --preset=aistudynow   # (re)download just this preset's models
+bash install.sh --preset=dasiwa_mmh3v12                # full install + this preset
+bash install.sh --only-models --preset=dasiwa_mmh3v12   # (re)download just this preset's models
 bash install.sh --preset=                           # disable the default preset, use the standard H3_TIER tier
 ```
 
 Or set it permanently in `config.env`:
 
 ```bash
-H3_PRESETS="aistudynow"
+H3_PRESETS="dasiwa_mmh3v12"
 ```
 
-Multiple presets: `--preset=aistudynow,other_preset`. An unknown preset name
+Multiple presets: `--preset=dasiwa_mmh3v12,other_preset`. An unknown preset name
 is ignored with a warning, never a hard failure.
 
 |Preset|What it installs|
 |-|-|
-|`aistudynow`|Experimental W4A8 MiniMax H3 Reference-to-Video checkpoint (Kijai/MiniMax-H3-experimental), its matching INT8 ConvRot video VAE and rank-256 reference LoRA, plus the NVFP4 AWQ text encoder and audio VAE already used by the standard install (skipped if already present) — and the dedicated `MiniMax_H3_REF2V_AIStudyNow.json` workflow.|
 |`dasiwa_mmh3v12` **(default)**|"DaSiWa - MiniMaxH3 MythicAlchemy v12" (T2VA/I2VA/FLF2VA/REF2VA) checkpoints — INT8 ConvRot FL2VA + REF2VA (Comfy-Org/MiniMax-H3, outside the standard tiers) and the INT4 ConvRot text encoder (Abiray/MiniMax-H3-GGUF) as selected in the workflow's Settings node — plus the fp16 video VAE and fp32 audio VAE (already used by the standard install, repeated here so the preset is self-contained), the TAE fast-preview model (Kijai/MiniMax-H3-TAE), the AnimeSharpV4 upscale model (Kim2091/2x-AnimeSharpV4), the RIFE 4.26 frame-interpolation model (Comfy-Org/frame_interpolation), and the `ComfyUI-DaSiWa-Nodes` custom node (required by the workflow's LoRA loader and Director nodes). 4 diffusion/VAE files also get symlinked into a `MiniMaxH3/` subfolder under `diffusion_models/`/`vae/`, matching the node pack's own naming convention. **Replaces the standard `H3_TIER` download** (see above) — INT8 ConvRot was kept deliberately over FP8 scaled: community benchmarks and the upstream Comfy-Org README both favor INT8 ConvRot on Ampere-class cards.|
-|`minimaxh3auto_v5`|"Minimax H3 Auto-Prompter" (T2VA/I2VA/L2VA/FL2VA/REF2V) — downloads the local GGUF prompt-writing LLM (DavidAU/Qwen3.6-27B-Fable-Fusion-711-Uncensored-Heretic-NM-DAU-NEO-MAX-MTP-GGUF) and its vision projector `mmproj-F16.gguf` into `models/LLM`, plus the `Qwen3.5-9B-abliterated` CLIP text encoder (lukey03/Qwen3.5-9B-abliterated) into `models/text_encoders`, and the dedicated `MinimaxH3Auto_v5.json` workflow. **Filename caveat**: the repo file is `model.safetensors` — this project's preset downloader never renames files, but the workflow's CLIPLoader widget expects `Qwen3.5-9B-abliterated.safetensors`, so rename it once after download (`mv ComfyUI/models/text_encoders/model.safetensors ComfyUI/models/text_encoders/Qwen3.5-9B-abliterated.safetensors`) or reselect `model.safetensors` in the node's dropdown. **Requires the `ComfyUI-LLM-text-processor` custom node** (installed separately via `OPTIONAL_NODE_REPOS`, not by the preset itself). Its llama.cpp backend only ships official Windows x64+CUDA 13 binaries — on this Linux/RunPod install it needs a Linux-built llama.cpp binary in place manually before the node will run (see the node's [README](https://github.com/KingManiya/ComfyUI-LLM-text-processor#llamacpp)); this installer does not build or fetch one for you.|
+|`muse_director_seedhunt`|"Muse Minimax Director (Seed Hunt)" — a timeline/CUT-based director node on top of the stock `MiniMaxH3ReferenceToVideo`/`MiniMaxH3ImageToVideo` nodes, with a Seed Hunt toggle that scouts 4 candidate seeds at low resolution before a full-res refine pass. Downloads the pruned INT8 ConvRot FL2VA + REF2VA checkpoints (Comfy-Org/MiniMax-H3, same files as `dasiwa_mmh3v12` — deduplicated automatically if both are active), the NVFP4 AWQ text encoder and fp16/fp32 video/audio VAE (already used by the standard install, repeated here so the preset is self-contained), and the TAE fast-preview model (Kijai/MiniMax-H3-TAE). Clones the `MiniMaxH3-Director-Seed-Hunt` custom node (muse-collective-26) and installs its one extra pip dependency (`av`, for decoding uploaded reference video/audio clips — declared only in the node's README, not in a requirements.txt, hence handled separately by this preset). Installs the bundled example workflow `muse_minimax_h3_director_scout_v1.json`. **Replaces the standard `H3_TIER` download** (see above) — it downloads its own complete FL2VA/REF2VA set.|
 
 Adding a new preset later only means: a manifest entry in `config.env`
 (`PRESET_<NAME>`, `H3_PRESET_NAMES`, optionally `H3_PRESET_WORKFLOWS`,
-`PRESET_<NAME>_NODE_REPOS`, `PRESET_<NAME>_SYMLINKS`, and
-`H3_PRESET_REPLACES_STANDARD_TIER` if it should replace rather than
+`PRESET_<NAME>_NODE_REPOS`, `PRESET_<NAME>_PIP_PACKAGES` (for a custom node
+whose dependencies aren't in a `requirements.txt`), `PRESET_<NAME>_SYMLINKS`,
+and `H3_PRESET_REPLACES_STANDARD_TIER` if it should replace rather than
 supplement the standard tier) and a workflow file under `presets/<name>/` —
 nothing in `lib/presets.sh` needs to change.
 
@@ -726,7 +725,7 @@ bash install.sh --only-models         # (re)download weights only
 bash install.sh --tier=light          # force a weight tier (light/pruned/pruned_scaled/balanced/max)
 bash install.sh --tier=auto           # pick a tier from detected VRAM
 bash install.sh --workflows=t2v,r2v   # only install these workflows' models
-bash install.sh --preset=aistudynow   # + this preset's models/workflow (additive)
+bash install.sh --preset=muse_director_seedhunt   # + this preset's models/workflow (replaces standard tier)
 bash install.sh --preset=             # disable the default preset, use the standard H3_TIER tier
 bash install.sh --skip-models --preset=dasiwa_mmh3v12  # ComfyUI/CUDA/PyTorch only + this preset's models
 bash install.sh --yes                 # non-interactive, answers "yes" everywhere
@@ -800,9 +799,8 @@ the installer only warns, it doesn't block on an unrecognized card.
 │   └── verify.sh            # check.sh backend + install summary
 ├── workflows/               # official MiniMax H3 workflow JSON files (see Workflows above)
 ├── presets/                 # preset-specific workflow JSON files (see Presets above)
-│   ├── aistudynow/
 │   ├── dasiwa_mmh3v12/
-│   └── minimaxh3auto_v5/
+│   └── muse_director_seedhunt/
 ├── docs/
 │   ├── INSTALL_EN.md        # detailed step-by-step guide (English)
 │   └── INSTALL_FR.md        # detailed step-by-step guide (French)

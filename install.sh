@@ -7,9 +7,13 @@
 #   bash install.sh --only-models         (ré)télécharge uniquement les poids
 #   bash install.sh --tier=light          force un palier de poids
 #   bash install.sh --workflows=t2v,r2v   choisit les workflows préparés
-#   bash install.sh --preset=aistudynow   télécharge en plus les modèles/le
-#                                          workflow d'un preset (additif —
-#                                          n'affecte jamais --tier/--workflows)
+#   bash install.sh --preset=dasiwa_mmh3v12  télécharge le jeu de modèles/
+#                                          le workflow d'un preset (voir
+#                                          H3_PRESET_NAMES, config.env —
+#                                          certains presets remplacent le
+#                                          palier standard, d'autres sont
+#                                          additifs, cf. commentaire de
+#                                          H3_PRESET_REPLACES_STANDARD_TIER)
 #   bash install.sh --yes                 non interactif (répond "oui" partout)
 #   bash install.sh --force               ignore l'état déjà validé (réexécute tout)
 
@@ -125,6 +129,7 @@ nvidia-smi || {
   install_turbo_lora
   if [[ -n "$H3_ACTIVE_PRESETS" ]]; then
     install_preset_nodes "$H3_ACTIVE_PRESETS"
+    install_preset_pip_packages "$H3_ACTIVE_PRESETS"
     if download_preset_models "$H3_ACTIVE_PRESETS"; then
       install_preset_symlinks "$H3_ACTIVE_PRESETS"
       install_preset_workflows "$H3_ACTIVE_PRESETS"
@@ -209,6 +214,7 @@ fi
 #     déjà résolu plus haut) ---------------------------------------------
 if [[ -n "$H3_ACTIVE_PRESETS" ]]; then
   install_preset_nodes "$H3_ACTIVE_PRESETS"
+  install_preset_pip_packages "$H3_ACTIVE_PRESETS"
   if download_preset_models "$H3_ACTIVE_PRESETS"; then
     install_preset_symlinks "$H3_ACTIVE_PRESETS"
     install_preset_workflows "$H3_ACTIVE_PRESETS"

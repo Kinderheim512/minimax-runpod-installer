@@ -109,8 +109,7 @@ echo "  (Entrée seule = garder le choix par défaut à chaque question)"
 ask_choice "Preset (jeu de modèles/workflow) :" WIZ_PRESET "dasiwa_mmh3v12" \
   "|Aucun — installation standard uniquement" \
   "dasiwa_mmh3v12|dasiwa_mmh3v12 — DaSiWa MythicAlchemy (remplace le palier standard)" \
-  "aistudynow|aistudynow — checkpoint expérimental W4A8 (additif)" \
-  "minimaxh3auto_v5|minimaxh3auto_v5 (additif)"
+  "muse_director_seedhunt|muse_director_seedhunt — Director/Seed Hunt, poids pruned (remplace le palier standard)"
 
 if [[ -n "$WIZ_PRESET" ]] && preset_replaces_tier "$WIZ_PRESET"; then
   WIZ_TIER=""
