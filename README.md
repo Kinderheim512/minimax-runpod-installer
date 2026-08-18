@@ -502,11 +502,54 @@ re-entry needed:
   `models/loras/manifest/`.
 * `nodes_manifest.txt` — one custom-node Git repo URL per line, optional
   second word `false` to skip its `requirements.txt`. Installed into
-  `custom_nodes/`, indistinguishable from any other optional node.
+  `custom_nodes/`, indistinguishable from any other optional node. No
+  need to list nodes already in `OPTIONAL_NODE_REPOS` (config.env) —
+  `rgthree-comfy`, `ComfyUI-KJNodes`, etc. are installed by default
+  regardless; this manifest is for anything *additional* you personally
+  want.
 
 Both are read-only for this project — `sync_push.sh`/`update.sh` never
 write to them, they're yours to maintain by hand. See
 `lib/personal_storage.sh` for the full mechanism.
+
+**Quick example.** Your vault repo's file layout, all four pieces combined:
+
+```
+<your-repo>/
+├── loras_manifest.txt              # plain text, one URL per line
+├── nodes_manifest.txt              # plain text, one Git URL per line
+├── loras/personal/                 # actual .safetensors files (pushed by sync_push.sh)
+├── presets/personal/               # your own presets
+├── outputs/                        # generated videos/images
+└── workflows/
+    └── my_workflow.json            # any ComfyUI-exported workflow, as-is
+```
+
+`loras_manifest.txt`:
+```
+# One LoRA per line: <URL> [optional local filename]
+https://huggingface.co/<user>/<repo>/resolve/main/my_favorite_lora.safetensors my_favorite_lora.safetensors
+```
+
+`nodes_manifest.txt`:
+```
+# One custom node repo per line: <git URL> [false to skip requirements.txt]
+https://github.com/crystian/ComfyUI-Crystools
+```
+
+Uploading either file or the `workflows/` folder (from a venv with
+`huggingface_hub` installed and authenticated — `hf auth login` if needed):
+
+```bash
+hf upload <you>/<repo> loras_manifest.txt loras_manifest.txt --repo-type dataset
+hf upload <you>/<repo> nodes_manifest.txt nodes_manifest.txt --repo-type dataset
+hf upload <you>/<repo> my_workflow.json workflows/my_workflow.json --repo-type dataset
+```
+
+...or just drag-and-drop via "Add file → Upload files" on the repo's page
+on huggingface.co. Any valid ComfyUI workflow export (Workflow → Export,
+or Ctrl+S in the UI) works as-is in `workflows/` — no special format
+required beyond what ComfyUI itself produces.
 
 The free Hugging Face tier gives 100 GB of private storage — plenty for
 this (not to be confused with the H3 weights storage, handled separately
