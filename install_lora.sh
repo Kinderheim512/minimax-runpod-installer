@@ -96,6 +96,13 @@ LORA_DIR="${INSTALL_DIR}/models/loras"
 # Même sous-dossier que lib/personal_storage.sh::PERSONAL_STORAGE_LORAS_DIR()
 # — ne pas diverger de ce chemin, c'est ce que sync_push.sh sauvegarde.
 PERSONAL_LORA_DIR="${LORA_DIR}/personal"
+# Même sous-dossier que lib/personal_storage.sh::PERSONAL_STORAGE_MANIFEST_LORAS_DIR()
+# — cible de --manifest ci-dessous, utilisée par
+# _personal_storage_process_manifest_loras() pour installer les LoRA listés
+# dans loras_manifest.txt (coffre HF perso). Dossier séparé de
+# PERSONAL_LORA_DIR : contenu déclaratif re-téléchargé à chaque restauration,
+# jamais lui-même sauvegardé vers le coffre HF (voir sync_push.sh).
+MANIFEST_LORA_DIR="${LORA_DIR}/manifest"
 DOWNLOAD_MAX_RETRIES="${DOWNLOAD_MAX_RETRIES:-5}"
 
 usage() {
@@ -106,6 +113,7 @@ Gestionnaire de LoRA pour ComfyUI — installe, liste ou supprime les LoRA
 présents dans :
   ${LORA_DIR}
   ${PERSONAL_LORA_DIR}  (avec --personal)
+  ${MANIFEST_LORA_DIR}  (avec --manifest)
 
 Sources supportées (aucune authentification requise pour du contenu public) :
   - Hugging Face : lien direct .../resolve/main/fichier.safetensors
@@ -119,6 +127,17 @@ Sources supportées (aucune authentification requise pour du contenu public) :
   PERSONAL_STORAGE_HF_REPO dans config.env, et sync_push.sh). Utilisez ce
   flag pour tout LoRA que vous voulez retrouver sur votre prochain pod sans
   le retélécharger. Combinable avec --force, --filename, --list, --remove.
+
+--manifest :
+  Installe (ou liste/supprime) dans ${MANIFEST_LORA_DIR}
+  au lieu de ${LORA_DIR} — c'est le dossier utilisé en interne par
+  lib/personal_storage.sh pour traiter loras_manifest.txt (coffre HF perso) :
+  contenu déclaratif, re-téléchargé à chaque restauration, jamais lui-même
+  sauvegardé vers le coffre HF. Mutuellement exclusif avec --personal.
+  Combinable avec --force, --filename, --list, --remove.
+
+  Exemple :
+    $0 --manifest https://civitai.com/api/download/models/123456
 
 Authentification CivitAI (optionnelle) :
   Si la variable d'environnement CIVITAI_API_KEY est définie, elle est
@@ -530,6 +549,7 @@ main() {
   local action="install"
   local force="false"
   local personal="false"
+  local manifest="false"
   local remove_target=""
   local filename_override=""
   local positional=()
@@ -563,6 +583,10 @@ main() {
         personal="true"
         shift
         ;;
+      --manifest)
+        manifest="true"
+        shift
+        ;;
       --filename)
         shift
         if [[ $# -lt 1 ]]; then
@@ -585,8 +609,14 @@ main() {
     esac
   done
 
+  if [[ "$personal" == "true" && "$manifest" == "true" ]]; then
+    log_error "--personal et --manifest sont mutuellement exclusifs (deux dossiers cibles différents)."
+    exit 1
+  fi
+
   local target_dir="$LORA_DIR"
   [[ "$personal" == "true" ]] && target_dir="$PERSONAL_LORA_DIR"
+  [[ "$manifest" == "true" ]] && target_dir="$MANIFEST_LORA_DIR"
 
   case "$action" in
     list)
