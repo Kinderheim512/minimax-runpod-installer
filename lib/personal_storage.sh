@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # lib/personal_storage.sh — sauvegarde/restauration des LoRAs, presets et
 # outputs perso, indépendamment du Network Volume RunPod (payant, lié à un
-# seul datacenter — voir la note d'objectif dans config.env).
+# seul datacenter — voir la note d'objectif dans config.env). Sert aussi de
+# mécanisme de "configuration perso" pour les LoRAs à télécharger, les nœuds
+# custom et les workflows souhaités — voir la section MANIFESTES ci-dessous.
 #
 # Deux backends indépendants, qui peuvent cohabiter :
 #   - Hugging Face (PERSONAL_STORAGE_HF_REPO) : coffre privé complet
-#     (loras/presets/outputs), lecture ET écriture, réutilise exactement le
-#     même token/la même authentification que lib/huggingface.sh (déjà
-#     utilisé pour les poids H3) — aucune nouvelle dépendance.
+#     (loras/presets/outputs/workflows + manifestes), lecture ET écriture,
+#     réutilise exactement le même token/la même authentification que
+#     lib/huggingface.sh (déjà utilisé pour les poids H3) — aucune nouvelle
+#     dépendance.
 #   - GitHub Releases (PERSONAL_LORAS_GITHUB_RELEASE_URL) : socle de LoRAs
 #     FIGÉS uniquement, lecture seule (jamais de push), aucune
 #     authentification requise si le dépôt est public.
@@ -16,6 +19,29 @@
 #   loras/     -> ${INSTALL_DIR}/models/loras/personal/
 #   presets/   -> ${PROJECT_ROOT}/presets/personal/
 #   outputs/   -> ${INSTALL_DIR}/output/
+#   workflows/ -> ${INSTALL_DIR}/user/default/workflows/personal/
+#     (n'importe quels fichiers *.json de workflow ComfyUI que vous avez
+#     vous-même exportés — copiés tels quels, aucun patch de nom de fichier
+#     de modèle contrairement aux workflows officiels H3, cf.
+#     lib/workflows.sh — c'est VOTRE workflow, configuré comme vous le
+#     voulez.)
+#
+# MANIFESTES (fichiers texte à la racine du dépôt HF, un par ligne, lignes
+# vides et commençant par '#' ignorées) — c'est la "configuration perso"
+# proprement dite, déclarative : vous éditez ces fichiers directement sur
+# huggingface.co (ou via `hf upload` depuis n'importe quelle machine), et
+# CHAQUE pod/conteneur qui restaure ce coffre au démarrage applique le même
+# souhait automatiquement, sans jamais avoir à ressaisir quoi que ce soit.
+# Ni loras_manifest.txt ni nodes_manifest.txt ne sont jamais écrits par
+# sync_personal_storage_push() : ce sont des souhaits que VOUS déclarez, pas
+# un état capturé automatiquement depuis ce qui est installé localement.
+#   - loras_manifest.txt : une URL de LoRA par ligne (HF/CivitAI/lien
+#     direct), avec un second mot optionnel pour forcer le nom de fichier
+#     local. Voir _personal_storage_process_manifest_loras ci-dessous.
+#   - nodes_manifest.txt : une URL de dépôt Git de nœud custom par ligne,
+#     avec un second mot optionnel "false" pour désactiver l'installation
+#     de son requirements.txt. Voir _personal_storage_process_manifest_nodes
+#     ci-dessous.
 #
 # Le sous-dossier "personal/" pour les LoRAs (plutôt que la racine
 # models/loras/) est un choix délibéré : le Turbo LoRA officiel MiniMax H3
@@ -24,9 +50,13 @@
 # d'un fichier "officiel" par convention de nommage fragile, et ComfyUI
 # scanne récursivement models/loras/ donc les LoRAs perso restent
 # sélectionnables normalement dans l'interface. Même raisonnement pour
-# presets/personal/ : les presets versionnés dans le repo (voir
-# H3_PRESET_WORKFLOWS, config.env) ne doivent jamais être confondus avec un
-# preset perso poussé/tiré depuis le coffre HF de l'utilisateur.
+# presets/personal/ et pour user/default/workflows/personal/ : le contenu
+# versionné dans ce repo (H3_PRESET_WORKFLOWS, config.env ; workflows/
+# officiels, cf. lib/workflows.sh) ne doit jamais être confondu avec du
+# contenu perso poussé/tiré depuis le coffre HF de l'utilisateur. Les nœuds
+# custom (custom_nodes/), en revanche, n'ont PAS cette distinction : ce sont
+# des extensions ComfyUI comme les autres, indiscernables de celles listées
+# dans OPTIONAL_NODE_REPOS (config.env) une fois installées.
 #
 # No-op propre et silencieux si aucune des deux variables n'est renseignée :
 # ne doit jamais bloquer une installation qui n'utilise pas cette
@@ -35,6 +65,16 @@
 PERSONAL_STORAGE_LORAS_DIR() { echo "${INSTALL_DIR}/models/loras/personal"; }
 PERSONAL_STORAGE_PRESETS_DIR() { echo "${PROJECT_ROOT}/presets/personal"; }
 PERSONAL_STORAGE_OUTPUTS_DIR() { echo "${INSTALL_DIR}/output"; }
+PERSONAL_STORAGE_WORKFLOWS_DIR() { echo "${INSTALL_DIR}/user/default/workflows/personal"; }
+# Dossier alimenté par loras_manifest.txt (voir
+# _personal_storage_pull_hf_manifest_loras ci-dessous) — délibérément séparé
+# de PERSONAL_STORAGE_LORAS_DIR ci-dessus : ces LoRA sont retéléchargés
+# depuis leur source d'origine à chaque démarrage (le manifeste est la seule
+# source de vérité), les inclure dans le coffre HF poussé par
+# sync_personal_storage_push() gaspillerait bande passante et stockage pour
+# un contenu déjà récupérable ailleurs. Même chemin que
+# install_lora.sh::MANIFEST_LORA_DIR — ne pas diverger.
+PERSONAL_STORAGE_MANIFEST_LORAS_DIR() { echo "${INSTALL_DIR}/models/loras/manifest"; }
 
 # _personal_storage_hf_ready
 # Vérifie que le CLI HF est disponible et authentifié, sans jamais forcer une
@@ -77,19 +117,139 @@ _personal_storage_hf_ready() {
   return 0
 }
 
+# _personal_storage_process_manifest_loras <staging_dir>
+# Traite loras_manifest.txt s'il est présent dans <staging_dir> (déjà
+# téléchargé par le pull complet du coffre HF ci-dessous, à la racine du
+# dépôt — pas de second appel réseau nécessaire ici) : une URL par ligne
+# (Hugging Face/CivitAI/lien direct, mêmes sources que install_lora.sh),
+# lignes vides et commençant par '#' ignorées. Un second mot optionnel sur
+# la ligne impose le nom de fichier local (équivalent de --filename).
+# Chaque URL est ensuite installée via install_lora.sh --manifest, dans
+# PERSONAL_STORAGE_MANIFEST_LORAS_DIR — aucune logique de téléchargement
+# dupliquée ici (mêmes garanties que l'installation manuelle : détection de
+# nom, retries, validation .safetensors, authentification CivitAI via
+# CIVITAI_API_KEY si définie).
+#
+# Best-effort et non bloquant, comme le reste de ce fichier : absence du
+# manifeste (fonctionnalité non utilisée) ou échec d'une URL individuelle ne
+# doit jamais interrompre sync_personal_storage_pull(). PERSONAL_STORAGE_
+# MANIFEST_LORAS_FILENAME (config.env) permet de renommer ce fichier si
+# besoin ; "loras_manifest.txt" par défaut.
+_personal_storage_process_manifest_loras() {
+  local staging="$1"
+  local manifest_filename="${PERSONAL_STORAGE_MANIFEST_LORAS_FILENAME:-loras_manifest.txt}"
+  local manifest_file="${staging}/${manifest_filename}"
+
+  [[ -s "$manifest_file" ]] || return 0
+
+  mkdir -p "$(PERSONAL_STORAGE_MANIFEST_LORAS_DIR)"
+
+  local total=0 ok=0 failed=0
+  local line url name
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' <<< "$line")"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+
+    url="$(awk '{print $1}' <<< "$line")"
+    name="$(awk '{print $2}' <<< "$line")"
+
+    if [[ ! "$url" =~ ^https?:// ]]; then
+      log_warn "Ligne ignorée dans ${manifest_filename} (URL invalide) : ${line}"
+      continue
+    fi
+
+    total=$((total + 1))
+    local -a lora_args=(--manifest)
+    [[ -n "$name" ]] && lora_args+=(--filename "$name")
+    lora_args+=("$url")
+
+    if bash "${PROJECT_ROOT}/install_lora.sh" "${lora_args[@]}" >>"$LOG_FILE" 2>&1; then
+      ok=$((ok + 1))
+    else
+      failed=$((failed + 1))
+      log_warn "Échec d'installation depuis le manifeste : ${url} (non bloquant, consultez ${LOG_FILE})."
+    fi
+  done < "$manifest_file"
+
+  if [[ "$total" -eq 0 ]]; then
+    log_info "${manifest_filename} présent mais vide (aucune URL exploitable)."
+  elif [[ "$failed" -eq 0 ]]; then
+    log_ok "LoRA du manifeste : ${ok}/${total} installés (${manifest_filename})."
+  else
+    log_warn "LoRA du manifeste : ${ok}/${total} installés, ${failed} échec(s) (${manifest_filename}) — voir ${LOG_FILE}."
+  fi
+}
+
+# _personal_storage_process_manifest_nodes <staging_dir>
+# Traite nodes_manifest.txt s'il est présent dans <staging_dir> (même
+# principe que _personal_storage_process_manifest_loras juste au-dessus,
+# mais pour des dépôts de nœuds custom Git plutôt que des URLs de LoRA) :
+# une URL de dépôt Git par ligne, lignes vides et commençant par '#'
+# ignorées. Un second mot optionnel "false" désactive l'installation du
+# requirements.txt du dépôt (équivalent de OPTIONAL_NODE_REPOS_NO_PIP,
+# config.env) — "true" (installer les dépendances) par défaut.
+#
+# Chaque dépôt est cloné/mis à jour via _clone_or_update_node_repo
+# (lib/nodes.sh) — EXACTEMENT la même fonction que pour OPTIONAL_NODE_REPOS,
+# aucune logique de clonage dupliquée ici. Un nœud installé de cette façon
+# atterrit dans ${INSTALL_DIR}/custom_nodes comme n'importe quel autre nœud
+# optionnel : contrairement aux LoRA/presets/workflows, il n'y a pas de
+# sous-dossier "personal" dédié (ce sont juste des extensions ComfyUI, pas
+# des données personnelles à isoler).
+#
+# Best-effort et non bloquant, comme le reste de ce fichier : un échec de
+# clonage individuel (déjà géré et loggué par _clone_or_update_node_repo
+# elle-même) ne doit jamais interrompre le traitement du reste du manifeste.
+# PERSONAL_STORAGE_MANIFEST_NODES_FILENAME (config.env) permet de renommer
+# ce fichier si besoin ; "nodes_manifest.txt" par défaut.
+_personal_storage_process_manifest_nodes() {
+  local staging="$1"
+  local manifest_filename="${PERSONAL_STORAGE_MANIFEST_NODES_FILENAME:-nodes_manifest.txt}"
+  local manifest_file="${staging}/${manifest_filename}"
+
+  [[ -s "$manifest_file" ]] || return 0
+
+  mkdir -p "${INSTALL_DIR}/custom_nodes"
+
+  local total=0
+  local line url allow_pip
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="$(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' <<< "$line")"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+
+    url="$(awk '{print $1}' <<< "$line")"
+    allow_pip="$(awk '{print $2}' <<< "$line")"
+    [[ "$allow_pip" == "false" ]] || allow_pip="true"
+
+    if [[ ! "$url" =~ ^https?:// ]]; then
+      log_warn "Ligne ignorée dans ${manifest_filename} (URL invalide) : ${line}"
+      continue
+    fi
+
+    total=$((total + 1))
+    _clone_or_update_node_repo "$url" "$allow_pip"
+  done < "$manifest_file"
+
+  if [[ "$total" -eq 0 ]]; then
+    log_info "${manifest_filename} présent mais vide (aucune URL exploitable)."
+  else
+    log_ok "Nœuds custom du manifeste : ${total} dépôt(s) traité(s) (${manifest_filename}, détail des succès/échecs individuels ci-dessus)."
+  fi
+}
+
 # sync_personal_storage_pull
 # Rapatrie LoRAs/presets/outputs perso au démarrage d'un nouveau pod/
 # conteneur, AVANT que ComfyUI ne soit lancé. Appelée depuis install.sh (tout
 # début, après vérification des prérequis) et depuis docker-entrypoint.sh.
 sync_personal_storage_pull() {
-  log_step "Stockage perso (LoRAs/presets/outputs) — restauration"
+  log_step "Stockage perso (LoRAs/presets/outputs/workflows + manifestes nœuds) — restauration"
 
   if [[ -z "${PERSONAL_STORAGE_HF_REPO:-}" && -z "${PERSONAL_LORAS_GITHUB_RELEASE_URL:-}" ]]; then
     log_info "PERSONAL_STORAGE_HF_REPO et PERSONAL_LORAS_GITHUB_RELEASE_URL vides — fonctionnalité désactivée, étape sautée."
     return 0
   fi
 
-  mkdir -p "$(PERSONAL_STORAGE_LORAS_DIR)" "$(PERSONAL_STORAGE_PRESETS_DIR)" "$(PERSONAL_STORAGE_OUTPUTS_DIR)"
+  mkdir -p "$(PERSONAL_STORAGE_LORAS_DIR)" "$(PERSONAL_STORAGE_PRESETS_DIR)" "$(PERSONAL_STORAGE_OUTPUTS_DIR)" "$(PERSONAL_STORAGE_WORKFLOWS_DIR)"
 
   if [[ -n "${PERSONAL_STORAGE_HF_REPO:-}" ]]; then
     if _personal_storage_hf_ready; then
@@ -107,15 +267,26 @@ sync_personal_storage_pull() {
         # ici : le coffre HF est la référence "au démarrage d'un nouveau
         # conteneur", où le local est par construction vide/absent.
         if require_cmd rsync; then
-          [[ -d "${staging}/loras" ]]   && rsync -a "${staging}/loras/"   "$(PERSONAL_STORAGE_LORAS_DIR)/"
-          [[ -d "${staging}/presets" ]] && rsync -a "${staging}/presets/" "$(PERSONAL_STORAGE_PRESETS_DIR)/"
-          [[ -d "${staging}/outputs" ]] && rsync -a "${staging}/outputs/" "$(PERSONAL_STORAGE_OUTPUTS_DIR)/"
+          [[ -d "${staging}/loras" ]]     && rsync -a "${staging}/loras/"     "$(PERSONAL_STORAGE_LORAS_DIR)/"
+          [[ -d "${staging}/presets" ]]   && rsync -a "${staging}/presets/"   "$(PERSONAL_STORAGE_PRESETS_DIR)/"
+          [[ -d "${staging}/outputs" ]]   && rsync -a "${staging}/outputs/"   "$(PERSONAL_STORAGE_OUTPUTS_DIR)/"
+          [[ -d "${staging}/workflows" ]] && rsync -a "${staging}/workflows/" "$(PERSONAL_STORAGE_WORKFLOWS_DIR)/"
         else
-          [[ -d "${staging}/loras" ]]   && cp -a "${staging}/loras/."   "$(PERSONAL_STORAGE_LORAS_DIR)/"
-          [[ -d "${staging}/presets" ]] && cp -a "${staging}/presets/." "$(PERSONAL_STORAGE_PRESETS_DIR)/"
-          [[ -d "${staging}/outputs" ]] && cp -a "${staging}/outputs/." "$(PERSONAL_STORAGE_OUTPUTS_DIR)/"
+          [[ -d "${staging}/loras" ]]     && cp -a "${staging}/loras/."     "$(PERSONAL_STORAGE_LORAS_DIR)/"
+          [[ -d "${staging}/presets" ]]   && cp -a "${staging}/presets/."   "$(PERSONAL_STORAGE_PRESETS_DIR)/"
+          [[ -d "${staging}/outputs" ]]   && cp -a "${staging}/outputs/."   "$(PERSONAL_STORAGE_OUTPUTS_DIR)/"
+          [[ -d "${staging}/workflows" ]] && cp -a "${staging}/workflows/." "$(PERSONAL_STORAGE_WORKFLOWS_DIR)/"
         fi
         log_ok "Coffre HF restauré (${PERSONAL_STORAGE_HF_REPO})."
+
+        # Manifestes déclaratifs (loras_manifest.txt / nodes_manifest.txt à
+        # la racine du dépôt HF, déjà présents dans $staging — aucun appel
+        # réseau supplémentaire) — voir le commentaire d'en-tête de ce
+        # fichier (section MANIFESTES) et celui de chaque fonction pour le
+        # détail. Appelés ici, dans le bloc encore activé du venv (le CLI
+        # HF et pip_install_requirements en ont besoin), avant `deactivate`.
+        _personal_storage_process_manifest_loras "$staging"
+        _personal_storage_process_manifest_nodes "$staging"
       else
         log_warn "Échec de récupération du coffre HF ${PERSONAL_STORAGE_HF_REPO} (consultez ${LOG_FILE}) — étape non bloquante, on continue."
       fi

@@ -487,6 +487,26 @@ e.g. `<you>/minimax-runpod-perso`) that acts as a vault for:
 * `presets/personal/` — your own presets (kept separate from the presets
   versioned in this repo)
 * `output/` — generated videos/images you want to keep
+* `user/default/workflows/personal/` — your own exported ComfyUI workflow
+  JSON files, copied as-is (no filename patching, unlike the official H3
+  workflows)
+
+**Declarative personal config.** Two optional plain-text files at the root
+of that same HF repo let you declare what you want auto-installed on
+every pod/container that restores this vault — edit them once on
+huggingface.co (or `hf upload`), applied everywhere from then on, no
+re-entry needed:
+
+* `loras_manifest.txt` — one LoRA URL per line (HF/CivitAI/direct link),
+  optional second word to force the local filename. Installed into
+  `models/loras/manifest/`.
+* `nodes_manifest.txt` — one custom-node Git repo URL per line, optional
+  second word `false` to skip its `requirements.txt`. Installed into
+  `custom_nodes/`, indistinguishable from any other optional node.
+
+Both are read-only for this project — `sync_push.sh`/`update.sh` never
+write to them, they're yours to maintain by hand. See
+`lib/personal_storage.sh` for the full mechanism.
 
 The free Hugging Face tier gives 100 GB of private storage — plenty for
 this (not to be confused with the H3 weights storage, handled separately

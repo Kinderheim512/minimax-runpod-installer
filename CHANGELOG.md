@@ -10,6 +10,33 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### ✨ Personal HF vault: declarative config for LoRAs, custom nodes, and workflows
+
+- Fixed a latent bug: `_personal_storage_process_manifest_loras()`
+  (`loras_manifest.txt` support) existed in `lib/personal_storage.sh` but
+  was never actually called from `sync_personal_storage_pull()` — dead code
+  since it was added, so that manifest was silently ignored on every pod.
+  Now wired in.
+- New `nodes_manifest.txt` (same location and format as
+  `loras_manifest.txt`, one Git repo URL per line) — installs custom nodes
+  from the personal HF vault via the same `_clone_or_update_node_repo()`
+  used for `OPTIONAL_NODE_REPOS`, landing in `custom_nodes/` like any other
+  optional node.
+- New `workflows/` folder synced from the personal HF vault (same
+  mechanism as `loras/`, `presets/`, `outputs/`) into
+  `user/default/workflows/personal/` — drop your own exported ComfyUI
+  workflow JSON files there, copied as-is on every pod.
+- `PERSONAL_STORAGE_MANIFEST_LORAS_FILENAME` and
+  `PERSONAL_STORAGE_MANIFEST_NODES_FILENAME` (`config.env`) let you rename
+  either manifest file if needed.
+- Together: a single private HF dataset repo now fully describes "what I
+  want installed" (LoRAs, presets, custom nodes, workflows) — pulled
+  automatically at the start of every `install.sh` run (including via
+  `wizard.sh`, which calls `install.sh` under the hood) and every Docker
+  container start. `sync_push.sh`/`update.sh` never write the two
+  manifests or `workflows/` back — they stay under manual control on
+  purpose (a wishlist, not an auto-captured snapshot).
+
 ### ⚡ Docker image build: split into two layers so most commits stop re-running apt/CUDA/PyTorch/SageAttention
 
 - `docker-build-steps.sh` split into `docker-build-steps-heavy.sh` (system
