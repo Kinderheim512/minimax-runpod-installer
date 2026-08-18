@@ -142,18 +142,40 @@ compute_optimization_flags() {
   fi
 
   # --- attention backend ---------------------------------------------------
+  # Voir COMFY_ATTENTION_BACKEND (config.env) pour le détail des trois modes.
   local has_xformers="false" has_flash="false"
   if [[ -x "${VENV_DIR}/bin/python" ]]; then
     has_xformers="$("${VENV_DIR}/bin/python" -c 'import importlib.util,sys; sys.stdout.write("true" if importlib.util.find_spec("xformers") else "false")' 2>/dev/null || echo false)"
     has_flash="$("${VENV_DIR}/bin/python" -c 'import importlib.util,sys; sys.stdout.write("true" if importlib.util.find_spec("flash_attn") else "false")' 2>/dev/null || echo false)"
   fi
 
-  if [[ "$has_xformers" == "true" ]]; then
-    log_ok "xFormers détecté → laissé actif par défaut (backend d'attention)."
-  else
-    flags+=("--use-pytorch-cross-attention")
-    log_warn "xFormers absent → repli sur --use-pytorch-cross-attention (installez xformers pour de meilleures perfs)."
-  fi
+  local attention_backend="${COMFY_ATTENTION_BACKEND:-auto}"
+  case "$attention_backend" in
+    pytorch)
+      flags+=("--use-pytorch-cross-attention")
+      if [[ "$has_xformers" == "true" ]]; then
+        log_info "COMFY_ATTENTION_BACKEND=pytorch (forcé) → --use-pytorch-cross-attention, xFormers ignoré bien qu'installé."
+      else
+        log_info "COMFY_ATTENTION_BACKEND=pytorch (forcé) → --use-pytorch-cross-attention."
+      fi
+      ;;
+    xformers)
+      if [[ "$has_xformers" == "true" ]]; then
+        log_ok "COMFY_ATTENTION_BACKEND=xformers (forcé) → xFormers utilisé (aucun flag requis, comportement natif ComfyUI)."
+      else
+        flags+=("--use-pytorch-cross-attention")
+        log_error "COMFY_ATTENTION_BACKEND=xformers (forcé) mais xFormers est ABSENT du venv → repli sur --use-pytorch-cross-attention. Installez xformers si vous voulez vraiment ce backend."
+      fi
+      ;;
+    auto|*)
+      if [[ "$has_xformers" == "true" ]]; then
+        log_ok "xFormers détecté → laissé actif par défaut (backend d'attention)."
+      else
+        flags+=("--use-pytorch-cross-attention")
+        log_warn "xFormers absent → repli sur --use-pytorch-cross-attention (installez xformers pour de meilleures perfs, ou passez COMFY_ATTENTION_BACKEND=pytorch pour figer ce choix explicitement)."
+      fi
+      ;;
+  esac
 
   if [[ "$has_flash" == "true" ]]; then
     log_ok "Flash Attention détectée (utilisée automatiquement par les nœuds compatibles)."

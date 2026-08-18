@@ -10,6 +10,18 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### ✨ `COMFY_ATTENTION_BACKEND` — explicit control over xFormers vs PyTorch cross-attention
+
+- New `config.env` knob (`auto`/`pytorch`/`xformers`, default `auto` =
+  unchanged behavior): `pytorch` forces `--use-pytorch-cross-attention`
+  even when xFormers is installed in the venv (the flag takes priority
+  over ComfyUI's automatic backend selection) — useful if you'd rather not
+  rely on xFormers on a given GPU/CUDA combo. `xformers` keeps the
+  existing "use it if present" behavior but logs an explicit error
+  instead of silently falling back if xFormers turns out to be missing.
+- Independent of SageAttention (a separate custom-node patch, untouched by
+  this setting) — see `lib/python.sh::install_sageattention`.
+
 ### ✨ Personal HF vault: declarative config for LoRAs, custom nodes, and workflows
 
 - Fixed a latent bug: `_personal_storage_process_manifest_loras()`
