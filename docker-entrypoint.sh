@@ -23,6 +23,25 @@
 # "$@" (arguments passés à `docker run`) est transmis tel quel à install.sh,
 # même principe que bootstrap.sh pour l'usage bash classique (ex:
 # `docker run ... image --tier=balanced --yes`).
+#
+# MINIMAX_DEBUG_SLEEP=true (variable d'environnement du pod) : échappatoire
+# de secours pour obtenir un shell stable en cas de boucle de redémarrage
+# (ce script qui plante, RunPod qui relance le conteneur en boucle, jamais
+# de fenêtre pour s'y connecter). Vérifiée EN TOUT PREMIER, avant même
+# nvidia-smi/PyTorch/install.sh : si activée, le conteneur reste vivant
+# indéfiniment sans rien installer ni lancer, pour laisser le temps de se
+# connecter (terminal web RunPod ou SSH) et diagnostiquer/corriger à la
+# main. Volontairement une variable d'environnement plutôt qu'un override de
+# la commande de démarrage du pod (ex: "sleep infinity" côté RunPod) : ce
+# dernier n'est PAS garanti remplacer l'ENTRYPOINT du conteneur selon les
+# interfaces RunPod — il peut au contraire être ajouté comme argument à CE
+# script, qui les transmettrait tel quel à install.sh et ferait échouer sur
+# une option inconnue (vécu). Une variable d'environnement, elle, n'a pas
+# cette ambiguïté : la section "Environment Variables" de RunPod est fiable.
+if [[ "${MINIMAX_DEBUG_SLEEP:-false}" == "true" ]]; then
+  echo "MINIMAX_DEBUG_SLEEP=true — conteneur maintenu en vie sans installer ni lancer quoi que ce soit (mode debug). Connectez-vous (terminal web/SSH), diagnostiquez/corrigez, puis lancez 'bash docker-entrypoint.sh' vous-même une fois MINIMAX_DEBUG_SLEEP retiré ou passé à false pour la prochaine fois."
+  exec sleep infinity
+fi
 
 set -Eeuo pipefail
 PROJECT_ROOT="/opt/minimax-runpod-installer"
