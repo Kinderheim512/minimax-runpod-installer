@@ -36,6 +36,26 @@ log_error() { echo -e "${C_RED}[FAIL]${C_RESET}  $*" | tee -a "$LOG_FILE" >&2; }
 log_step()  { echo -e "\n${C_BOLD}${C_CYAN}==> $*${C_RESET}" | tee -a "$LOG_FILE" >&2; }
 log_raw()   { echo "$*" >> "$LOG_FILE"; }
 
+# log_error_tail <label> [n_lines]
+# Affiche directement dans le terminal les N dernières lignes de $LOG_FILE
+# (défaut 25), encadrées et étiquetées. Utilisée après un échec dont la
+# sortie complète (compilation, pip install...) a été redirigée uniquement
+# vers le log — sans ça, l'utilisateur ne voit qu'un "consultez le log" et
+# doit aller ouvrir le fichier lui-même pour connaître l'erreur réelle.
+# Ne remplace pas log_warn/log_error (qui expliquent le contexte), s'utilise
+# en complément juste après.
+log_error_tail() {
+  local label="$1"
+  local n="${2:-25}"
+  echo -e "${C_RED}${C_BOLD}----- Dernières lignes de sortie : ${label} -----${C_RESET}" >&2
+  if [[ -f "$LOG_FILE" ]]; then
+    tail -n "$n" "$LOG_FILE" | sed 's/^/    /' >&2
+  else
+    echo "    (log introuvable : ${LOG_FILE})" >&2
+  fi
+  echo -e "${C_RED}${C_BOLD}----- Fin de sortie (log complet : ${LOG_FILE}) -----${C_RESET}" >&2
+}
+
 # ----------------------------------------------------------------------------
 # Gestion d'erreurs
 # ----------------------------------------------------------------------------

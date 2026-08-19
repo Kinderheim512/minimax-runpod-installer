@@ -479,7 +479,8 @@ PYEOF
     ) >>"$LOG_FILE" 2>&1 || build_rc=$?
 
     if [[ "$build_rc" -ne 0 ]] || ! find "$wheel_dir" -maxdepth 1 -name '*.whl' 2>/dev/null | grep -q .; then
-        log_warn "Échec de pré-compilation de SageAttention pendant le build de l'image (code ${build_rc}) — le conteneur recompilera depuis les sources au démarrage, comme avant ce mécanisme (détail : ${LOG_FILE})."
+        log_warn "Échec de pré-compilation de SageAttention pendant le build de l'image (code ${build_rc}) — le conteneur recompilera depuis les sources au démarrage, comme avant ce mécanisme."
+        log_error_tail "pré-compilation SageAttention (build image)"
         rm -rf "$wheel_dir"
         deactivate
         return 0
@@ -904,6 +905,7 @@ install_sageattention() {
           return 0
         fi
         log_warn "Échec d'installation de la wheel pré-compilée (${baked_whl##*/}) — bascule sur la compilation depuis les sources ci-dessous."
+        log_error_tail "installation de la wheel pré-compilée"
       fi
     else
       log_info "Wheel pré-compilée présente dans l'image mais pour un autre index CUDA (${baked_index:-inconnu} != ${current_index}, probablement un repli PREFER_CUDA130) — ignorée, compilation depuis les sources."
@@ -1068,16 +1070,21 @@ PYEOF
   ) >>"$LOG_FILE" 2>&1 || build_rc=$?
 
   if [[ "$build_rc" -ne 0 ]]; then
-    log_warn "Échec de compilation de SageAttention (code ${build_rc}) — installation sautée (consultez ${LOG_FILE} pour le détail)."
+    log_warn "Échec de compilation de SageAttention (code ${build_rc}) — installation sautée."
+    log_error_tail "compilation SageAttention"
     log_warn "H3 restera fonctionnel sans SageAttention, juste plus lent / plus gourmand en VRAM."
     deactivate
     return 0
   fi
 
-  if python -c "import sageattention" 2>/dev/null; then
+  local import_err=""
+  if import_err="$(python -c "import sageattention" 2>&1 >/dev/null)"; then
     log_ok "SageAttention compilé et importable."
   else
-    log_warn "Compilation terminée sans erreur mais le module ne s'importe pas — installation considérée en échec (consultez ${LOG_FILE})."
+    log_warn "Compilation terminée sans erreur mais le module ne s'importe pas — installation considérée en échec."
+    echo -e "${C_RED}${C_BOLD}----- Erreur à l'import de sageattention -----${C_RESET}" >&2
+    echo "$import_err" | sed 's/^/    /' >&2
+    echo -e "${C_RED}${C_BOLD}----- Fin -----${C_RESET}" >&2
   fi
 
   deactivate
