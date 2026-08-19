@@ -10,6 +10,31 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🐛 Fix: `update.sh` never ensured system packages (silently defeated the `python3-dev` fix below on already-installed pods)
+
+- `bootstrap.sh` routes any pod where `${COMFY_DIR}/main.py` already exists
+  straight to `update.sh`, never `install.sh` — this is the common path on
+  RunPod (pod restart/redeploy on a persistent volume). `update.sh` never
+  sourced `lib/system.sh` nor called `install_system_packages()`, even
+  though it calls `install_sageattention()` and `install_comfyui_requirements()`,
+  both of which depend on system packages (`python3-dev`, `build-essential`,
+  `ninja-build`...). Concretely, the `python3-dev`/`ninja-build` fix above
+  would never actually run for anyone on this path — SageAttention would
+  keep failing with the exact same `Python.h` error even after upgrading.
+- `update.sh` now sources `lib/system.sh` and calls `install_system_packages()`
+  first, before anything that depends on it. Idempotent (per-package
+  `dpkg -s` check) and fast when already satisfied — no meaningful slowdown
+  to routine updates.
+
+### 🐛 Fix: redundant/unreachable `nvidia-smi` check in `install.sh --only-models`
+
+- The `--only-models` branch called `detect_gpu` (which already checks
+  `nvidia-smi` itself and exits cleanly with its own error message if
+  absent) immediately followed by a second, standalone `nvidia-smi || { ...;
+  exit 1; }` check. The second check was dead code: `detect_gpu` would
+  already have stopped the script beforehand in any case where it would
+  have mattered. Removed.
+
 ### 🐛 Fix: SageAttention compilation fails with `Python.h: No such file or directory`
 
 - `install_system_packages()` (`lib/system.sh`) never installed `python3-dev`,

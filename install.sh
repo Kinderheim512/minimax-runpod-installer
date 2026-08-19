@@ -95,12 +95,13 @@ if [[ "$ONLY_MODELS" == "true" ]]; then
     log_error "ComfyUI n'est pas installé dans ${INSTALL_DIR}. Lancez d'abord : bash install.sh"
     exit 1
   fi
+  # detect_gpu (lib/gpu.sh) vérifie déjà nvidia-smi lui-même et quitte
+  # proprement (avec un message d'erreur dédié) s'il est absent — un second
+  # contrôle nvidia-smi ici serait du code mort, jamais atteint en cas
+  # d'absence réelle du GPU puisque detect_gpu aurait déjà stoppé le script
+  # juste avant.
   detect_gpu
   detect_system_ram
-nvidia-smi || {
-    log_error "GPU NVIDIA non détecté."
-    exit 1
-}
   run_step "python_venv" setup_python_venv "$FORCE"
   install_extra_requirements
   # Restauration du stockage perso (LoRAs/presets/outputs) — APRÈS

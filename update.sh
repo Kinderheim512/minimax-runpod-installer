@@ -21,6 +21,8 @@ source "${PROJECT_ROOT}/config.env"
 source "${PROJECT_ROOT}/lib/utils.sh"
 enable_error_trap
 # shellcheck disable=SC1091
+source "${PROJECT_ROOT}/lib/system.sh"
+# shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/gpu.sh"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/python.sh"
@@ -45,6 +47,18 @@ if [[ ! -d "${INSTALL_DIR}/.git" ]]; then
 fi
 
 log_step "Mise à jour du projet MiniMax H3 / ComfyUI"
+
+# Garantit python3-dev/ninja-build/build-essential (et le reste des paquets
+# système) AVANT tout ce qui en dépend plus bas (install_comfyui_requirements,
+# install_sageattention) — même étape que install.sh (run_step
+# "system_packages"), mais appelée ici SANS run_step : bootstrap.sh route
+# tout pod déjà installé (main.py présent) vers CE script, jamais
+# install.sh (voir bootstrap.sh) — c'est donc le seul endroit qui peut
+# réparer un pod existant dont les paquets système datent d'avant un fix
+# comme l'ajout de python3-dev. Idempotent et rapide si déjà en place
+# (dpkg -s par paquet, cf. lib/system.sh) : n'ajoute pas de délai notable
+# aux mises à jour normales.
+install_system_packages
 
 clone_or_update_comfyui
 install_comfyui_requirements
