@@ -1,25 +1,11 @@
 name: Build and Push Docker Image
 
 on:
-  push:
-    branches:
-      - main
-    # Un commit qui ne touche à RIEN de pertinent pour l'image (doc, le
-    # workflow CI lui-même...) ne déclenche même pas ce workflow — pas
-    # seulement "cache réutilisé", carrément aucun job lancé, aucune minute
-    # CI consommée. Complémentaire du découpage Dockerfile/docker-build-
-    # steps-{heavy,light}.sh : celui-ci protège le CACHE des étapes
-    # coûteuses (apt/CUDA/PyTorch/SageAttention) pour les commits qui
-    # déclenchent quand même le workflow (ex: lib/manager.sh, un preset) ;
-    # ceci évite même le déclenchement pour ceux qui ne concernent QUE la
-    # doc. Toute liste ici doit rester strictement des fichiers qui ne
-    # finissent jamais dans l'image ET n'influencent aucune étape du build —
-    # en cas de doute, NE PAS ajouter le fichier ici (mieux vaut un build
-    # inutile qu'une image obsolète non reconstruite).
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.github/workflows/ci.yml'
+  # Déclenchement manuel uniquement : le build/push de l'image Docker
+  # (plusieurs Go, ~20 min) ne doit plus se lancer automatiquement à
+  # chaque commit sur main. Il faut aller dans l'onglet Actions du repo
+  # GitHub → "Build and Push Docker Image" → "Run workflow" pour le
+  # déclencher explicitement.
   workflow_dispatch: {}
 
 jobs:
