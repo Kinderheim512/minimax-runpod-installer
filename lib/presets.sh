@@ -144,8 +144,8 @@ download_preset_models() {
 # _preset_node_repos_ref <nom> -> nom de variable du tableau de nœuds custom
 # du preset (PRESET_<NOM_MAJ>_NODE_REPOS) sur stdout. Même convention que
 # _preset_manifest_ref() ci-dessus, tableau distinct : un preset peut n'avoir
-# aucun nœud custom (cas le plus courant — ex. aistudynow n'en a pas besoin,
-# le support H3 étant natif), ce tableau est alors absent de config.env.
+# aucun nœud custom (le support H3 étant natif dans ce cas), ce tableau est
+# alors absent de config.env.
 _preset_node_repos_ref() {
   local name="$1"
   echo "PRESET_${name^^}_NODE_REPOS"
@@ -187,6 +187,67 @@ install_preset_nodes() {
 
   [[ "$any_declared" == "false" ]] && return 0
   log_ok "Nœuds custom du/des preset(s) '${presets_csv}' à jour."
+  return 0
+}
+
+# _preset_pip_packages_ref <nom> -> nom de variable du tableau de paquets pip
+# du preset (PRESET_<NOM_MAJ>_PIP_PACKAGES) sur stdout. Même convention que
+# _preset_node_repos_ref() ci-dessus.
+#
+# Pourquoi ce mécanisme distinct de install_preset_nodes() (qui installe
+# déjà automatiquement le requirements.txt d'un nœud custom cloné, si
+# présent) : certains nœuds custom tiers déclarent leurs dépendances via
+# pyproject.toml plutôt qu'un requirements.txt classique (ex.
+# muse_director_seedhunt ci-dessous) — _clone_or_update_node_repo() ne lit
+# jamais pyproject.toml (cf. son commentaire, lib/nodes.sh), donc ces
+# dépendances ne seraient jamais installées sans ce tableau explicite. Scopé
+# au preset (pas à OPTIONAL_NODE_REPOS/requirements.txt du projet) pour ne
+# jamais imposer un paquet pip à une installation standard qui n'a pas
+# activé ce preset précis.
+_preset_pip_packages_ref() {
+  local name="$1"
+  echo "PRESET_${name^^}_PIP_PACKAGES"
+}
+
+# install_preset_pip_packages <presets_csv>
+# Installe (dans le venv du projet) les paquets pip déclarés par les presets
+# actifs, un par un via `pip install <paquet>` (paquets simples, versionnés
+# ou non selon la déclaration dans config.env — jamais un fichier
+# requirements.txt ici, voir _preset_pip_packages_ref ci-dessus pour le
+# pourquoi). Silencieux si aucun preset actif ne déclare ce tableau (cas
+# courant). Jamais bloquant : un échec logue un avertissement et passe au
+# paquet suivant, même logique que install_preset_nodes().
+install_preset_pip_packages() {
+  local presets_csv="$1"
+  [[ -z "$presets_csv" ]] && return 0
+
+  local -a names=()
+  IFS=',' read -ra names <<< "$presets_csv"
+
+  local name ref pkg any_declared="false"
+  for name in "${names[@]}"; do
+    [[ -z "$name" ]] && continue
+    ref="$(_preset_pip_packages_ref "$name")"
+    # Garde requise sous `set -u`, même logique que install_preset_nodes().
+    declare -p "$ref" &>/dev/null || continue
+    any_declared="true"
+    local -n pkg_arr="$ref"
+    [[ ${#pkg_arr[@]} -eq 0 ]] && continue
+    log_step "Preset '${name}' — dépendances pip associées"
+    # shellcheck disable=SC1091
+    source "${VENV_DIR}/bin/activate"
+    for pkg in "${pkg_arr[@]}"; do
+      if python -m pip install --quiet "$pkg" >>"$LOG_FILE" 2>&1; then
+        log_ok "${pkg} installé (preset '${name}')."
+      else
+        log_warn "Échec d'installation de ${pkg} (preset '${name}', non bloquant) — consultez ${LOG_FILE}."
+      fi
+    done
+    deactivate
+  done
+
+  [[ "$any_declared" == "false" ]] && return 0
+  log_ok "Dépendances pip du/des preset(s) '${presets_csv}' à jour."
   return 0
 }
 

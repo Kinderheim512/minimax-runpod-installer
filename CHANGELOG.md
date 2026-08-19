@@ -10,6 +10,20 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🐛 Fix: `install_preset_pip_packages: command not found` (install.sh exit 127)
+
+- `install_preset_pip_packages()` and its helper `_preset_pip_packages_ref()`
+  existed only in a stray `presets.sh` at the project root — never sourced
+  by `install.sh` (which only sources `lib/presets.sh`) — instead of inside
+  `lib/presets.sh` where the two other call sites (`install.sh` lines ~132
+  and ~217) expect to find it. Any preset declaring a
+  `PRESET_<NAME>_PIP_PACKAGES` array (e.g. `muse_director_seedhunt` →
+  `av`) hit this immediately after custom-node installation, failing the
+  whole run with exit code 127.
+- Moved into `lib/presets.sh` (root `presets.sh` removed — it was a
+  duplicate, not a separate concern). Re-running `install.sh` now picks up
+  right after the already-completed steps, as usual.
+
 ### ✨ `COMFY_ATTENTION_BACKEND` — explicit control over xFormers vs PyTorch cross-attention
 
 - New `config.env` knob (`auto`/`pytorch`/`xformers`, default `auto` =
