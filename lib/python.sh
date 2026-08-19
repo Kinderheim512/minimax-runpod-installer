@@ -398,6 +398,7 @@ bake_sageattention_wheel() {
     if [[ -z "$matched_cuda_home" ]] && require_cmd apt-get; then
         _sage_ensure_nvidia_cuda_apt_repo || true
         local toolkit_pkg="cuda-toolkit-${torch_major}-${torch_minor}"
+        wait_for_apt_lock
         apt-get update -y >>"$LOG_FILE" 2>&1 || log_warn "apt-get update a échoué — on tente quand même l'installation du toolkit CUDA."
         if ! retry "$DOWNLOAD_MAX_RETRIES" apt-get install -y "$toolkit_pkg" >>"$LOG_FILE" 2>&1; then
             log_warn "${toolkit_pkg} indisponible — repli sur cuda-toolkit-${torch_major} (branche majeure, vérifiée ci-dessous — la compatibilité mineure est garantie par NVIDIA, cf. commentaire de _sage_find_matching_nvcc)."
@@ -411,6 +412,7 @@ bake_sageattention_wheel() {
     fi
     if [[ -z "$matched_cuda_home" ]]; then
         log_warn "Aucun nvcc de la branche CUDA ${torch_major}.x disponible pendant le build de l'image — pré-compilation de SageAttention sautée (le conteneur tentera la compilation depuis les sources au démarrage)."
+        log_error_tail "apt-get install cuda-toolkit (build image)"
         deactivate
         return 0
     fi
@@ -933,6 +935,7 @@ install_sageattention() {
     [[ "$(id -u)" -ne 0 ]] && require_cmd sudo && sudo_cmd="sudo"
     _sage_ensure_nvidia_cuda_apt_repo || true
     log_info "Aucun nvcc de la branche CUDA ${torch_major}.x (build torch) trouvé — installation de ${toolkit_pkg} (peut prendre plusieurs minutes, ~3-4 Go)."
+    wait_for_apt_lock
     if ! $sudo_cmd apt-get update -y >>"$LOG_FILE" 2>&1; then
       log_warn "apt-get update a échoué — on tente quand même l'installation du toolkit CUDA."
     fi
@@ -948,7 +951,8 @@ install_sageattention() {
       local major_pkg="cuda-toolkit-${torch_major}"
       log_warn "${toolkit_pkg} indisponible — repli sur ${major_pkg} (la version réelle obtenue sera vérifiée avant de compiler, pas supposée correcte)."
       if ! retry "$DOWNLOAD_MAX_RETRIES" $sudo_cmd apt-get install -y "$major_pkg" >>"$LOG_FILE" 2>&1; then
-        log_warn "Échec d'installation de ${toolkit_pkg} et ${major_pkg} — SageAttention sera sauté cette fois (consultez ${LOG_FILE})."
+        log_warn "Échec d'installation de ${toolkit_pkg} et ${major_pkg} — SageAttention sera sauté cette fois."
+        log_error_tail "apt-get install ${toolkit_pkg} / ${major_pkg}"
         log_warn "H3 restera fonctionnel sans SageAttention, juste plus lent / plus gourmand en VRAM."
         deactivate
         return 0

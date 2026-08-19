@@ -108,6 +108,38 @@ retry() {
   done
 }
 
+# wait_for_apt_lock [timeout_secs]
+# Attend que le verrou dpkg (/var/lib/dpkg/lock-frontend) soit libre avant de
+# lancer un apt-get. Sur RunPod, l'image de base lance souvent son propre
+# apt-get/unattended-upgrades juste après le démarrage du pod ; sans cette
+# attente, "apt-get install" échoue immédiatement avec "Could not get lock"
+# et retry() (5 tentatives x 5s = ~20-25s) n'attend pas assez longtemps si
+# l'autre process met plus de temps — l'installation du toolkit CUDA est
+# alors abandonnée pour une raison qui n'a rien à voir avec le paquet
+# lui-même. Timeout par défaut généreux (5 min) car ce process de fond peut
+# être long sur un pod qui vient de démarrer.
+wait_for_apt_lock() {
+  local timeout="${1:-300}"
+  local waited=0
+  if ! require_cmd fuser; then
+    return 0
+  fi
+  while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+    if (( waited == 0 )); then
+      log_info "Verrou dpkg occupé par un autre processus (apt-get de démarrage du pod probable) — attente jusqu'à ${timeout}s avant de lancer apt-get."
+    fi
+    if (( waited >= timeout )); then
+      log_warn "Verrou dpkg toujours occupé après ${timeout}s — on tente quand même apt-get."
+      return 0
+    fi
+    sleep 5
+    ((waited+=5))
+  done
+  if (( waited > 0 )); then
+    log_info "Verrou dpkg libéré après ${waited}s — poursuite."
+  fi
+}
+
 human_gb() {
   # affiche un nombre d'octets en Go, 1 décimale
   awk -v b="$1" 'BEGIN{printf "%.1f Go", b/1000000000}'
