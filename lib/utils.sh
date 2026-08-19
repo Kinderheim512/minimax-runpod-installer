@@ -49,7 +49,7 @@ log_error_tail() {
   local n="${2:-25}"
   echo -e "${C_RED}${C_BOLD}----- Dernières lignes de sortie : ${label} -----${C_RESET}" >&2
   if [[ -f "$LOG_FILE" ]]; then
-    tail -n "$n" "$LOG_FILE" | sed 's/^/    /' >&2
+    while IFS= read -r _line; do echo "    ${_line}"; done < <(tail -n "$n" "$LOG_FILE") >&2
   else
     echo "    (log introuvable : ${LOG_FILE})" >&2
   fi

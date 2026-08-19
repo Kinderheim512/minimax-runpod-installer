@@ -1087,7 +1087,7 @@ PYEOF
   else
     log_warn "Compilation terminée sans erreur mais le module ne s'importe pas — installation considérée en échec."
     echo -e "${C_RED}${C_BOLD}----- Erreur à l'import de sageattention -----${C_RESET}" >&2
-    echo "$import_err" | sed 's/^/    /' >&2
+    while IFS= read -r _line; do echo "    ${_line}"; done <<<"$import_err" >&2
     echo -e "${C_RED}${C_BOLD}----- Fin -----${C_RESET}" >&2
   fi
 
