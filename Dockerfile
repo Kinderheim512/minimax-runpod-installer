@@ -95,7 +95,19 @@ COPY lib/utils.sh lib/system.sh lib/comfyui.sh lib/python.sh ${PROJECT_ROOT}/lib
 RUN find "${PROJECT_ROOT}" -name "*.sh" -exec sed -i 's/\r$//' {} \; \
     && find "${PROJECT_ROOT}" -name "*.sh" -exec chmod +x {} \;
 
+# SAGEATTENTION_BUILD_JOBS réduit UNIQUEMENT pour cette étape : le défaut
+# (32, config.env) suppose la RAM d'un pod RunPod réel, mais bake_sageattention_wheel()
+# lance jusqu'à 32 process nvcc en parallèle x 5 architectures cibles
+# (SAGEATTENTION_ARCH_LIST) — largement de quoi OOM-kill le build sur un
+# runner GitHub Actions standard (~16 Go RAM), qui tue le process docker
+# buildx sans message d'erreur exploitable (juste "Cleaning up orphan
+# processes" en fin de log). Repassé à vide juste après pour ne PAS
+# persister cette limite dans l'image finale / au runtime du pod (voir
+# config.env: ${SAGEATTENTION_BUILD_JOBS:-32}, qui ne s'applique que si la
+# variable est vide ou absente).
+ENV SAGEATTENTION_BUILD_JOBS=4
 RUN ./docker-build-steps-heavy.sh
+ENV SAGEATTENTION_BUILD_JOBS=
 
 # --- Étape 2/2 : reste du dépôt, pour les étapes bon marché uniquement ----
 # docker-build-steps-light.sh a besoin du reste du dépôt (presets,
