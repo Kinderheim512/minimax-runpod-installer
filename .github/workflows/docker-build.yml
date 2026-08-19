@@ -45,4 +45,11 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/minimax-h3-comfyui:latest
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # mode=min (au lieu de max) : n'exporte vers le cache GHA que les
+          # couches nécessaires à reconstruire l'image finale, pas TOUTES
+          # les couches intermédiaires. Avec le découpage explicite du
+          # Dockerfile en COPY ciblés (heavy/light), le cache par couche
+          # fonctionne déjà bien sans mode=max — qui, lui, force à
+          # ré-uploader plusieurs Go (PyTorch, toolkit CUDA...) vers le
+          # cache à chaque build, même quand leur contenu n'a pas changé.
+          cache-to: type=gha,mode=min

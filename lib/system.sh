@@ -9,7 +9,16 @@ install_system_packages() {
     return 0
   fi
 
-  local pkgs=(git wget curl aria2 ffmpeg unzip tmux python3 python3-venv python3-pip build-essential ca-certificates)
+  # python3-dev : fournit Python.h, requis pour compiler TOUTE extension
+  # C/C++/CUDA qui inclut <Python.h> (SageAttention et d'autres nœuds
+  # custom en dépendent). Sans lui, build-essential seul (g++/make) ne
+  # suffit pas : la compilation échoue avec "fatal error: Python.h: No
+  # such file or directory" (cf. post-mortem SageAttention).
+  # ninja-build : accélère fortement la compilation d'extensions PyTorch
+  # (backend "ninja" au lieu du repli "slow distutils backend" utilisé
+  # sinon par torch.utils.cpp_extension) — non bloquant s'il manque, mais
+  # rend la compilation SageAttention nettement plus lente.
+  local pkgs=(git wget curl aria2 ffmpeg unzip tmux python3 python3-venv python3-pip python3-dev ninja-build build-essential ca-certificates)
   local missing=()
   for p in "${pkgs[@]}"; do
     dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p")

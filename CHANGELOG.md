@@ -10,6 +10,24 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🐛 Fix: SageAttention compilation fails with `Python.h: No such file or directory`
+
+- `install_system_packages()` (`lib/system.sh`) never installed `python3-dev`,
+  so `Python.h` was missing from the system. `build-essential` alone
+  (g++/make) is not enough: any C/C++/CUDA extension that includes
+  `<Python.h>` — SageAttention in particular — fails to compile with
+  `fatal error: Python.h: No such file or directory`, regardless of how
+  correctly the CUDA toolkit/nvcc branch was matched to torch
+  (`install_sageattention()` in `lib/python.sh` was working exactly as
+  intended; the failure happened one step later, during the actual
+  `pip install -e .` build).
+- Also added `ninja-build`: without it, `torch.utils.cpp_extension` falls
+  back to the "slow distutils backend" for every compiled extension
+  (SageAttention included), which is non-blocking but noticeably slower.
+- Both packages are now installed by `install_system_packages()`, used by
+  both `install.sh` (bare pod) and `docker-build-steps-heavy.sh` (prebuilt
+  Docker image) — a single fix covers both paths.
+
 ### 🐛 Fix: `install_preset_pip_packages: command not found` (install.sh exit 127)
 
 - `install_preset_pip_packages()` and its helper `_preset_pip_packages_ref()`
