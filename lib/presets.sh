@@ -13,8 +13,10 @@
 #
 # Source de vérité pour la liste des presets connus et leur manifeste :
 # H3_PRESET_NAMES / PRESET_<NOM> / PRESET_<NOM>_NODE_REPOS (optionnel) /
-# H3_PRESET_WORKFLOWS (config.env). Ajouter un preset ne nécessite aucune
-# modification ici — voir le commentaire dans config.env.
+# H3_PRESET_WORKFLOWS / H3_PRESET_WORKFLOW_GITHUB_SOURCES (optionnel) /
+# H3_PRESET_WORKFLOW_CIVITAI_URLS (optionnel) (config.env). Ajouter un
+# preset ne nécessite aucune modification ici — voir le commentaire dans
+# config.env.
 
 # resolve_h3_presets — normalise H3_PRESETS/--preset= : liste séparée par des
 # virgules, jetons vides ignorés silencieusement, jetons inconnus ignorés
@@ -343,22 +345,40 @@ install_preset_symlinks() {
 }
 
 # install_preset_workflows <presets_csv>
-# Installe le workflow ComfyUI associé à chaque preset actif
-# (H3_PRESET_WORKFLOWS, config.env) dans ${INSTALL_DIR}/user/default/workflows
-# — jamais via install_workflows() (lib/workflows.sh), dont la ré-écriture de
-# noms de fichier par palier (_patch_workflow_tier_filenames) ne doit jamais
-# s'appliquer aux noms de fichiers figés d'un preset.
+# Installe le(s) workflow(s) ComfyUI associé(s) à chaque preset actif dans
+# ${INSTALL_DIR}/user/default/workflows — jamais via install_workflows()
+# (lib/workflows.sh), dont la ré-écriture de noms de fichier par palier
+# (_patch_workflow_tier_filenames) ne doit jamais s'appliquer aux noms de
+# fichiers figés d'un preset.
 #
-# Pour un preset déclarant une URL dans H3_PRESET_WORKFLOW_CIVITAI_URLS
-# (config.env, optionnel) : le workflow est d'abord téléchargé directement
-# depuis CivitAI, TOUJOURS en priorité sur la copie locale — l'auteur tiers
-# du template (ex. darksidewalker pour dasiwa_mmh3v12) le met à jour
-# régulièrement, et la copie versionnée dans presets/<nom>/ deviendrait sinon
-# obsolète à chaque mise à jour amont. En cas d'échec (réseau, CivitAI
-# indisponible, contenu invalide) : repli silencieux sur la copie locale
-# bundlée (comportement historique) — jamais d'échec bloquant pour ce seul
-# détail. Un preset sans URL déclarée ici garde exactement l'ancien
-# comportement (copie locale uniquement).
+# Trois sources possibles, dans cet ordre de priorité, chacune retombant sur
+# la suivante en cas d'échec (réseau, dépôt/CivitAI indisponible, contenu
+# invalide) — jamais d'échec bloquant pour ce seul détail :
+#
+# 1. H3_PRESET_WORKFLOW_GITHUB_SOURCES (config.env, optionnel) : TOUTES les
+#    versions présentes dans le dossier d'un dépôt GitHub tiers sont
+#    synchronisées (pas une seule) — pour un preset comme dasiwa_mmh3v12,
+#    dont l'auteur (darksidewalker) publie régulièrement de nouvelles
+#    versions numérotées dans son dépôt officiel
+#    (github.com/darksidewalker/dasiwa-comfyui-workflows), ça évite de
+#    figer arbitrairement UNE version côté installateur : l'utilisateur
+#    retrouve tout l'historique disponible dans le menu workflows de ComfyUI
+#    et choisit celle qu'il préfère, et une nouvelle version publiée en amont
+#    apparaît automatiquement au prochain install/update sans modification
+#    de ce projet.
+# 2. H3_PRESET_WORKFLOW_CIVITAI_URLS (config.env, optionnel) : un fichier
+#    unique téléchargé directement depuis CivitAI. À la différence de (1),
+#    une URL CivitAI de ce type pointe une version de modèle CivitAI
+#    précise et figée (pas de notion de "dernière version" côté CivitAI sur
+#    cette route de téléchargement) — à réserver aux presets pour lesquels
+#    aucun dépôt GitHub source n'est disponible.
+# 3. Repli final : copie de TOUS les fichiers .json bundlés localement dans
+#    presets/<nom>/ (et non plus un seul fichier nommé dans
+#    H3_PRESET_WORKFLOWS) — pour qu'un preset multi-versions (comme
+#    dasiwa_mmh3v12) garde le même choix de versions même hors ligne ou si
+#    GitHub/CivitAI sont injoignables. Un preset qui n'a jamais eu qu'un seul
+#    fichier bundlé (ex. muse_director_seedhunt) garde exactement l'ancien
+#    comportement, le glob ne retombant que sur ce fichier unique.
 install_preset_workflows() {
   local presets_csv="$1"
   [[ -z "$presets_csv" ]] && return 0
@@ -369,18 +389,28 @@ install_preset_workflows() {
   local -a names=()
   IFS=',' read -ra names <<< "$presets_csv"
 
-  local name rel src target civitai_url
+  local name github_src owner_repo branch subfolder civitai_url rel target
+  local preset_dir f synced
   for name in "${names[@]}"; do
     [[ -z "$name" ]] && continue
-    rel="${H3_PRESET_WORKFLOWS[$name]:-}"
-    if [[ -z "$rel" ]]; then
-      log_warn "Preset '${name}' : aucun workflow associé (H3_PRESET_WORKFLOWS) — modèles installés, mais pas de workflow prêt à l'emploi."
-      continue
-    fi
-    target="${dest}/$(basename "$rel")"
 
+    # 1) Dépôt GitHub tiers — toutes les versions disponibles.
+    github_src="${H3_PRESET_WORKFLOW_GITHUB_SOURCES[$name]:-}"
+    if [[ -n "$github_src" ]]; then
+      IFS='|' read -r owner_repo branch subfolder <<< "$github_src"
+      log_step "Preset '${name}' — synchronisation des workflows depuis GitHub (${owner_repo}/${subfolder}, branche ${branch})"
+      if _sync_preset_workflow_versions_from_github "$owner_repo" "$branch" "$subfolder" "$dest"; then
+        continue
+      fi
+      log_warn "Preset '${name}' : synchronisation GitHub échouée, repli sur l'étape suivante."
+    fi
+
+    # 2) Fichier unique CivitAI (repli, ou source principale si aucun dépôt
+    #    GitHub n'est déclaré pour ce preset).
+    rel="${H3_PRESET_WORKFLOWS[$name]:-}"
     civitai_url="${H3_PRESET_WORKFLOW_CIVITAI_URLS[$name]:-}"
-    if [[ -n "$civitai_url" ]]; then
+    if [[ -n "$civitai_url" && -n "$rel" ]]; then
+      target="${dest}/$(basename "$rel")"
       log_step "Preset '${name}' — récupération de la dernière version du workflow sur CivitAI"
       if _download_preset_workflow_from_civitai "$civitai_url" "$target"; then
         log_ok "Workflow du preset '${name}' téléchargé depuis CivitAI (dernière version) : $(basename "$rel")."
@@ -389,18 +419,90 @@ install_preset_workflows() {
       log_warn "Preset '${name}' : téléchargement CivitAI du workflow échoué, repli sur la copie locale bundlée."
     fi
 
-    src="${PROJECT_ROOT}/${rel}"
-    if [[ ! -f "$src" ]]; then
-      log_warn "Preset '${name}' : workflow introuvable (${src}) — modèles installés, mais workflow non copié."
+    # 3) Copie locale bundlée — tous les .json du dossier du preset.
+    preset_dir="${PROJECT_ROOT}/presets/${name}"
+    if [[ ! -d "$preset_dir" ]]; then
+      log_warn "Preset '${name}' : aucun workflow associé — modèles installés, mais pas de workflow prêt à l'emploi."
       continue
     fi
-    cp -f "$src" "$target"
-    if [[ -f "$target" ]]; then
-      log_ok "Workflow du preset '${name}' installé (copie locale) : $(basename "$rel")."
+    synced=0
+    for f in "${preset_dir}"/*.json; do
+      [[ -f "$f" ]] || continue
+      cp -f "$f" "${dest}/$(basename "$f")"
+      synced=$((synced + 1))
+    done
+    if [[ "$synced" -gt 0 ]]; then
+      log_ok "Workflow(s) du preset '${name}' installé(s) (copie locale) : ${synced} fichier(s)."
     else
-      log_warn "Échec de copie du workflow du preset '${name}' (${src} -> ${target})."
+      log_warn "Preset '${name}' : aucun workflow bundlé trouvé dans ${preset_dir} — modèles installés, mais workflow non copié."
     fi
   done
+}
+
+# _sync_preset_workflow_versions_from_github <owner/repo> <branch> <subfolder> <dest_dir>
+# Télécharge l'archive tar.gz d'un dépôt GitHub public via codeload.github.com
+# (pas besoin de git installé ni d'authentification pour un dépôt public),
+# puis copie dans <dest_dir> TOUS les fichiers .json valides trouvés sous
+# <subfolder>/ dans cette archive — une version amont = un fichier = une
+# entrée dans le menu workflows de ComfyUI, à l'utilisateur de choisir.
+# Chaque fichier est validé (_is_valid_workflow_json) avant copie ; un
+# fichier individuellement invalide est ignoré (avertissement) sans faire
+# échouer la synchronisation des autres. Retourne 0 si au moins un fichier a
+# été synchronisé, 1 sinon (réseau, dépôt/branche/sous-dossier introuvable,
+# archive vide ou corrompue) — toujours en repli non bloquant, voir
+# install_preset_workflows() ci-dessus.
+_sync_preset_workflow_versions_from_github() {
+  local owner_repo="$1" branch="$2" subfolder="$3" dest_dir="$4"
+  local tmp_dir; tmp_dir="$(mktemp -d)"
+  local tar_file="${tmp_dir}/repo.tar.gz"
+  local tarball_url="https://codeload.github.com/${owner_repo}/tar.gz/refs/heads/${branch}"
+
+  if ! curl -sS -L --retry 3 --retry-delay 3 -o "$tar_file" "$tarball_url" 2>/dev/null || [[ ! -s "$tar_file" ]]; then
+    log_warn "GitHub (${owner_repo}) : échec du téléchargement de l'archive du dépôt."
+    rm -rf -- "$tmp_dir"
+    return 1
+  fi
+
+  if ! tar -xzf "$tar_file" -C "$tmp_dir" 2>/dev/null; then
+    log_warn "GitHub (${owner_repo}) : archive invalide ou corrompue."
+    rm -rf -- "$tmp_dir"
+    return 1
+  fi
+
+  # GitHub nomme le dossier extrait "<repo>-<branche>/" (le owner n'y figure
+  # pas). On cherche plutôt que de reconstruire le nom, plus robuste face à
+  # d'éventuelles variations (branche avec des "/", etc.).
+  local extracted_dir
+  extracted_dir="$(find "$tmp_dir" -mindepth 2 -maxdepth 2 -type d -path "*/${subfolder}" -print -quit)"
+
+  if [[ -z "$extracted_dir" || ! -d "$extracted_dir" ]]; then
+    log_warn "GitHub (${owner_repo}) : sous-dossier '${subfolder}' introuvable dans l'archive (branche '${branch}')."
+    rm -rf -- "$tmp_dir"
+    return 1
+  fi
+
+  mkdir -p "$dest_dir"
+  local synced=0 f base
+  for f in "${extracted_dir}"/*.json; do
+    [[ -f "$f" ]] || continue
+    base="$(basename "$f")"
+    if _is_valid_workflow_json "$f"; then
+      cp -f "$f" "${dest_dir}/${base}"
+      synced=$((synced + 1))
+    else
+      log_warn "GitHub (${owner_repo}) : '${base}' ignoré (JSON invalide)."
+    fi
+  done
+
+  rm -rf -- "$tmp_dir"
+
+  if [[ "$synced" -eq 0 ]]; then
+    log_warn "GitHub (${owner_repo}/${subfolder}) : aucun workflow valide synchronisé."
+    return 1
+  fi
+
+  log_ok "GitHub (${owner_repo}/${subfolder}) : ${synced} version(s) de workflow synchronisée(s)."
+  return 0
 }
 
 # _download_preset_workflow_from_civitai <url> <dest_file>
