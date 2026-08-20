@@ -133,59 +133,73 @@ else
   ask_workflows
 fi
 
-# --- Turbo LoRA ---------------------------------------------------------------
-# Question retirée de l'assistant : la variable MINIMAX_H3_TURBO_LORA_AUTO_DOWNLOAD/
-# MINIMAX_H3_TURBO_NODE_AUTO_INSTALL ci-dessous ne pilote QUE le téléchargement
-# "générique" du Turbo LoRA + son custom node dédié (MiniMaxH3TurboLoRA) —
-# aucun des deux presets fournis n'en a besoin :
-#   - dasiwa_mmh3v12 : le LoRA loader du workflow reste sur "None", Turbo
-#     inutilisé.
-#   - muse_director_seedhunt : le workflow utilise bien un Turbo LoRA actif
-#     (nœud LoraLoaderModelOnly, mode=0), MAIS le fichier est déjà téléchargé
-#     par le mécanisme de modèles propre à ce preset (PRESET_MUSE_DIRECTOR_
-#     SEEDHUNT dans config.env, indépendant de ce toggle) et il utilise un
-#     nœud stock ComfyUI, pas le custom node Turbo dédié.
-# Dans les deux cas, désactiver cette question ne casse rien — figé sur
-# Désactivé sans la poser.
+# --- Turbo LoRA / SageAttention / Spectrum -------------------------------------
+# Ces trois options ne concernent QUE les presets dasiwa_mmh3v12 et
+# muse_director_seedhunt : les workflows officiels du palier standard
+# (t2v/i2v/r2v, sans preset) n'utilisent aucun de ces nœuds — rien n'est donc
+# demandé dans ce cas (WIZ_PRESET vide).
+#
+# Turbo LoRA et Spectrum sont désormais figés sur Désactivé pour les deux
+# presets (raisons détaillées dans chaque branche ci-dessous) : plus de
+# question posée pour eux. SageAttention reste une question, mais fortement
+# déconseillée, avec un avertissement spécifique à chaque preset (le texte
+# générique précédent — "remplacé par ComfyKitchen Attention" — n'était vrai
+# que pour dasiwa_mmh3v12 et induisait en erreur pour muse_director_seedhunt).
 WIZ_TURBO="off"
+WIZ_SAGE_ONOFF="off"
+WIZ_SAGE="false"
+WIZ_SPECTRUM="off"
 
-# --- SageAttention -------------------------------------------------------------
-# Fortement déconseillé, quel que soit le preset. SAGE_ATTENTION ci-dessous ne
-# pilote QUE l'installation du paquet Python sageattention (compilation
-# depuis les sources, ~10-20 min) — pas son utilisation dans un workflow :
-#   - dasiwa_mmh3v12 : l'attention est désormais gérée en natif par ComfyUI
-#     via "ComfyKitchen Attention" (nœud Settings du workflow) ; le nœud
-#     SageAttention dédié n'y est plus câblé.
-#   - muse_director_seedhunt : le nœud SageAttention (PathchSageAttentionKJ,
-#     id 241) est présent dans le workflow bundlé mais désactivé par défaut
-#     (mode bypass) — il ne s'exécute pas tant qu'on ne l'active pas
-#     manuellement dans ComfyUI.
-# Dans les deux cas, installer le paquet ici n'apporte donc aucun bénéfice
-# par défaut et ne fait que rallonger fortement l'installation. Question
-# conservée mais désactivée par défaut, avec avertissement explicite.
-echo ""
-echo "  ⚠ SageAttention n'est pas utilisé par défaut dans les workflows fournis"
-echo "    (DaSiWa : remplacé par ComfyKitchen Attention, natif — Director/Seed"
-echo "    Hunt : nœud présent mais désactivé/bypassé par défaut). L'activer ici"
-echo "    rallonge fortement le temps d'installation (compilation depuis les"
-echo "    sources, ~10-20 min) pour aucun bénéfice avec les réglages par défaut."
-
-ask_choice "SageAttention (déconseillé — non utilisé par défaut, compilation depuis les sources) :" WIZ_SAGE_ONOFF "off" \
-  "off|Désactivé (recommandé)" \
-  "on|Activé (rallonge fortement l'installation, sans effet par défaut)"
+case "$WIZ_PRESET" in
+  dasiwa_mmh3v12)
+    # Turbo LoRA : le LoRA loader du workflow reste sur "None" — inutilisé,
+    # pas de question.
+    # Spectrum : aucun nœud Spectrum dans ce workflow — pas de question.
+    # SageAttention : l'attention est gérée en natif par ComfyUI via
+    # "ComfyKitchen Attention" (nœud Settings du workflow) ; le nœud
+    # SageAttention dédié n'y est plus câblé — déconseillé.
+    echo ""
+    echo "  ⚠ SageAttention n'est plus utilisé par le workflow DaSiWa (remplacé"
+    echo "    par ComfyKitchen Attention, natif). L'activer ici rallonge"
+    echo "    fortement le temps d'installation (compilation depuis les"
+    echo "    sources, ~10-20 min) pour aucun bénéfice avec ce preset."
+    ask_choice "SageAttention (déconseillé — remplacé par ComfyKitchen Attention dans ce preset) :" WIZ_SAGE_ONOFF "off" \
+      "off|Désactivé (recommandé)" \
+      "on|Activé (rallonge fortement l'installation, sans effet sur ce preset)"
+    ;;
+  muse_director_seedhunt)
+    # Turbo LoRA : le workflow charge bien un Turbo LoRA actif (nœud
+    # LoraLoaderModelOnly, mode=0), MAIS le fichier est déjà téléchargé par
+    # le mécanisme de modèles propre à ce preset (PRESET_MUSE_DIRECTOR_
+    # SEEDHUNT, config.env), indépendant de ce toggle — et il utilise un
+    # nœud stock ComfyUI, pas le custom node Turbo dédié. Pas de question.
+    # Spectrum : nœud présent (SpectrumApplyMiniMaxH3) mais désactivé/bypassé
+    # par défaut dans le workflow bundlé, et explicitement listé "optionnel"
+    # par le README amont — pas de question.
+    # SageAttention : nœud présent (PathchSageAttentionKJ) mais désactivé/
+    # bypassé par défaut — déconseillé.
+    echo ""
+    echo "  ⚠ Le nœud SageAttention du workflow Director/Seed Hunt est"
+    echo "    désactivé (bypassé) par défaut. L'activer ici rallonge fortement"
+    echo "    le temps d'installation (compilation depuis les sources,"
+    echo "    ~10-20 min) pour aucun bénéfice tant que vous ne l'activez pas"
+    echo "    manuellement dans ComfyUI."
+    ask_choice "SageAttention (déconseillé — désactivé par défaut dans ce preset) :" WIZ_SAGE_ONOFF "off" \
+      "off|Désactivé (recommandé)" \
+      "on|Activé (rallonge fortement l'installation, sans effet tant qu'il n'est pas activé manuellement)"
+    ;;
+  *)
+    # Palier standard (aucun preset) : Turbo/SageAttention/Spectrum ne sont
+    # utilisés par aucun des workflows officiels t2v/i2v/r2v — rien à
+    # demander.
+    ;;
+esac
 
 if [[ "$WIZ_SAGE_ONOFF" == "on" ]]; then
   WIZ_SAGE="auto"
 else
   WIZ_SAGE="false"
 fi
-
-# --- Spectrum ------------------------------------------------------------------
-# Question retirée de l'assistant, pour la même raison : le nœud Spectrum est
-# lui aussi désactivé/bypassé par défaut dans les deux workflows bundlés
-# (dasiwa_mmh3v12 comme muse_director_seedhunt) — figé sur Désactivé sans
-# poser la question.
-WIZ_SPECTRUM="off"
 
 echo ""
 echo "  Récapitulatif :"
