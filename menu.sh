@@ -8,7 +8,7 @@ while true; do
   echo ""
   echo "  MiniMax H3 — RunPod / ComfyUI"
   echo "  ─────────────────────────────"
-  echo "  0) Assistant de configuration puis installer (palier, preset, Turbo, SageAttention)"
+  echo "  0) Assistant de configuration puis installer (palier, preset, SageAttention [déconseillé])"
   echo "  1) Installer (réglages par défaut/config.env)"
   echo "  2) Télécharger les modèles"
   echo "  3) Vérifier l'installation"

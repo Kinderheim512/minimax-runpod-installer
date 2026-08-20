@@ -134,37 +134,45 @@ else
 fi
 
 # --- Turbo LoRA ---------------------------------------------------------------
-ask_choice "Turbo LoRA MiniMax H3 (génération accélérée) :" WIZ_TURBO "on" \
-  "on|Activé (téléchargement + custom node auto)" \
-  "off|Désactivé"
+# Question retirée de l'assistant : la variable MINIMAX_H3_TURBO_LORA_AUTO_DOWNLOAD/
+# MINIMAX_H3_TURBO_NODE_AUTO_INSTALL ci-dessous ne pilote QUE le téléchargement
+# "générique" du Turbo LoRA + son custom node dédié (MiniMaxH3TurboLoRA) —
+# aucun des deux presets fournis n'en a besoin :
+#   - dasiwa_mmh3v12 : le LoRA loader du workflow reste sur "None", Turbo
+#     inutilisé.
+#   - muse_director_seedhunt : le workflow utilise bien un Turbo LoRA actif
+#     (nœud LoraLoaderModelOnly, mode=0), MAIS le fichier est déjà téléchargé
+#     par le mécanisme de modèles propre à ce preset (PRESET_MUSE_DIRECTOR_
+#     SEEDHUNT dans config.env, indépendant de ce toggle) et il utilise un
+#     nœud stock ComfyUI, pas le custom node Turbo dédié.
+# Dans les deux cas, désactiver cette question ne casse rien — figé sur
+# Désactivé sans la poser.
+WIZ_TURBO="off"
 
 # --- SageAttention -------------------------------------------------------------
-# On/Off comme les autres options — mais "On" = SAGE_ATTENTION=auto (tente
-# seulement si le GPU est compatible, jamais bloquant en cas d'échec), pas
-# =true (qui forcerait la compilation même sur un GPU non recommandé). Le
-# seuil et le compute capability réel du GPU sont lus pour prévenir l'
-# utilisateur AVANT qu'il choisisse, plutôt que de le laisser découvrir un
-# échec de compilation après coup.
-_cc_line="$(grep -E '^SAGEATTENTION_MIN_COMPUTE_CAP=' "${PROJECT_ROOT}/config.env" || true)"
-[[ -n "$_cc_line" ]] && eval "$_cc_line"
-SAGEATTENTION_MIN_COMPUTE_CAP="${SAGEATTENTION_MIN_COMPUTE_CAP:-8.0}"
+# Fortement déconseillé, quel que soit le preset. SAGE_ATTENTION ci-dessous ne
+# pilote QUE l'installation du paquet Python sageattention (compilation
+# depuis les sources, ~10-20 min) — pas son utilisation dans un workflow :
+#   - dasiwa_mmh3v12 : l'attention est désormais gérée en natif par ComfyUI
+#     via "ComfyKitchen Attention" (nœud Settings du workflow) ; le nœud
+#     SageAttention dédié n'y est plus câblé.
+#   - muse_director_seedhunt : le nœud SageAttention (PathchSageAttentionKJ,
+#     id 241) est présent dans le workflow bundlé mais désactivé par défaut
+#     (mode bypass) — il ne s'exécute pas tant qu'on ne l'active pas
+#     manuellement dans ComfyUI.
+# Dans les deux cas, installer le paquet ici n'apporte donc aucun bénéfice
+# par défaut et ne fait que rallonger fortement l'installation. Question
+# conservée mais désactivée par défaut, avec avertissement explicite.
+echo ""
+echo "  ⚠ SageAttention n'est pas utilisé par défaut dans les workflows fournis"
+echo "    (DaSiWa : remplacé par ComfyKitchen Attention, natif — Director/Seed"
+echo "    Hunt : nœud présent mais désactivé/bypassé par défaut). L'activer ici"
+echo "    rallonge fortement le temps d'installation (compilation depuis les"
+echo "    sources, ~10-20 min) pour aucun bénéfice avec les réglages par défaut."
 
-WIZ_GPU_CC=""
-if command -v nvidia-smi >/dev/null 2>&1; then
-  WIZ_GPU_CC="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n1 | tr -d ' ')"
-fi
-
-SAGE_DEFAULT="on"
-if [[ -z "$WIZ_GPU_CC" ]] || ! awk -v c="$WIZ_GPU_CC" -v m="$SAGEATTENTION_MIN_COMPUTE_CAP" 'BEGIN{exit !(c+0 >= m+0)}'; then
-  echo ""
-  echo "  ⚠ GPU (compute capability ${WIZ_GPU_CC:-inconnue}) sous le seuil recommandé (${SAGEATTENTION_MIN_COMPUTE_CAP}) pour SageAttention."
-  echo "    La compilation pourrait échouer ou être instable sur ce GPU — mieux vaut choisir Désactivé."
-  SAGE_DEFAULT="off"
-fi
-
-ask_choice "SageAttention (attention optimisée, compilation depuis les sources) :" WIZ_SAGE_ONOFF "$SAGE_DEFAULT" \
-  "on|Activé" \
-  "off|Désactivé"
+ask_choice "SageAttention (déconseillé — non utilisé par défaut, compilation depuis les sources) :" WIZ_SAGE_ONOFF "off" \
+  "off|Désactivé (recommandé)" \
+  "on|Activé (rallonge fortement l'installation, sans effet par défaut)"
 
 if [[ "$WIZ_SAGE_ONOFF" == "on" ]]; then
   WIZ_SAGE="auto"
@@ -173,9 +181,11 @@ else
 fi
 
 # --- Spectrum ------------------------------------------------------------------
-ask_choice "Spectrum (nœud d'accélération optionnel pour MiniMax H3) :" WIZ_SPECTRUM "on" \
-  "on|Activé" \
-  "off|Désactivé"
+# Question retirée de l'assistant, pour la même raison : le nœud Spectrum est
+# lui aussi désactivé/bypassé par défaut dans les deux workflows bundlés
+# (dasiwa_mmh3v12 comme muse_director_seedhunt) — figé sur Désactivé sans
+# poser la question.
+WIZ_SPECTRUM="off"
 
 echo ""
 echo "  Récapitulatif :"
