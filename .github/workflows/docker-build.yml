@@ -15,6 +15,44 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Libère de l'espace disque sur le runner AVANT le build Docker : le
+      # bake de la wheel SageAttention (bake_sageattention_wheel(),
+      # lib/python.sh) installe en plus le toolkit CUDA complet via apt
+      # pendant le build heavy, ce qui saturait l'espace disque du runner
+      # ubuntu-latest (~14 Go libres) en plus de PyTorch/ComfyUI/dépendances
+      # déjà téléchargés — c'est ce qui avait forcé la désactivation du bake
+      # dans le Dockerfile (SAGEATTENTION_DOCKER_BAKE=false). Les
+      # répertoires supprimés ci-dessous (.NET, Android SDK, GHC, Swift)
+      # sont des composants préinstallés du runner GitHub-hosted, non
+      # utilisés par ce workflow (checkout + Buildx + login + build/push
+      # Docker uniquement — aucune étape .NET/Android/Haskell/Swift) :
+      # vérifié avant d'ajouter cette étape. Solution shell native plutôt
+      # qu'une action tierce, comme demandé.
+      - name: Free disk space
+        run: |
+          echo "=== Disk before cleanup ==="
+          df -h /
+
+          du -sh \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/share/swift \
+            2>/dev/null || true
+
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /usr/local/.ghcup \
+            /usr/share/swift || true
+
+          docker image prune -af || true
+
+          echo "=== Disk after cleanup ==="
+          df -h /
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

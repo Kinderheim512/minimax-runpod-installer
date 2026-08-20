@@ -95,27 +95,38 @@ COPY lib/utils.sh lib/system.sh lib/comfyui.sh lib/python.sh ${PROJECT_ROOT}/lib
 RUN find "${PROJECT_ROOT}" -name "*.sh" -exec sed -i 's/\r$//' {} \; \
     && find "${PROJECT_ROOT}" -name "*.sh" -exec chmod +x {} \;
 
-# SAGEATTENTION_DOCKER_BAKE=false UNIQUEMENT pour cette étape : la
-# pré-compilation de la wheel SageAttention (bake_sageattention_wheel(),
-# lib/python.sh) installe en plus le toolkit CUDA complet via apt
-# (cuda-toolkit-13-0, plusieurs Go) pour disposer de nvcc — ajouté à tout ce
-# qui est déjà téléchargé avant (torch x2, stack nvidia-*, assets ComfyUI),
-# ça sature très probablement l'espace disque d'un runner GitHub Actions
-# standard (~14 Go libres), qui plante sans message d'erreur exploitable
-# (écriture du log elle-même en échec). Deux tentatives ont échoué
-# exactement au même endroit, y compris après réduction de
-# SAGEATTENTION_BUILD_JOBS — ce qui exclut la RAM/le parallélisme et pointe
-# vers le disque. Désactiver le bake ici est sans risque : c'est un
-# mécanisme best-effort (voir bake_sageattention_wheel()) — si la wheel
-# n'est pas pré-compilée dans l'image, install_sageattention() la compile
-# normalement au premier démarrage du conteneur, comme avant ce mécanisme.
-# Repassé à vide juste après pour ne PAS changer ce comportement sur un pod
-# qui utiliserait cette image comme base pour un build custom.
-ENV SAGEATTENTION_DOCKER_BAKE=false
+# SAGEATTENTION_DOCKER_BAKE n'est PLUS forcé à false ici : la valeur de
+# config.env (true) s'applique donc, et bake_sageattention_wheel()
+# (lib/python.sh) précompile réellement la wheel SageAttention pendant ce
+# build. Ce forçage existait parce que la précompilation installe en plus
+# le toolkit CUDA complet via apt (cuda-toolkit-13-0, plusieurs Go) pour
+# disposer de nvcc — ajouté à tout ce qui est déjà téléchargé avant (torch
+# x2, stack nvidia-*, assets ComfyUI), ça saturait l'espace disque d'un
+# runner GitHub Actions standard (~14 Go libres avant nettoyage). Deux
+# leviers ont permis de réactiver le bake sans revenir à ce problème :
+# l'étape "Free disk space" du workflow CI
+# (.github/workflows/docker-build.yml), qui libère l'espace occupé par des
+# composants préinstallés du runner (.NET, Android SDK, GHC, Swift — non
+# utilisés par ce workflow) avant le build Docker, et PIP_NO_CACHE_DIR=1 +
+# le nettoyage apt ci-dessous, UNIQUEMENT pour cette étape, qui évitent que
+# le cache pip/apt s'accumule inutilement dans cette couche (plusieurs Go
+# cumulés sur torch x2 + toutes les dépendances ComfyUI + le toolkit CUDA).
+# Repassés à vide juste après / nettoyés dans la même commande RUN (pour
+# rester dans la même couche Docker, voir le commentaire sur les layers
+# plus bas dans ce fichier) afin de ne PAS changer le comportement pip/apt
+# runtime d'un pod qui utiliserait cette image comme base pour un build
+# custom — le nettoyage reste ciblé sur le build Docker. Le mécanisme de
+# bake reste best-effort et non bloquant (voir bake_sageattention_wheel()) :
+# en cas d'échec, install_sageattention() recompile normalement au premier
+# démarrage du conteneur, comme avant ce mécanisme.
 ENV SAGEATTENTION_BUILD_JOBS=4
-RUN ./docker-build-steps-heavy.sh
-ENV SAGEATTENTION_DOCKER_BAKE=
+ENV PIP_NO_CACHE_DIR=1
+RUN ./docker-build-steps-heavy.sh \
+    && (apt-get clean 2>/dev/null || true) \
+    && (rm -rf /var/lib/apt/lists/* 2>/dev/null || true) \
+    && (rm -rf /var/cache/apt/archives/*.deb 2>/dev/null || true)
 ENV SAGEATTENTION_BUILD_JOBS=
+ENV PIP_NO_CACHE_DIR=
 
 # --- Étape 2/2 : reste du dépôt, pour les étapes bon marché uniquement ----
 # docker-build-steps-light.sh a besoin du reste du dépôt (presets,
