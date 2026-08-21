@@ -1,22 +1,21 @@
 #!/usr/bin/env bash
-# wizard.sh — assistant de configuration interactif.
+# wizard.sh — interactive configuration assistant.
 #
-# Pose quelques questions (preset, palier de poids, workflows, Turbo LoRA,
-# SageAttention, Spectrum) puis lance install.sh avec les bons --flags /
-# variables d'environnement. N'écrit rien dans config.env : les choix ne
-# valent que pour CETTE exécution (relancer wizard.sh pose à nouveau les
-# questions ; config.env garde ses valeurs par défaut habituelles pour toute
-# installation non-interactive — bootstrap.sh, curl | bash, etc. — qui ne
-# passe jamais par ce script).
+# Asks a few questions (preset, weight tier, workflows, Turbo LoRA,
+# SageAttention, Spectrum) then runs install.sh with the right --flags /
+# environment variables. Writes nothing to config.env: the choices only
+# apply to THIS run (re-running wizard.sh asks the questions again;
+# config.env keeps its usual defaults for any non-interactive install —
+# bootstrap.sh, curl | bash, etc. — which never goes through this script).
 #
-# Usage : bash wizard.sh
+# Usage: bash wizard.sh
 
 set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ask_choice() {
-  # ask_choice <titre> <var_résultat> <valeur_par_défaut> <option1> [option2...]
-  # Chaque "optionN" est de la forme "valeur|description".
+  # ask_choice <title> <result_var> <default_value> <option1> [option2...]
+  # Each "optionN" is of the form "value|description".
   local title="$1" __resultvar="$2" default="$3"; shift 3
   local -a opts=("$@")
   echo ""
@@ -25,14 +24,14 @@ ask_choice() {
   for o in "${opts[@]}"; do
     val="${o%%|*}"; desc="${o#*|}"
     if [[ "$val" == "$default" ]]; then
-      echo "   $i) ${desc}  [défaut]"
+      echo "   $i) ${desc}  [default]"
     else
       echo "   $i) ${desc}"
     fi
     i=$((i+1))
   done
   local choice
-  read -r -p "  Choix [1-$((i-1)), Entrée = défaut] : " choice
+  read -r -p "  Choice [1-$((i-1)), Enter = default] : " choice
   if [[ -z "$choice" ]]; then
     printf -v "$__resultvar" '%s' "$default"
     return 0
@@ -41,19 +40,19 @@ ask_choice() {
     val="${opts[$((choice-1))]%%|*}"
     printf -v "$__resultvar" '%s' "$val"
   else
-    echo "  Choix invalide, valeur par défaut retenue (${default})."
+    echo "  Invalid choice, keeping the default (${default})."
     printf -v "$__resultvar" '%s' "$default"
   fi
 }
 
 ask_workflows() {
   echo ""
-  echo "  Workflows à installer (liste séparée par des virgules, ex : 1,2) :"
-  echo "   1) t2v — texte → vidéo"
-  echo "   2) i2v — image → vidéo"
-  echo "   3) r2v — référence → vidéo"
+  echo "  Workflows to install (comma-separated list, e.g. 1,2) :"
+  echo "   1) t2v — text → video"
+  echo "   2) i2v — image → video"
+  echo "   3) r2v — reference → video"
   local input
-  read -r -p "  Choix [1-3, Entrée = les trois] : " input
+  read -r -p "  Choice [1-3, Enter = all three] : " input
   if [[ -z "$input" ]]; then
     WIZ_WORKFLOWS="t2v,i2v,r2v"
     return
@@ -68,23 +67,23 @@ ask_workflows() {
       2) sel+=("i2v") ;;
       3) sel+=("r2v") ;;
       "") ;;
-      *) echo "  Jeton ignoré : '${t}'" ;;
+      *) echo "  Ignored token: '${t}'" ;;
     esac
   done
   if [[ ${#sel[@]} -eq 0 ]]; then
-    echo "  Aucun workflow valide sélectionné — repli sur les trois."
+    echo "  No valid workflow selected — falling back to all three."
     sel=(t2v i2v r2v)
   fi
   local IFS=','
   WIZ_WORKFLOWS="${sel[*]}"
 }
 
-# preset_replaces_tier <nom_preset> -> 0 (true) / 1 (false)
-# Lit UNIQUEMENT la ligne H3_PRESET_REPLACES_STANDARD_TIER=(...) de
-# config.env (pas un `source` complet du fichier, pour ne dépendre d'aucune
-# fonction lib/*.sh non encore chargée) — même liste que celle utilisée par
-# install.sh/lib/presets.sh, jamais dupliquée ici : si demain un autre
-# preset y est ajouté, ce script s'adapte sans modification.
+# preset_replaces_tier <preset_name> -> 0 (true) / 1 (false)
+# Reads ONLY the H3_PRESET_REPLACES_STANDARD_TIER=(...) line from
+# config.env (not a full `source` of the file, to avoid depending on any
+# lib/*.sh function not loaded yet) — same list used by
+# install.sh/lib/presets.sh, never duplicated here: if another preset is
+# added tomorrow, this script adapts without modification.
 declare -a H3_PRESET_REPLACES_STANDARD_TIER=()
 _replaces_line="$(grep -E '^H3_PRESET_REPLACES_STANDARD_TIER=' "${PROJECT_ROOT}/config.env" || true)"
 if [[ -n "$_replaces_line" ]]; then
@@ -101,50 +100,50 @@ preset_replaces_tier() {
 
 echo ""
 echo "  ┌────────────────────────────────────────────────────┐"
-echo "  │  Assistant de configuration — MiniMax H3            │"
+echo "  │  Configuration Assistant — MiniMax H3               │"
 echo "  └────────────────────────────────────────────────────┘"
-echo "  (Entrée seule = garder le choix par défaut à chaque question)"
+echo "  (Enter alone = keep the default choice for each question)"
 
-# --- Preset (posé EN PREMIER : conditionne si Palier/Workflows ont un sens) --
-ask_choice "Preset (jeu de modèles/workflow) :" WIZ_PRESET "dasiwa_mmh3v12" \
-  "|Aucun — installation standard uniquement" \
-  "dasiwa_mmh3v12|dasiwa_mmh3v12 — DaSiWa MythicAlchemy (remplace le palier standard)" \
-  "muse_director_seedhunt|muse_director_seedhunt — Director/Seed Hunt, poids pruned (remplace le palier standard)"
+# --- Preset (asked FIRST: determines whether Tier/Workflows are relevant) ----
+ask_choice "Preset (model/workflow set) :" WIZ_PRESET "dasiwa_mmh3v12" \
+  "|None — standard installation only" \
+  "dasiwa_mmh3v12|dasiwa_mmh3v12 — DaSiWa MythicAlchemy (replaces the standard tier)" \
+  "muse_director_seedhunt|muse_director_seedhunt — Director/Seed Hunt, pruned weights (replaces the standard tier)"
 
 if [[ -n "$WIZ_PRESET" ]] && preset_replaces_tier "$WIZ_PRESET"; then
   WIZ_TIER=""
   WIZ_WORKFLOWS=""
   echo ""
-  echo "  → '${WIZ_PRESET}' fournit son propre jeu de poids et son propre workflow :"
-  echo "    le palier standard H3_TIER n'est pas téléchargé, et les workflows"
-  echo "    officiels t2v/i2v/r2v ne sont pas installés (ils référenceraient des"
-  echo "    poids absents). Questions Palier/Workflows sautées."
+  echo "  → '${WIZ_PRESET}' provides its own set of weights and its own workflow:"
+  echo "    the standard H3_TIER is not downloaded, and the official"
+  echo "    t2v/i2v/r2v workflows are not installed (they would reference"
+  echo "    missing weights). Tier/Workflows questions skipped."
 else
-  # --- Palier de poids H3 -----------------------------------------------------
-  ask_choice "Palier de poids H3 (précision/VRAM) :" WIZ_TIER "auto" \
-    "auto|Auto-détection selon la VRAM (recommandé)" \
-    "light|light — VRAM réduite, qualité/vitesse moindres (~18,5 Go, dépôt tiers)" \
-    "pruned|pruned — INT8 ConvRot, recommandation officielle Comfy-Org (~21 Go)" \
-    "pruned_scaled|pruned_scaled — FP8 scaled, repli si pruned ne fonctionne pas (~21 Go)" \
-    "balanced|balanced — modèles officiels pleine précision, élagués (~40 Go)" \
-    "max|max — précision maximale, non élagué (~66 Go, 48 Go+ VRAM)"
+  # --- H3 weight tier -----------------------------------------------------
+  ask_choice "H3 weight tier (precision/VRAM) :" WIZ_TIER "auto" \
+    "auto|Auto-detect based on VRAM (recommended)" \
+    "light|light — reduced VRAM, lower quality/speed (~18.5 GB, third-party repo)" \
+    "pruned|pruned — INT8 ConvRot, official Comfy-Org recommendation (~21 GB)" \
+    "pruned_scaled|pruned_scaled — FP8 scaled, fallback if pruned doesn't work (~21 GB)" \
+    "balanced|balanced — official full-precision models, pruned (~40 GB)" \
+    "max|max — maximum precision, unpruned (~66 GB, 48 GB+ VRAM)"
 
   # --- Workflows ---------------------------------------------------------------
   ask_workflows
 fi
 
 # --- Turbo LoRA / SageAttention / Spectrum -------------------------------------
-# Ces trois options ne concernent QUE les presets dasiwa_mmh3v12 et
-# muse_director_seedhunt : les workflows officiels du palier standard
-# (t2v/i2v/r2v, sans preset) n'utilisent aucun de ces nœuds — rien n'est donc
-# demandé dans ce cas (WIZ_PRESET vide).
+# These three options only apply to the dasiwa_mmh3v12 and
+# muse_director_seedhunt presets: the official standard-tier workflows
+# (t2v/i2v/r2v, no preset) don't use any of these nodes — so nothing is
+# asked in that case (WIZ_PRESET empty).
 #
-# Turbo LoRA et Spectrum sont désormais figés sur Désactivé pour les deux
-# presets (raisons détaillées dans chaque branche ci-dessous) : plus de
-# question posée pour eux. SageAttention reste une question, mais fortement
-# déconseillée, avec un avertissement spécifique à chaque preset (le texte
-# générique précédent — "remplacé par ComfyKitchen Attention" — n'était vrai
-# que pour dasiwa_mmh3v12 et induisait en erreur pour muse_director_seedhunt).
+# Turbo LoRA and Spectrum are now fixed to Disabled for both presets
+# (reasons detailed in each branch below): no question asked for them
+# anymore. SageAttention remains a question, but strongly discouraged, with
+# a warning specific to each preset (the previous generic text — "replaced
+# by ComfyKitchen Attention" — was only true for dasiwa_mmh3v12 and was
+# misleading for muse_director_seedhunt).
 WIZ_TURBO="off"
 WIZ_SAGE_ONOFF="off"
 WIZ_SAGE="false"
@@ -152,46 +151,45 @@ WIZ_SPECTRUM="off"
 
 case "$WIZ_PRESET" in
   dasiwa_mmh3v12)
-    # Turbo LoRA : le LoRA loader du workflow reste sur "None" — inutilisé,
-    # pas de question.
-    # Spectrum : aucun nœud Spectrum dans ce workflow — pas de question.
-    # SageAttention : l'attention est gérée en natif par ComfyUI via
-    # "ComfyKitchen Attention" (nœud Settings du workflow) ; le nœud
-    # SageAttention dédié n'y est plus câblé — déconseillé.
+    # Turbo LoRA: the workflow's LoRA loader stays on "None" — unused,
+    # no question.
+    # Spectrum: no Spectrum node in this workflow — no question.
+    # SageAttention: attention is now handled natively by ComfyUI via
+    # "ComfyKitchen Attention" (Settings node of the workflow); the
+    # dedicated SageAttention node is no longer wired in — discouraged.
     echo ""
-    echo "  ⚠ SageAttention n'est plus utilisé par le workflow DaSiWa (remplacé"
-    echo "    par ComfyKitchen Attention, natif). L'activer ici rallonge"
-    echo "    fortement le temps d'installation (compilation depuis les"
-    echo "    sources, ~10-20 min) pour aucun bénéfice avec ce preset."
-    ask_choice "SageAttention (déconseillé — remplacé par ComfyKitchen Attention dans ce preset) :" WIZ_SAGE_ONOFF "off" \
-      "off|Désactivé (recommandé)" \
-      "on|Activé (rallonge fortement l'installation, sans effet sur ce preset)"
+    echo "  ⚠ SageAttention is no longer used by the DaSiWa workflow (replaced"
+    echo "    by ComfyKitchen Attention, native). Enabling it here strongly"
+    echo "    lengthens installation time (compiling from source, ~10-20 min)"
+    echo "    for no benefit with this preset."
+    ask_choice "SageAttention (discouraged — replaced by ComfyKitchen Attention in this preset) :" WIZ_SAGE_ONOFF "off" \
+      "off|Disabled (recommended)" \
+      "on|Enabled (lengthens installation significantly, no effect with this preset)"
     ;;
   muse_director_seedhunt)
-    # Turbo LoRA : le workflow charge bien un Turbo LoRA actif (nœud
-    # LoraLoaderModelOnly, mode=0), MAIS le fichier est déjà téléchargé par
-    # le mécanisme de modèles propre à ce preset (PRESET_MUSE_DIRECTOR_
-    # SEEDHUNT, config.env), indépendant de ce toggle — et il utilise un
-    # nœud stock ComfyUI, pas le custom node Turbo dédié. Pas de question.
-    # Spectrum : nœud présent (SpectrumApplyMiniMaxH3) mais désactivé/bypassé
-    # par défaut dans le workflow bundlé, et explicitement listé "optionnel"
-    # par le README amont — pas de question.
-    # SageAttention : nœud présent (PathchSageAttentionKJ) mais désactivé/
-    # bypassé par défaut — déconseillé.
+    # Turbo LoRA: the workflow does load an active Turbo LoRA
+    # (LoraLoaderModelOnly node, mode=0), BUT the file is already
+    # downloaded by this preset's own model mechanism (PRESET_MUSE_
+    # DIRECTOR_SEEDHUNT, config.env), independent of this toggle — and it
+    # uses a stock ComfyUI node, not the dedicated Turbo custom node. No
+    # question.
+    # Spectrum: node present (SpectrumApplyMiniMaxH3) but disabled/bypassed
+    # by default in the bundled workflow, and explicitly listed as
+    # "optional" by the upstream README — no question.
+    # SageAttention: node present (PathchSageAttentionKJ) but
+    # disabled/bypassed by default — discouraged.
     echo ""
-    echo "  ⚠ Le nœud SageAttention du workflow Director/Seed Hunt est"
-    echo "    désactivé (bypassé) par défaut. L'activer ici rallonge fortement"
-    echo "    le temps d'installation (compilation depuis les sources,"
-    echo "    ~10-20 min) pour aucun bénéfice tant que vous ne l'activez pas"
-    echo "    manuellement dans ComfyUI."
-    ask_choice "SageAttention (déconseillé — désactivé par défaut dans ce preset) :" WIZ_SAGE_ONOFF "off" \
-      "off|Désactivé (recommandé)" \
-      "on|Activé (rallonge fortement l'installation, sans effet tant qu'il n'est pas activé manuellement)"
+    echo "  ⚠ The SageAttention node in the Director/Seed Hunt workflow is"
+    echo "    disabled (bypassed) by default. Enabling it here strongly"
+    echo "    lengthens installation time (compiling from source, ~10-20 min)"
+    echo "    for no benefit unless you also enable it manually in ComfyUI."
+    ask_choice "SageAttention (discouraged — disabled by default in this preset) :" WIZ_SAGE_ONOFF "off" \
+      "off|Disabled (recommended)" \
+      "on|Enabled (lengthens installation significantly, no effect unless manually enabled)"
     ;;
   *)
-    # Palier standard (aucun preset) : Turbo/SageAttention/Spectrum ne sont
-    # utilisés par aucun des workflows officiels t2v/i2v/r2v — rien à
-    # demander.
+    # Standard tier (no preset): Turbo/SageAttention/Spectrum are not used
+    # by any of the official t2v/i2v/r2v workflows — nothing to ask.
     ;;
 esac
 
@@ -202,28 +200,28 @@ else
 fi
 
 echo ""
-echo "  Récapitulatif :"
-echo "   - Preset       : ${WIZ_PRESET:-aucun}"
+echo "  Summary :"
+echo "   - Preset       : ${WIZ_PRESET:-none}"
 if [[ -n "$WIZ_TIER" ]]; then
-  echo "   - Palier       : ${WIZ_TIER}"
+  echo "   - Tier         : ${WIZ_TIER}"
   echo "   - Workflows    : ${WIZ_WORKFLOWS}"
 else
-  echo "   - Palier       : (n/a — fourni par le preset)"
-  echo "   - Workflows    : (n/a — fourni par le preset)"
+  echo "   - Tier         : (n/a — provided by the preset)"
+  echo "   - Workflows    : (n/a — provided by the preset)"
 fi
 echo "   - Turbo LoRA   : ${WIZ_TURBO}"
 echo "   - SageAttention: ${WIZ_SAGE_ONOFF}"
 echo "   - Spectrum     : ${WIZ_SPECTRUM}"
 echo ""
-read -r -p "  Lancer l'installation avec ces réglages ? [O/n] " confirm
+read -r -p "  Start the installation with these settings? [Y/n] " confirm
 if [[ "$confirm" =~ ^[nN] ]]; then
-  echo "  Annulé."
+  echo "  Cancelled."
   exit 0
 fi
 
-# Turbo LoRA : deux interrupteurs distincts dans config.env (téléchargement
-# du LoRA + auto-install du custom node associé) — la question du wizard les
-# couvre tous les deux en même temps, c'est plus simple à comprendre.
+# Turbo LoRA: two separate switches in config.env (LoRA download + auto-
+# install of the associated custom node) — the wizard question covers both
+# at once, which is simpler to understand.
 if [[ "$WIZ_TURBO" == "on" ]]; then
   export MINIMAX_H3_TURBO_LORA_AUTO_DOWNLOAD="true"
   export MINIMAX_H3_TURBO_NODE_AUTO_INSTALL="true"
@@ -242,35 +240,34 @@ install_args=()
 if [[ -n "$WIZ_TIER" ]]; then
   install_args+=(--tier="$WIZ_TIER" --workflows="$WIZ_WORKFLOWS")
 fi
-# Sinon (preset qui remplace le palier standard) : on ne passe ni --tier=
-# ni --workflows= du tout, ces réglages n'ayant aucun effet dans ce cas
-# (téléchargement standard + copie des workflows officiels sautés côté
-# install.sh — voir preset_replaces_standard_tier()) ; les laisser à leurs
-# valeurs par défaut de config.env évite un --workflows= vide qui, lui,
-# retomberait sur "t2v,i2v,r2v" par défaut (voir resolve_h3_workflows()).
+# Otherwise (a preset that replaces the standard tier): pass neither
+# --tier= nor --workflows= at all, since these settings have no effect in
+# that case (standard download + official workflow copy are skipped on the
+# install.sh side — see preset_replaces_standard_tier()); leaving them at
+# their config.env defaults avoids an empty --workflows=, which would fall
+# back to "t2v,i2v,r2v" by default (see resolve_h3_workflows()).
 if [[ -n "$WIZ_PRESET" ]]; then
   install_args+=(--preset="$WIZ_PRESET")
 else
-  # Force explicitement "pas de preset", même si config.env a un défaut
-  # (dasiwa_mmh3v12) — sinon --preset= absent laisserait le défaut de
-  # config.env s'appliquer silencieusement, ce qui contredirait le choix
-  # "Aucun" fait ci-dessus.
+  # Explicitly force "no preset", even if config.env has a default
+  # (dasiwa_mmh3v12) — otherwise a missing --preset= would let config.env's
+  # default apply silently, contradicting the "None" choice made above.
   install_args+=(--preset=)
 fi
 
-# Pas de "exec" ici : on a besoin du code de sortie pour décider de proposer
-# (ou non) le lancement de ComfyUI juste après.
+# No "exec" here: we need the exit code to decide whether to offer
+# launching ComfyUI right after.
 if ! bash "${PROJECT_ROOT}/install.sh" "${install_args[@]}"; then
   install_status=$?
   echo ""
-  echo "  L'installation a échoué (code ${install_status}) — voir les messages ci-dessus / logs/install.log."
+  echo "  Installation failed (code ${install_status}) — see the messages above / logs/install.log."
   exit "$install_status"
 fi
 
 echo ""
-read -r -p "  Lancer ComfyUI maintenant (session tmux) ? [O/n] " launch_confirm
+read -r -p "  Launch ComfyUI now (tmux session)? [Y/n] " launch_confirm
 if [[ "$launch_confirm" =~ ^[nN] ]]; then
-  echo "  Terminé. Pour lancer plus tard : bash launch.sh --tmux"
+  echo "  Done. To launch later: bash launch.sh --tmux"
   exit 0
 fi
 exec bash "${PROJECT_ROOT}/launch.sh" --tmux

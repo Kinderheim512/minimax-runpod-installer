@@ -122,7 +122,7 @@ if [[ "$ONLY_MODELS" == "true" ]]; then
   run_step "hf_login" hf_login "$FORCE"
   H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
   if [[ "$(preset_replaces_standard_tier "$H3_ACTIVE_PRESETS")" == "true" ]]; then
-    log_info "Preset '${H3_ACTIVE_PRESETS}' remplace le palier standard H3_TIER (voir H3_PRESET_REPLACES_STANDARD_TIER, config.env) — téléchargement du palier standard sauté."
+    log_info "Preset '${H3_ACTIVE_PRESETS}' replaces the standard H3_TIER (see H3_PRESET_REPLACES_STANDARD_TIER, config.env) — standard tier download skipped."
   else
     if download_h3_models; then mark_step_done "h3_models"; fi
   fi
@@ -135,7 +135,7 @@ if [[ "$ONLY_MODELS" == "true" ]]; then
       install_preset_symlinks "$H3_ACTIVE_PRESETS"
       install_preset_workflows "$H3_ACTIVE_PRESETS"
     else
-      log_warn "Téléchargement du/des preset(s) '${H3_ACTIVE_PRESETS}' incomplet — relancez plus tard : bash install.sh --only-models --preset=${H3_ACTIVE_PRESETS}"
+      log_warn "Download of preset(s) '${H3_ACTIVE_PRESETS}' incomplete — re-run later: bash install.sh --only-models --preset=${H3_ACTIVE_PRESETS}"
     fi
   fi
   print_summary
@@ -176,7 +176,7 @@ H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
 if [[ "$SKIP_MODELS" == "false" ]]; then
   run_step "hf_login" hf_login "$FORCE"
   if [[ "$(preset_replaces_standard_tier "$H3_ACTIVE_PRESETS")" == "true" ]]; then
-    log_info "Preset '${H3_ACTIVE_PRESETS}' remplace le palier standard H3_TIER (voir H3_PRESET_REPLACES_STANDARD_TIER, config.env) — téléchargement du palier standard sauté."
+    log_info "Preset '${H3_ACTIVE_PRESETS}' replaces the standard H3_TIER (see H3_PRESET_REPLACES_STANDARD_TIER, config.env) — standard tier download skipped."
   elif ! step_done "h3_models" || [[ "$FORCE" == "true" ]]; then
     # Estimation dynamique de l'espace requis : mêmes fonctions que celles
     # utilisées à l'intérieur de download_h3_models() (lib/models.sh), donc
@@ -220,7 +220,7 @@ if [[ -n "$H3_ACTIVE_PRESETS" ]]; then
     install_preset_symlinks "$H3_ACTIVE_PRESETS"
     install_preset_workflows "$H3_ACTIVE_PRESETS"
   else
-    log_warn "Téléchargement du/des preset(s) '${H3_ACTIVE_PRESETS}' incomplet — relancez plus tard : bash install.sh --only-models --preset=${H3_ACTIVE_PRESETS}"
+    log_warn "Download of preset(s) '${H3_ACTIVE_PRESETS}' incomplete — re-run later: bash install.sh --only-models --preset=${H3_ACTIVE_PRESETS}"
   fi
 fi
 
@@ -232,7 +232,7 @@ fi
 # été installé plus haut par install_preset_workflows(), indépendamment de
 # ce garde-fou.
 if [[ "$(preset_replaces_standard_tier "$H3_ACTIVE_PRESETS")" == "true" ]]; then
-  log_info "Preset '${H3_ACTIVE_PRESETS}' remplace le palier standard H3_TIER — workflows officiels t2v/i2v/r2v non copiés (référenceraient des poids non installés)."
+  log_info "Preset '${H3_ACTIVE_PRESETS}' replaces the standard H3_TIER — official t2v/i2v/r2v workflows not copied (they would reference weights that aren't installed)."
 else
   run_step "workflows" install_workflows "$FORCE"
 fi
