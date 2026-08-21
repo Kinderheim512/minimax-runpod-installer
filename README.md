@@ -76,8 +76,60 @@ tunes everything for the GPU it detects.
 
 ## ⚡ Quick start
 
-Create a fresh RunPod (PyTorch / CUDA / Ubuntu template, NVIDIA GPU, port
-`8188` exposed as HTTP), open its terminal, and clone the project:
+### Recommended — deploy the ready-made RunPod template (Docker, one click)
+
+The easiest way to get running is the official RunPod Hub template for this
+project, which deploys straight from the **pre-installed Docker image**
+described in [Pre-installed Docker image](#-pre-installed-docker-image)
+below — no manual `git clone`, no manual `bash wizard.sh`:
+
+**👉 [Deploy the MiniMax H3 template on RunPod](https://console.runpod.io/hub/template/rfv75gjaip?ref=76jvawoy)**
+
+**What "Docker" means here, in a nutshell:** Docker packages an entire,
+pre-configured environment — the OS packages, ComfyUI, the Python
+virtual environment, every dependency, ComfyUI-Manager, and the required
+custom nodes — into a single portable image. Instead of running the
+installer step by step on a fresh machine, RunPod just launches a container
+from that image, which already has everything except the model weights
+in place. That's what makes pod restarts (or moving to a completely
+different GPU/datacenter after RunPod frees your old machine) near-instant
+on the install side: only the MiniMax H3 weights and your personal data
+still need to download, since those depend on the GPU/tier you land on.
+This template still runs `install.sh` automatically on start for that
+GPU-dependent part, so you end up in the same place as a manual install —
+just faster to get there.
+
+Don't have a RunPod account yet? You can sign up here:
+**👉 [runpod.io](https://runpod.io?ref=76jvawoy)**
+
+Using that link is an affiliate link that also unlocks a small welcome
+bonus for you — see below.
+
+<details>
+<summary><strong>💸 What the RunPod referral bonus gives you</strong></summary>
+
+**You (the new user) get:**
+* A one-time credit of $5 when you sign up with the link above, plus
+  another $10 the first time you add funds to your account
+* Instant access to RunPod's GPU resources to run this project
+
+**I (whoever shared the link) get:**
+* A one-time credit of $5 once you sign up with the link and add funds for
+  the first time
+* A small percentage of your RunPod spend during your first 6 months (5%
+  on Serverless, 3% on Pods) — this costs you nothing extra, it's paid by
+  RunPod out of its own referral program, not added to your bill
+
+It's entirely optional — the project works the same either way, this just
+helps support it if you find it useful.
+
+</details>
+
+### Manual install (guided wizard)
+
+If you'd rather start from a plain RunPod pod instead of the template
+above, create a fresh RunPod (PyTorch / CUDA / Ubuntu template, NVIDIA GPU,
+port `8188` exposed as HTTP), open its terminal, and clone the project:
 
 ```bash
 cd /workspace
@@ -85,36 +137,25 @@ git clone https://github.com/Kinderheim512/minimax-runpod-installer.git
 cd minimax-runpod-installer
 ```
 
-Then pick one of the two entry points below.
-
-### Option A — Guided (recommended)
+Then run the guided setup wizard:
 
 ```bash
 bash wizard.sh
 ```
 
-Answers a handful of questions — preset, model tier, Turbo LoRA,
+It asks a handful of questions — preset, model tier, Turbo LoRA,
 SageAttention, Spectrum — shows a recap before doing anything, then installs
-and offers to launch ComfyUI in tmux right away. Best default for a first
-install, or whenever you want to change something without memorizing flags.
-See [The wizard, in detail](#-the-wizard-in-detail) below for a full sample
+and offers to launch ComfyUI in tmux right away. This is the recommended
+entry point for a manual install, or whenever you want to change something
+without memorizing flags. See
+[The wizard, in detail](#-the-wizard-in-detail) below for a full sample
 run.
 
-### Option B — One command, no questions asked
+Prefer a fully non-interactive, one-command install instead (for
+repeat/scripted deployments)? See `bash bootstrap.sh` in the
+[CLI reference](#-cli-reference) below.
 
-```bash
-bash bootstrap.sh
-```
-
-Uses whatever is set in `config.env` (the `dasiwa_mmh3v12` preset by
-default) with **zero prompts** — picks a matching PyTorch/CUDA build,
-installs ComfyUI + ComfyUI-Manager + custom nodes, downloads the selected
-preset/tier, installs the workflows, tunes launch flags for the detected
-GPU, and starts ComfyUI **inside a persistent tmux session** (see
-[TMUX.md](TMUX.md)). Best for repeat/scripted deployments, or once you
-already know exactly what you want.
-
-Either way, no manual configuration is required for a first run. For
+No manual configuration is required for a first run either way. For
 anything beyond the defaults, see [CLI reference](#-cli-reference) below, or
 the full walkthrough in [docs/INSTALL_EN.md](docs/INSTALL_EN.md) /
 [docs/INSTALL_FR.md](docs/INSTALL_FR.md).
@@ -140,33 +181,33 @@ skips the tier question entirely, since it wouldn't do anything. Sample run:
 
 ```
 ┌────────────────────────────────────────────────────┐
-│  Assistant de configuration — MiniMax H3            │
+│  Setup Wizard — MiniMax H3                          │
 └────────────────────────────────────────────────────┘
-(Entrée seule = garder le choix par défaut à chaque question)
-Preset (jeu de modèles/workflow) :
- 1) Aucun — installation standard uniquement
- 2) dasiwa_mmh3v12 — DaSiWa MythicAlchemy (remplace le palier standard)  [défaut]
- 3) muse_director_seedhunt — Director/Seed Hunt, poids pruned (remplace le palier standard)
-Choix [1-3, Entrée = défaut] :
-→ 'dasiwa_mmh3v12' fournit son propre jeu de poids et son propre workflow.
-Turbo LoRA MiniMax H3 (génération accélérée) :
- 1) Activé (téléchargement + custom node auto)  [défaut]
- 2) Désactivé
-Choix [1-2, Entrée = défaut] :
+(Press Enter alone to keep the default answer for each question)
+Preset (model/workflow set):
+ 1) None — standard install only
+ 2) dasiwa_mmh3v12 — DaSiWa MythicAlchemy (replaces the standard tier)  [default]
+ 3) muse_director_seedhunt — Director/Seed Hunt, pruned weights (replaces the standard tier)
+Choice [1-3, Enter = default]:
+→ 'dasiwa_mmh3v12' provides its own set of weights and its own workflow.
+MiniMax H3 Turbo LoRA (accelerated generation):
+ 1) Enabled (download + custom node, automatic)  [default]
+ 2) Disabled
+Choice [1-2, Enter = default]:
 ...
-Récapitulatif :
- - Preset       : dasiwa_mmh3v12
- - Palier       : (n/a — fourni par le preset)
- - Turbo LoRA   : on
- - SageAttention: on
- - Spectrum     : on
-Lancer l'installation avec ces réglages ? [O/n]
+Summary:
+ - Preset        : dasiwa_mmh3v12
+ - Tier          : (n/a — provided by the preset)
+ - Turbo LoRA    : on
+ - SageAttention : on
+ - Spectrum      : on
+Start the install with these settings? [Y/n]
 ```
 
 After install, it asks once more before starting ComfyUI:
 
 ```
-Lancer ComfyUI maintenant (session tmux) ? [O/n]
+Launch ComfyUI now (tmux session)? [Y/n]
 ```
 
 Answer `n` and start it later with `bash launch.sh --tmux` whenever you're
