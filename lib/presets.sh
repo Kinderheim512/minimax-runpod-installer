@@ -39,7 +39,7 @@ resolve_h3_presets() {
     if [[ "$known" == "true" ]]; then
       valid+=("$t")
     else
-      log_warn "H3_PRESETS/--preset= : unknown preset ignored: '${t}' (available: ${H3_PRESET_NAMES[*]})."
+      log_warn "$(t presets_unknown_ignored "$t" "${H3_PRESET_NAMES[*]}")"
     fi
   done
 
@@ -97,8 +97,8 @@ download_preset_models() {
   # shellcheck disable=SC2207
   repos=($(preset_required_repos "$presets_csv"))
   if ! hf_check_required_access "${repos[@]}"; then
-    log_error "Preset model download cancelled: access to at least one repository not confirmed."
-    log_error "Accept the license on the relevant repository/repositories, then re-run with the same --preset=."
+    log_error "$(t presets_download_cancelled)"
+    log_error "$(t presets_download_cancelled_fix)"
     return 1
   fi
 
@@ -122,7 +122,7 @@ download_preset_models() {
   local repo path subdir dest_root dest_dir
   for name in "${names[@]}"; do
     [[ -z "$name" ]] && continue
-    log_step "Preset '${name}' — downloading associated models"
+    log_step "$(t presets_downloading_models_step "$name")"
     ref="$(_preset_manifest_ref "$name")"
     local -n manifest="$ref"
     for entry in "${manifest[@]}"; do
@@ -140,7 +140,7 @@ download_preset_models() {
     done
   done
 
-  log_ok "Model(s) for preset(s) '${presets_csv}' downloaded."
+  log_ok "$(t presets_models_downloaded "$presets_csv")"
 }
 
 # _preset_node_repos_ref <nom> -> nom de variable du tableau de nœuds custom
@@ -180,7 +180,7 @@ install_preset_nodes() {
     any_declared="true"
     local -n node_repo_arr="$ref"
     [[ ${#node_repo_arr[@]} -eq 0 ]] && continue
-    log_step "Preset '${name}' — associated custom nodes"
+    log_step "$(t presets_nodes_step "$name")"
     mkdir -p "${INSTALL_DIR}/custom_nodes"
     for repo_url in "${node_repo_arr[@]}"; do
       _clone_or_update_node_repo "$repo_url" "true"
@@ -188,7 +188,7 @@ install_preset_nodes() {
   done
 
   [[ "$any_declared" == "false" ]] && return 0
-  log_ok "Custom node(s) for preset(s) '${presets_csv}' up to date."
+  log_ok "$(t presets_nodes_up_to_date "$presets_csv")"
   return 0
 }
 
@@ -235,21 +235,21 @@ install_preset_pip_packages() {
     any_declared="true"
     local -n pkg_arr="$ref"
     [[ ${#pkg_arr[@]} -eq 0 ]] && continue
-    log_step "Preset '${name}' — associated pip dependencies"
+    log_step "$(t presets_pip_step "$name")"
     # shellcheck disable=SC1091
     source "${VENV_DIR}/bin/activate"
     for pkg in "${pkg_arr[@]}"; do
       if python -m pip install --quiet "$pkg" >>"$LOG_FILE" 2>&1; then
-        log_ok "${pkg} installed (preset '${name}')."
+        log_ok "$(t presets_pip_installed "$pkg" "$name")"
       else
-        log_warn "Failed to install ${pkg} (preset '${name}', non-blocking) — check ${LOG_FILE}."
+        log_warn "$(t presets_pip_install_failed "$pkg" "$name" "$LOG_FILE")"
       fi
     done
     deactivate
   done
 
   [[ "$any_declared" == "false" ]] && return 0
-  log_ok "Pip dependencies for preset(s) '${presets_csv}' up to date."
+  log_ok "$(t presets_pip_up_to_date "$presets_csv")"
   return 0
 }
 
@@ -320,13 +320,13 @@ install_preset_symlinks() {
     any_declared="true"
     local -n links="$ref"
     [[ ${#links[@]} -eq 0 ]] && continue
-    log_step "Preset '${name}' — model symlinks"
+    log_step "$(t presets_symlinks_step "$name")"
     for entry in "${links[@]}"; do
       IFS='|' read -r target_rel link_rel <<< "$entry"
       target_abs="${base}/${target_rel}"
       link_abs="${base}/${link_rel}"
       if [[ ! -f "$target_abs" ]]; then
-        log_warn "Symlink '${link_rel}' skipped — target file not found (${target_rel}), was it actually downloaded?"
+        log_warn "$(t presets_symlink_target_missing "$link_rel" "$target_rel")"
         continue
       fi
       mkdir -p "$(dirname "$link_abs")"
@@ -334,14 +334,14 @@ install_preset_symlinks() {
         continue
       fi
       ln -sf "$target_abs" "$link_abs"
-      log_ok "Link created: ${link_rel} -> ${target_rel}"
+      log_ok "$(t presets_symlink_created "$link_rel" "$target_rel")"
     done
   done
 
   if [[ "$any_declared" == "false" ]]; then
     return 0
   fi
-  log_ok "Symlink(s) for preset(s) '${presets_csv}' up to date."
+  log_ok "$(t presets_symlinks_up_to_date "$presets_csv")"
 }
 
 # install_preset_workflows <presets_csv>
@@ -398,11 +398,11 @@ install_preset_workflows() {
     github_src="${H3_PRESET_WORKFLOW_GITHUB_SOURCES[$name]:-}"
     if [[ -n "$github_src" ]]; then
       IFS='|' read -r owner_repo branch subfolder <<< "$github_src"
-      log_step "Preset '${name}' — syncing workflows from GitHub (${owner_repo}/${subfolder}, branch ${branch})"
+      log_step "$(t presets_workflows_github_step "$name" "$owner_repo" "$subfolder" "$branch")"
       if _sync_preset_workflow_versions_from_github "$owner_repo" "$branch" "$subfolder" "$dest"; then
         continue
       fi
-      log_warn "Preset '${name}': GitHub sync failed, falling back to the next step."
+      log_warn "$(t presets_workflows_github_failed "$name")"
     fi
 
     # 2) Fichier unique CivitAI (repli, ou source principale si aucun dépôt
@@ -411,18 +411,18 @@ install_preset_workflows() {
     civitai_url="${H3_PRESET_WORKFLOW_CIVITAI_URLS[$name]:-}"
     if [[ -n "$civitai_url" && -n "$rel" ]]; then
       target="${dest}/$(basename "$rel")"
-      log_step "Preset '${name}' — fetching the latest workflow version from CivitAI"
+      log_step "$(t presets_workflows_civitai_step "$name")"
       if _download_preset_workflow_from_civitai "$civitai_url" "$target"; then
-        log_ok "Preset '${name}' workflow downloaded from CivitAI (latest version): $(basename "$rel")."
+        log_ok "$(t presets_workflows_civitai_downloaded "$name" "$(basename "$rel")")"
         continue
       fi
-      log_warn "Preset '${name}': CivitAI workflow download failed, falling back to the bundled local copy."
+      log_warn "$(t presets_workflows_civitai_failed "$name")"
     fi
 
     # 3) Copie locale bundlée — tous les .json du dossier du preset.
     preset_dir="${PROJECT_ROOT}/presets/${name}"
     if [[ ! -d "$preset_dir" ]]; then
-      log_warn "Preset '${name}': no associated workflow — models installed, but no ready-to-use workflow."
+      log_warn "$(t presets_workflows_none_associated "$name")"
       continue
     fi
     synced=0
@@ -432,9 +432,9 @@ install_preset_workflows() {
       synced=$((synced + 1))
     done
     if [[ "$synced" -gt 0 ]]; then
-      log_ok "Preset '${name}' workflow(s) installed (local copy): ${synced} file(s)."
+      log_ok "$(t presets_workflows_local_installed "$name" "$synced")"
     else
-      log_warn "Preset '${name}': no bundled workflow found in ${preset_dir} — models installed, but workflow not copied."
+      log_warn "$(t presets_workflows_none_bundled "$name" "$preset_dir")"
     fi
   done
 }
@@ -458,13 +458,13 @@ _sync_preset_workflow_versions_from_github() {
   local tarball_url="https://codeload.github.com/${owner_repo}/tar.gz/refs/heads/${branch}"
 
   if ! curl -sS -L --retry 3 --retry-delay 3 -o "$tar_file" "$tarball_url" 2>/dev/null || [[ ! -s "$tar_file" ]]; then
-    log_warn "GitHub (${owner_repo}): failed to download the repository archive."
+    log_warn "$(t presets_github_archive_failed "$owner_repo")"
     rm -rf -- "$tmp_dir"
     return 1
   fi
 
   if ! tar -xzf "$tar_file" -C "$tmp_dir" 2>/dev/null; then
-    log_warn "GitHub (${owner_repo}): invalid or corrupted archive."
+    log_warn "$(t presets_github_archive_invalid "$owner_repo")"
     rm -rf -- "$tmp_dir"
     return 1
   fi
@@ -476,7 +476,7 @@ _sync_preset_workflow_versions_from_github() {
   extracted_dir="$(find "$tmp_dir" -mindepth 2 -maxdepth 2 -type d -path "*/${subfolder}" -print -quit)"
 
   if [[ -z "$extracted_dir" || ! -d "$extracted_dir" ]]; then
-    log_warn "GitHub (${owner_repo}): subfolder '${subfolder}' not found in the archive (branch '${branch}')."
+    log_warn "$(t presets_github_subfolder_missing "$owner_repo" "$subfolder" "$branch")"
     rm -rf -- "$tmp_dir"
     return 1
   fi
@@ -490,18 +490,18 @@ _sync_preset_workflow_versions_from_github() {
       cp -f "$f" "${dest_dir}/${base}"
       synced=$((synced + 1))
     else
-      log_warn "GitHub (${owner_repo}): '${base}' skipped (invalid JSON)."
+      log_warn "$(t presets_github_json_skipped "$owner_repo" "$base")"
     fi
   done
 
   rm -rf -- "$tmp_dir"
 
   if [[ "$synced" -eq 0 ]]; then
-    log_warn "GitHub (${owner_repo}/${subfolder}): no valid workflow synced."
+    log_warn "$(t presets_github_none_synced "$owner_repo" "$subfolder")"
     return 1
   fi
 
-  log_ok "GitHub (${owner_repo}/${subfolder}): ${synced} workflow version(s) synced."
+  log_ok "$(t presets_github_synced "$owner_repo" "$subfolder" "$synced")"
   return 0
 }
 
@@ -529,13 +529,13 @@ _download_preset_workflow_from_civitai() {
   http_code="$(curl -sS -L --retry 3 --retry-delay 3 "${auth_args[@]}" -o "$tmp_file" -w '%{http_code}' "$url" 2>/dev/null || true)"
 
   if [[ ! "$http_code" =~ ^2 ]] || [[ ! -s "$tmp_file" ]]; then
-    log_warn "CivitAI: failed to download the workflow (HTTP code: ${http_code:-unknown})."
+    log_warn "$(t presets_civitai_download_failed "${http_code:-$(t gpu_cuda_unknown)}")"
     rm -f -- "$tmp_file" 2>/dev/null || true
     return 1
   fi
 
   if ! _is_valid_workflow_json "$tmp_file"; then
-    log_warn "CivitAI: invalid content received (not a usable workflow JSON)."
+    log_warn "$(t presets_civitai_invalid_content)"
     rm -f -- "$tmp_file" 2>/dev/null || true
     return 1
   fi

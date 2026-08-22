@@ -12,12 +12,12 @@
 # au téléchargement via la taille distante réelle, voir lib/download.sh).
 
 create_model_folders() {
-  log_step "Création de l'arborescence de modèles"
+  log_step "$(t models_folders_step)"
   local base="${INSTALL_DIR}/models"
   for d in checkpoints diffusion_models text_encoders vae clip controlnet loras upscale_models; do
     mkdir -p "${base}/${d}"
   done
-  log_ok "Dossiers models/{checkpoints,diffusion_models,text_encoders,vae,clip,controlnet,loras,upscale_models} prêts."
+  log_ok "$(t models_folders_ready)"
 }
 
 # --- Manifeste des fichiers H3 -----------------------------------------------
@@ -150,12 +150,12 @@ resolve_h3_tier() {
   local tier="$H3_TIER"
   if [[ "$tier" == "auto" ]]; then
     tier="${GPU_TIER_RECOMMENDED:-balanced}"
-    log_info "H3_TIER=auto → palier '${tier}' choisi selon la VRAM détectée."
+    log_info "$(t models_tier_auto_selected "$tier")"
   fi
   case "$tier" in
     light|pruned|pruned_scaled|balanced|max) ;;
     *)
-      log_warn "H3_TIER/--tier='${tier}' inconnu (valeurs valides : light, pruned, pruned_scaled, balanced, max, auto) — repli sur 'balanced'."
+      log_warn "$(t models_tier_unknown_fallback "$tier")"
       tier="balanced"
       ;;
   esac
@@ -178,12 +178,12 @@ resolve_h3_workflows() {
     case "$t" in
       t2v|i2v|r2v) valid+=("$t") ;;
       "") ;;
-      *) log_warn "H3_WORKFLOWS/--workflows= : jeton inconnu ignoré : '${t}' (valides : t2v, i2v, r2v, all)." ;;
+      *) log_warn "$(t models_workflow_unknown_token "$t")" ;;
     esac
   done
 
   if [[ ${#valid[@]} -eq 0 ]]; then
-    log_warn "H3_WORKFLOWS/--workflows='${H3_WORKFLOWS:-}' ne contient aucun workflow valide — repli sur t2v,i2v,r2v."
+    log_warn "$(t models_workflows_none_valid "${H3_WORKFLOWS:-}")"
     valid=(t2v i2v r2v)
   fi
 
@@ -325,15 +325,15 @@ download_civitai_model() {
   announce_download "$(basename "$dest")"
   while (( attempt <= max_retries )); do
     if curl -L -C - --fail --retry 3 --retry-delay 2 -o "$dest" "$url"; then
-      log_ok "Téléchargé (CivitAI) : $(basename "$dest")"
+      log_ok "$(t models_civitai_downloaded "$(basename "$dest")")"
       return 0
     fi
-    log_warn "Échec du téléchargement CivitAI (tentative ${attempt}/${max_retries}) : $(basename "$dest")"
+    log_warn "$(t models_civitai_attempt_failed "$attempt" "$max_retries" "$(basename "$dest")")"
     attempt=$((attempt + 1))
     [[ $attempt -le $max_retries ]] && sleep 2
   done
 
-  log_error "Échec définitif du téléchargement CivitAI : ${url}"
+  log_error "$(t models_civitai_final_failed "$url")"
   return 1
 }
 
@@ -513,7 +513,7 @@ model_is_valid() {
     if actual_sha256="$(compute_sha256 "$path")"; then
       [[ "$actual_sha256" == "$expected_sha256" ]] || return 1
     else
-      log_warn "sha256sum/shasum introuvable — vérification SHA256 ignorée pour $(basename "$path")."
+      log_warn "$(t models_sha256_tool_missing "$(basename "$path")")"
     fi
   fi
 
@@ -668,8 +668,8 @@ download_missing_models() {
     # shellcheck disable=SC2207
     required_repos=($(h3_required_repos "$workflows"))
     if ! hf_check_required_access "${required_repos[@]}"; then
-      log_error "Téléchargement des modèles annulé : accès à au moins un dépôt non confirmé."
-      log_error "Acceptez la licence sur le(s) dépôt(s) concerné(s) puis relancez : bash install.sh --only-models"
+      log_error "$(t models_license_access_error1)"
+      log_error "$(t models_license_access_error2)"
       return 1
     fi
   fi
@@ -729,7 +729,7 @@ download_missing_models() {
 }
 
 download_h3_models() {
-  log_step "Téléchargement des modèles MiniMax H3"
+  log_step "$(t models_download_step)"
 
   # Palier et workflows résolus depuis H3_TIER/--tier= et H3_WORKFLOWS/
   # --workflows= (config.env, surchargeables en ligne de commande) — seule
@@ -745,7 +745,7 @@ download_h3_models() {
   case "$model_source" in
     huggingface|civitai) ;;
     *)
-      log_warn "MODEL_SOURCE='${model_source}' inconnu — retour à 'huggingface'."
+      log_warn "$(t models_source_unknown "$model_source")"
       model_source="huggingface"
       ;;
   esac
@@ -760,11 +760,11 @@ download_h3_models() {
   # verify_local_file() puisqu'aucun hash SHA256 n'est renseigné par
   # défaut). Repli : MODEL_SOURCE=huggingface (défaut).
   if [[ "$model_source" == "civitai" ]]; then
-    log_error "MODEL_SOURCE=civitai n'est plus disponible : CivitAI héberge uniquement les"
-    log_error "poids pruned INT8 ConvRot, et aucun palier ne les utilise plus (palier"
-    log_error "'balanced' = pruned_fp8_scaled depuis 2026-08). Utilisez MODEL_SOURCE=huggingface"
-    log_error "(défaut) — ou H3_CIVITAI_FL2VA_URL/H3_CIVITAI_REF2VA_URL pointent toujours vers"
-    log_error "les fichiers int8_convrot si vous en avez besoin manuellement."
+    log_error "$(t models_civitai_deprecated_1)"
+    log_error "$(t models_civitai_deprecated_2)"
+    log_error "$(t models_civitai_deprecated_3)"
+    log_error "$(t models_civitai_deprecated_4)"
+    log_error "$(t models_civitai_deprecated_5)"
     return 1
   fi
 
@@ -774,7 +774,7 @@ download_h3_models() {
   else
     echo "Selected Model Source : HuggingFace"
   fi
-  log_info "Palier retenu : ${tier} — workflows : ${workflows}"
+  log_info "$(t models_tier_workflows_selected "$tier" "$workflows")"
 
   local base="${INSTALL_DIR}/models"
 
@@ -786,7 +786,7 @@ download_h3_models() {
   #     revérifier ici, un seul endroit décide de ce cas. ------------------
   if ! any_model_missing "$workflows"; then
     download_missing_models "$base" "$model_source" "$workflows"
-    log_ok "Modèles MiniMax H3 déjà installés (palier ${tier}, workflows ${workflows}, source ${model_source})."
+    log_ok "$(t models_already_installed "$tier" "$workflows" "$model_source")"
     return 0
   fi
 
@@ -798,14 +798,14 @@ download_h3_models() {
   # compté même s'il est absent du disque.
   local est_gb; est_gb="$(estimate_missing_download_size_gb "$tier" "$workflows")"
   local free_gb; free_gb="$(free_disk_gb "$INSTALL_DIR")"
-  log_info "Espace requis (estimation, modèles manquants et requis uniquement) : ~${est_gb} Go — espace libre : ${free_gb:-inconnu} Go"
+  log_info "$(t models_space_required_estimate "$est_gb" "${free_gb:-$(t gpu_cuda_unknown)}")"
 
   if [[ -n "$free_gb" ]] && awk -v f="$free_gb" -v e="$est_gb" 'BEGIN{exit !(f < e)}'; then
-    log_warn "Espace disque possiblement insuffisant (${free_gb} Go libres pour ~${est_gb} Go requis)."
-    confirm "Continuer quand même ?" || { log_error "Téléchargement annulé par l'utilisateur."; return 1; }
+    log_warn "$(t models_disk_maybe_insufficient "$free_gb" "$est_gb")"
+    confirm "$(t models_confirm_continue_anyway)" || { log_error "$(t models_download_cancelled_by_user)"; return 1; }
   fi
 
   download_missing_models "$base" "$model_source" "$workflows" || return 1
 
-  log_ok "Modèles MiniMax H3 (palier ${tier}, workflows ${workflows}, source ${model_source}) téléchargés."
+  log_ok "$(t models_downloaded_done "$tier" "$workflows" "$model_source")"
 }
