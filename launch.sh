@@ -73,20 +73,20 @@ stop_comfyui() {
   local pids
   pids="$(find_comfyui_pid)"
   if [[ -z "$pids" ]]; then
-    log_info "Aucun process ComfyUI (${INSTALL_DIR}/main.py) trouvé — rien à arrêter."
+    log_info "$(t launch_stop_none "$INSTALL_DIR")"
     return 0
   fi
-  log_info "Arrêt de ComfyUI (PID : ${pids//$'\n'/, })..."
+  log_info "$(t launch_stopping "${pids//$'\n'/, }")"
   # shellcheck disable=SC2086  # plusieurs PID possibles sur des lignes séparées, split volontaire
   kill $pids 2>/dev/null || true
   sleep 2
   pids="$(find_comfyui_pid)"
   if [[ -n "$pids" ]]; then
-    log_warn "Toujours actif après SIGTERM (PID : ${pids//$'\n'/, }) — arrêt forcé (SIGKILL)."
+    log_warn "$(t launch_stop_force "${pids//$'\n'/, }")"
     # shellcheck disable=SC2086
     kill -9 $pids 2>/dev/null || true
   fi
-  log_ok "ComfyUI arrêté — la VRAM qu'il occupait devrait être libérée sous peu."
+  log_ok "$(t launch_stopped)"
 }
 
 if [[ "${1:-}" == "--stop" ]]; then
@@ -121,8 +121,8 @@ attach_tmux_if_interactive() {
     exec tmux attach-session -t "$TMUX_SESSION_NAME"
   fi
 
-  echo "[INFO] Pas de terminal interactif détecté — la session tmux '${TMUX_SESSION_NAME}' continue de tourner en arrière-plan."
-  echo "[INFO] Pour vous y rattacher plus tard : tmux attach -t ${TMUX_SESSION_NAME}"
+  echo "$(t launch_tmux_no_tty "$TMUX_SESSION_NAME")"
+  echo "$(t launch_tmux_reattach_hint "$TMUX_SESSION_NAME")"
   # ComfyUI tourne déjà dans la session tmux détachée : on doit s'arrêter ici,
   # sinon le flux repasserait dans launch_in_tmux() puis dans le corps
   # principal de ce script et lancerait un second ComfyUI hors tmux.
@@ -131,7 +131,7 @@ attach_tmux_if_interactive() {
 
 launch_in_tmux() {
   if ! command -v tmux >/dev/null 2>&1; then
-    echo "[ERREUR] tmux est introuvable (il devrait pourtant être installé automatiquement)." >&2
+    echo "$(t launch_tmux_missing)" >&2
     exit 1
   fi
 
@@ -152,17 +152,17 @@ launch_in_tmux() {
   # ComfyUI au premier plan dans le pane courant — exactement ce qu'il faut
   # puisqu'on est déjà dans tmux.
   if [[ -n "${TMUX:-}" ]]; then
-    echo "[INFO] Déjà dans une session tmux — lancement de ComfyUI directement ici (pas de session imbriquée)."
+    echo "$(t launch_tmux_already_inside)"
     return 0
   fi
 
   if tmux has-session -t "$TMUX_SESSION_NAME" 2>/dev/null; then
-    echo "[INFO] Session tmux '${TMUX_SESSION_NAME}' déjà existante — attache..."
+    echo "$(t launch_tmux_existing "$TMUX_SESSION_NAME")"
     attach_tmux_if_interactive
   fi
 
-  echo "[INFO] Lancement de ComfyUI dans tmux..."
-  echo "[INFO] Création de la session tmux '${TMUX_SESSION_NAME}'..."
+  echo "$(t launch_tmux_launching)"
+  echo "$(t launch_tmux_creating "$TMUX_SESSION_NAME")"
   # La session relance simplement ce même script (sans --tmux) : c'est lui
   # qui sait déjà activer le bon venv et détecter une instance déjà en
   # cours (message "ComfyUI est déjà lancé." ci-dessous). Aucune logique de
@@ -179,7 +179,7 @@ fi
 
 if curl -fs "http://127.0.0.1:${COMFYUI_PORT}" >/dev/null 2>&1; then
     echo
-    log_ok "ComfyUI est déjà lancé et répond sur le port ${COMFYUI_PORT}."
+    log_ok "$(t launch_already_running "$COMFYUI_PORT")"
     echo
     exit 0
 fi
@@ -187,19 +187,19 @@ fi
 existing_pid="$(find_comfyui_pid)"
 if [[ -n "$existing_pid" ]]; then
   echo
-  log_warn "Un process ComfyUI (PID : ${existing_pid//$'\n'/, }) tourne déjà mais ne répond pas (encore) sur le port ${COMFYUI_PORT}."
-  log_warn "S'il vient d'être lancé : patientez le temps du chargement des modèles (30-60s selon le GPU) puis réessayez."
-  log_warn "S'il est bloqué/planté (VRAM potentiellement toujours occupée) : bash launch.sh --stop, puis relancez."
+  log_warn "$(t launch_ghost_process "${existing_pid//$'\n'/, }" "$COMFYUI_PORT")"
+  log_warn "$(t launch_ghost_wait)"
+  log_warn "$(t launch_ghost_stuck)"
   echo
   exit 1
 fi
 
 if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
-  log_error "Environnement virtuel introuvable (${VENV_DIR}). Lancez d'abord bash install.sh."
+  log_error "$(t launch_venv_missing "$VENV_DIR")"
   exit 1
 fi
 if [[ ! -f "${INSTALL_DIR}/main.py" ]]; then
-  log_error "ComfyUI introuvable dans ${INSTALL_DIR}. Lancez d'abord bash install.sh."
+  log_error "$(t launch_comfyui_missing "$INSTALL_DIR")"
   exit 1
 fi
 
@@ -213,9 +213,9 @@ fi
 # ici, AVANT d'activer le venv pour de bon, que `import torch` réussit et
 # que CUDA est disponible.
 if ! "${VENV_DIR}/bin/python" -c "import torch; assert torch.cuda.is_available()" >/dev/null 2>&1; then
-  log_error "PyTorch absent ou non fonctionnel dans ${VENV_DIR} (CUDA indisponible ou import en échec)."
-  log_error "Si vous êtes dans l'image Docker pré-installée : ne lancez jamais launch.sh directement au premier démarrage — utilisez ./docker-entrypoint.sh (ou relancez le conteneur normalement), qui installe PyTorch pour ce GPU avant de lancer ComfyUI."
-  log_error "Sinon : relancez bash install.sh (ou installez PyTorch manuellement via install_pytorch dans lib/python.sh)."
+  log_error "$(t launch_torch_broken "$VENV_DIR")"
+  log_error "$(t launch_torch_broken_docker_hint)"
+  log_error "$(t launch_torch_broken_manual_hint)"
   exit 1
 fi
 
@@ -227,8 +227,8 @@ if [[ -f "$flags_file" ]]; then
   # par compute_optimization_flags (lib/optimization.sh) : rien à suivre au lint.
   source "$flags_file"
 else
-  log_warn "Aucun fichier d'optimisation trouvé — lancement avec les réglages ComfyUI par défaut."
-  log_warn "(Lancez bash install.sh ou bash update.sh pour générer des optimisations adaptées au GPU.)"
+  log_warn "$(t launch_no_opt_file)"
+  log_warn "$(t launch_no_opt_file_hint)"
 fi
 
 for kv in "${MINIMAX_ENV_VARS[@]+"${MINIMAX_ENV_VARS[@]}"}"; do
@@ -241,20 +241,20 @@ source "${VENV_DIR}/bin/activate"
 
 read -r -a extra_args_from_config <<< "${EXTRA_LAUNCH_ARGS}"
 
-log_step "Lancement de ComfyUI"
-log_info "Répertoire   : ${INSTALL_DIR}"
-log_info "Écoute       : ${COMFYUI_LISTEN}:${COMFYUI_PORT}"
-[[ ${#MINIMAX_LAUNCH_FLAGS[@]} -gt 0 ]] && log_info "Flags GPU    : ${MINIMAX_LAUNCH_FLAGS[*]}"
-[[ -n "$EXTRA_LAUNCH_ARGS" ]] && log_info "Flags manuels: ${EXTRA_LAUNCH_ARGS}"
+log_step "$(t launch_step)"
+log_info "$(t launch_dir_line "$INSTALL_DIR")"
+log_info "$(t launch_listen_line "$COMFYUI_LISTEN" "$COMFYUI_PORT")"
+[[ ${#MINIMAX_LAUNCH_FLAGS[@]} -gt 0 ]] && log_info "$(t launch_gpu_flags_line "${MINIMAX_LAUNCH_FLAGS[*]}")"
+[[ -n "$EXTRA_LAUNCH_ARGS" ]] && log_info "$(t launch_manual_flags_line "$EXTRA_LAUNCH_ARGS")"
 
 if [[ -n "${RUNPOD_POD_ID:-}" ]]; then
   echo ""
-  log_ok "URL RunPod (proxy HTTP, une fois le serveur démarré) :"
+  log_ok "$(t launch_url_runpod)"
   echo -e "  ${C_BOLD}https://${RUNPOD_POD_ID}-${COMFYUI_PORT}.proxy.runpod.net${C_RESET}"
-  echo "  (assurez-vous que le port ${COMFYUI_PORT} est bien exposé en HTTP dans les réglages du pod)"
+  echo "$(t launch_url_runpod_hint "$COMFYUI_PORT")"
 else
   echo ""
-  log_ok "URL locale (une fois le serveur démarré) :"
+  log_ok "$(t launch_url_local)"
   echo -e "  ${C_BOLD}http://<ip-publique-du-pod>:${COMFYUI_PORT}${C_RESET}"
 fi
 echo ""

@@ -42,11 +42,11 @@ source "${PROJECT_ROOT}/lib/huggingface.sh"
 source "${PROJECT_ROOT}/lib/personal_storage.sh"
 
 if [[ ! -d "${INSTALL_DIR}/.git" ]]; then
-  log_error "${INSTALL_DIR} n'existe pas encore — lancez d'abord install.sh."
+  log_error "$(t update_not_installed "$INSTALL_DIR")"
   exit 1
 fi
 
-log_step "Mise à jour du projet MiniMax H3 / ComfyUI"
+log_step "$(t update_step)"
 
 # Garantit python3-dev/ninja-build/build-essential (et le reste des paquets
 # système) AVANT tout ce qui en dépend plus bas (install_comfyui_requirements,
@@ -94,4 +94,4 @@ compute_optimization_flags
 # terminate un pod, sans attendre un update.sh), voir : bash sync_push.sh
 sync_personal_storage_push
 
-log_ok "Mise à jour terminée."
+log_ok "$(t update_done)"

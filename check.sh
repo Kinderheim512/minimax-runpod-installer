@@ -28,9 +28,9 @@ verify_installation || exit_code=$?
 
 if [[ "${INSTALL_SPECTRUM:-true}" == "true" ]]; then
   if [[ -d "${INSTALL_DIR}/custom_nodes/ComfyUI-Spectrum-MiniMax-H3" ]]; then
-    log_ok "Spectrum MiniMax H3 : installé."
+    log_ok "$(t check_spectrum_installed)"
   else
-    log_warn "Spectrum MiniMax H3 : non installé (optionnel, INSTALL_SPECTRUM=true) — bash install.sh"
+    log_warn "$(t check_spectrum_not_installed)"
   fi
 fi
 

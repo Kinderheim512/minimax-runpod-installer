@@ -28,21 +28,21 @@ _clone_or_update_node_repo() {
   local target="${nodes_dir}/${name}"
 
   if [[ -d "${target}/.git" ]]; then
-    log_info "${name} déjà présent — mise à jour..."
+    log_info "$(t nodes_updating "$name")"
     local dirty
     dirty="$(git -C "$target" status --porcelain 2>/dev/null || true)"
     if [[ -n "$dirty" ]]; then
-      log_warn "${name} a des modifications locales, mise à jour sautée."
+      log_warn "$(t nodes_local_changes "$name")"
       return 0
     fi
     if ! git -C "$target" pull --ff-only >>"$LOG_FILE" 2>&1; then
-      log_warn "Échec de mise à jour de ${name} (non bloquant)."
+      log_warn "$(t nodes_update_failed "$name")"
       return 0
     fi
   else
-    log_info "Installation de ${name}..."
+    log_info "$(t nodes_installing "$name")"
     if ! git clone "$repo_url" "$target" >>"$LOG_FILE" 2>&1; then
-      log_warn "Échec du clonage de ${name} (non bloquant, on continue)."
+      log_warn "$(t nodes_clone_failed "$name")"
       return 0
     fi
   fi
@@ -52,22 +52,22 @@ _clone_or_update_node_repo() {
     # construction de l'image Docker (DOCKER_BUILD_NO_TORCH), transparent
     # sinon (install.sh/update.sh classiques).
     pip_install_requirements "${target}/requirements.txt" || \
-      log_warn "Dépendances de ${name} partiellement installées (non bloquant)."
+      log_warn "$(t nodes_deps_partial "$name")"
   fi
-  log_ok "${name} prêt."
+  log_ok "$(t nodes_ready "$name")"
 }
 
 install_optional_nodes() {
-  log_step "Nœuds custom optionnels"
+  log_step "$(t nodes_step)"
 
   if [[ "$INSTALL_OPTIONAL_NODES" != "true" ]]; then
-    log_info "INSTALL_OPTIONAL_NODES=false, étape sautée."
+    log_info "$(t nodes_disabled)"
     return 0
   fi
 
   local total=$(( ${#OPTIONAL_NODE_REPOS[@]} + ${#OPTIONAL_NODE_REPOS_NO_PIP[@]} ))
   if [[ $total -eq 0 ]]; then
-    log_info "Aucun nœud optionnel configuré."
+    log_info "$(t nodes_none_configured)"
     return 0
   fi
 
@@ -81,5 +81,5 @@ install_optional_nodes() {
     _clone_or_update_node_repo "$repo_url" "false"
   done
 
-  log_info "D'autres nœuds peuvent être ajoutés à tout moment via ComfyUI-Manager, directement dans l'interface web."
+  log_info "$(t nodes_more_via_manager)"
 }

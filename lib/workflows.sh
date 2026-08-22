@@ -29,10 +29,10 @@ install_workflows() {
   local dest="${INSTALL_DIR}/user/default/workflows"
 
   echo "------------------------------------------------"
-  echo "Installing official MiniMax H3 workflows..."
+  echo "$(t wf_installing_header)"
 
   if [[ ! -d "$src" ]]; then
-    log_warn "Dossier ${src} introuvable — aucun workflow à installer."
+    log_warn "$(t wf_src_missing "$src")"
     echo "------------------------------------------------"
     return 0
   fi
@@ -80,25 +80,25 @@ install_workflows() {
   done < <(find "$src" -type f -iname "*.json" -print0 | sort -z)
 
   if (( ${#skipped[@]} > 0 )); then
-    echo "Skipped (require a model outside the selected workflows '${workflows}'):"
+    echo "$(t wf_skipped_header "$workflows")"
     for rel in "${skipped[@]}"; do
       echo "- ${rel}"
     done
   fi
 
   if (( ${#copied[@]} == 0 )); then
-    log_warn "Aucun workflow compatible avec H3_WORKFLOWS='${workflows}' trouvé dans ${src} — rien à installer."
+    log_warn "$(t wf_none_compatible "$workflows" "$src")"
     echo "------------------------------------------------"
     return 0
   fi
 
-  echo "Copied:"
+  echo "$(t wf_copied_header)"
   for rel in "${copied[@]}"; do
     echo "- ${rel}"
   done
 
   if (( ${#patched[@]} > 0 )); then
-    echo "Adapted to tier '${tier}' (model loader filenames rewritten):"
+    echo "$(t wf_adapted_header "$tier")"
     for rel in "${patched[@]}"; do
       echo "- ${rel}"
     done
@@ -111,10 +111,10 @@ install_workflows() {
 
   _warn_stale_tier_filenames "${copied[@]}"
 
-  echo "Official workflows installed successfully."
+  echo "$(t wf_success_footer)"
   echo "------------------------------------------------"
 
-  log_ok "Workflows installés dans ${dest} (${#copied[@]}), palier ${tier}."
+  log_ok "$(t wf_installed_ok "$dest" "${#copied[@]}" "$tier")"
 }
 
 # _known_filenames_for_key <key>
@@ -213,7 +213,7 @@ _warn_stale_tier_filenames() {
       while IFS= read -r candidate; do
         [[ -z "$candidate" || "$candidate" == "$target_name" ]] && continue
         if grep -qF -- "$candidate" "${dest}/${rel}" 2>/dev/null; then
-          log_warn "${rel} référence encore ${candidate} (palier différent de celui sélectionné) — reséléctionnez le modèle dans ce nœud si besoin. Voir TROUBLESHOOTING.md."
+          log_warn "$(t wf_stale_filename_warn "$rel" "$candidate")"
           found_any="true"
         fi
       done < <(_known_filenames_for_key "$key")
@@ -233,13 +233,13 @@ _verify_workflows_installed() {
 
   for rel in "$@"; do
     if [[ ! -f "${dest}/${rel}" ]]; then
-      log_error "Workflow manquant après copie : ${rel}"
+      log_error "$(t wf_missing_after_copy "$rel")"
       missing=1
     fi
   done
 
   if (( missing == 1 )); then
-    log_error "Un ou plusieurs workflows n'ont pas été installés correctement dans ${dest}."
+    log_error "$(t wf_not_installed_properly "$dest")"
     return 1
   fi
 

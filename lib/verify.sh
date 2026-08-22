@@ -17,40 +17,40 @@ _v_fail() { log_error "$1"; VERIFY_FAILED=1; }
 _v_warn() { log_warn "$1"; }
 
 verify_installation() {
-  log_step "Vérification de l'installation"
+  log_step "$(t verify_step)"
   VERIFY_FAILED=0
 
   # --- GPU ---
   if require_cmd nvidia-smi && nvidia-smi >/dev/null 2>&1; then
-    _v_ok "GPU accessible : ${GPU_NAME:-détection en cours} (${GPU_VRAM_GB:-?} Go)"
+    _v_ok "$(t verify_gpu_ok "${GPU_NAME:-$(t verify_gpu_detecting)}" "${GPU_VRAM_GB:-?}")"
   else
-    _v_fail "GPU non accessible via nvidia-smi."
+    _v_fail "$(t verify_gpu_fail)"
   fi
 
   # --- ComfyUI ---
   if [[ -f "${INSTALL_DIR}/main.py" ]]; then
-    _v_ok "ComfyUI présent dans ${INSTALL_DIR}"
+    _v_ok "$(t verify_comfyui_ok "$INSTALL_DIR")"
   else
-    _v_fail "main.py introuvable dans ${INSTALL_DIR} — ComfyUI n'est pas installé."
+    _v_fail "$(t verify_comfyui_fail "$INSTALL_DIR")"
   fi
 
   # --- venv / torch ---
   if [[ -x "${VENV_DIR}/bin/python" ]]; then
-    _v_ok "Environnement virtuel présent (${VENV_DIR})"
+    _v_ok "$(t verify_venv_ok "$VENV_DIR")"
     if "${VENV_DIR}/bin/python" -c "import torch" 2>/dev/null; then
       local tv cuda_ok
       tv="$("${VENV_DIR}/bin/python" -c 'import torch; print(torch.__version__)')"
       cuda_ok="$("${VENV_DIR}/bin/python" -c 'import torch; print(torch.cuda.is_available())')"
       if [[ "$cuda_ok" == "True" ]]; then
-        _v_ok "PyTorch ${tv} — CUDA disponible."
+        _v_ok "$(t verify_torch_cuda_ok "$tv")"
       else
-        _v_fail "PyTorch ${tv} installé mais CUDA indisponible pour torch."
+        _v_fail "$(t verify_torch_cuda_fail "$tv")"
       fi
     else
-      _v_fail "PyTorch non importable dans le venv."
+      _v_fail "$(t verify_torch_import_fail)"
     fi
   else
-    _v_fail "Environnement virtuel absent."
+    _v_fail "$(t verify_venv_fail)"
   fi
 
   # --- comfy-kitchen (kernels accélérés FP8/NVFP4/INT8/ConvRot) ---
@@ -70,17 +70,17 @@ verify_installation() {
     if "${VENV_DIR}/bin/python" -c "import comfy_kitchen" 2>/dev/null; then
       local ck_version
       ck_version="$("${VENV_DIR}/bin/python" -c 'import importlib.metadata as m; print(m.version("comfy-kitchen"))' 2>/dev/null)"
-      _v_ok "comfy-kitchen ${ck_version:-?} importable (kernels FP8/NVFP4/INT8/ConvRot accélérés)."
+      _v_ok "$(t verify_kitchen_ok "${ck_version:-?}")"
     else
-      _v_warn "comfy-kitchen non importable — les checkpoints int8_convrot/int4_convrot/fp8_scaled retomberont sur des kernels eager PyTorch, plus lents. Essayez : ${VENV_DIR}/bin/python -m pip install --force-reinstall comfy-kitchen"
+      _v_warn "$(t verify_kitchen_warn "${VENV_DIR}/bin/python")"
     fi
   fi
 
   # --- ComfyUI-Manager ---
   if [[ -d "${INSTALL_DIR}/custom_nodes/ComfyUI-Manager" ]]; then
-    _v_ok "ComfyUI-Manager installé."
+    _v_ok "$(t verify_manager_ok)"
   else
-    _v_warn "ComfyUI-Manager absent (facultatif mais recommandé)."
+    _v_warn "$(t verify_manager_warn)"
   fi
 
   # --- Modèles H3 : recherche récursive, peu importe le sous-dossier réel ---
@@ -101,23 +101,23 @@ verify_installation() {
 
   if _workflow_needs "$workflows" t2v i2v; then
     if (( ${#_fl2va_files[@]} > 0 )); then
-      _v_ok "Modèle de diffusion FL2VA présent (requis par les workflows t2v/i2v)."
+      _v_ok "$(t verify_fl2va_ok)"
       for f in "${_fl2va_files[@]}"; do
         log_info "   - ${f#"$base"/} ($(du -h "$f" 2>/dev/null | cut -f1))"
       done
     else
-      _v_fail "Modèle de diffusion FL2VA manquant (requis par les workflows t2v/i2v sélectionnés) — lancez : bash install.sh --only-models"
+      _v_fail "$(t verify_fl2va_fail)"
     fi
   fi
 
   if _workflow_needs "$workflows" r2v; then
     if (( ${#_ref2va_files[@]} > 0 )); then
-      _v_ok "Modèle de diffusion REF2VA présent (requis par le workflow r2v)."
+      _v_ok "$(t verify_ref2va_ok)"
       for f in "${_ref2va_files[@]}"; do
         log_info "   - ${f#"$base"/} ($(du -h "$f" 2>/dev/null | cut -f1))"
       done
     else
-      _v_fail "Modèle de diffusion REF2VA manquant (requis par le workflow r2v sélectionné) — lancez : bash install.sh --only-models"
+      _v_fail "$(t verify_ref2va_fail)"
     fi
   fi
 
@@ -126,12 +126,12 @@ verify_installation() {
     mapfile -t _text_encoder_files < <(find "$base" -type f -iname "*qwen3vl*" -iname "*minimax_h3*" -iname "*.safetensors" 2>/dev/null)
   fi
   if (( ${#_text_encoder_files[@]} > 0 )); then
-    _v_ok "Encodeur de texte MiniMax H3 présent."
+    _v_ok "$(t verify_text_encoder_ok)"
     for f in "${_text_encoder_files[@]}"; do
       log_info "   - ${f#"$base"/} ($(du -h "$f" 2>/dev/null | cut -f1))"
     done
   else
-    _v_warn "Encodeur de texte MiniMax H3 manquant."
+    _v_warn "$(t verify_text_encoder_warn)"
   fi
 
   local _video_vae="" _audio_vae=""
@@ -140,21 +140,21 @@ verify_installation() {
     _audio_vae="$(find "$base" -type f -iname "minimax_h3_audio_vae_*.safetensors" 2>/dev/null | head -n1)"
   fi
   if [[ -n "$_video_vae" && -n "$_audio_vae" ]]; then
-    _v_ok "VAE vidéo + audio MiniMax H3 présents."
+    _v_ok "$(t verify_vae_ok)"
   else
-    [[ -z "$_video_vae" ]] && _v_warn "VAE vidéo MiniMax H3 manquant."
-    [[ -z "$_audio_vae" ]] && _v_warn "VAE audio MiniMax H3 manquant."
+    [[ -z "$_video_vae" ]] && _v_warn "$(t verify_video_vae_warn)"
+    [[ -z "$_audio_vae" ]] && _v_warn "$(t verify_audio_vae_warn)"
   fi
 
   # --- espace disque ---
   local free_gb; free_gb="$(free_disk_gb "$INSTALL_DIR")"
-  _v_ok "Espace disque libre : ${free_gb:-inconnu} Go sur $(dirname "$INSTALL_DIR")"
+  _v_ok "$(t verify_disk_free "${free_gb:-$(t gpu_cuda_unknown)}" "$(dirname "$INSTALL_DIR")")"
 
   echo ""
   if (( VERIFY_FAILED == 0 )); then
-    log_ok "Vérification terminée : tout est en ordre pour un lancement."
+    log_ok "$(t verify_all_ok)"
   else
-    log_error "Vérification terminée avec des échecs critiques — voir ci-dessus avant de lancer ComfyUI."
+    log_error "$(t verify_has_failures)"
   fi
   return "$VERIFY_FAILED"
 }
@@ -162,17 +162,17 @@ verify_installation() {
 print_summary() {
   echo ""
   echo -e "${C_BOLD}${C_CYAN}════════════════════════════════════════════════════${C_RESET}"
-  echo -e "${C_BOLD} Résumé de l'installation MiniMax H3 / ComfyUI ${C_RESET}"
+  echo -e "${C_BOLD}$(t summary_title)${C_RESET}"
   echo -e "${C_BOLD}${C_CYAN}════════════════════════════════════════════════════${C_RESET}"
-  echo "  Répertoire ComfyUI : ${INSTALL_DIR}"
-  echo "  GPU                : ${GPU_NAME:-?} (${GPU_VRAM_GB:-?} Go VRAM)"
-  echo "  Palier de poids H3 : $(resolve_h3_tier 2>/dev/null || echo '?')"
-  echo "  Workflows préparés : $(resolve_h3_workflows 2>/dev/null || echo "${H3_WORKFLOWS:-?}")"
+  echo "$(t summary_comfyui_dir "$INSTALL_DIR")"
+  echo "$(t summary_gpu "${GPU_NAME:-?}" "${GPU_VRAM_GB:-?}")"
+  echo "$(t summary_tier "$(resolve_h3_tier 2>/dev/null || echo '?')")"
+  echo "$(t summary_workflows "$(resolve_h3_workflows 2>/dev/null || echo "${H3_WORKFLOWS:-?}")")"
   local _presets_summary; _presets_summary="$(resolve_h3_presets 2>/dev/null || echo "")"
-  [[ -n "$_presets_summary" ]] && echo "  Preset(s) actif(s) : ${_presets_summary}"
-  echo "  Port d'écoute      : ${COMFYUI_PORT}"
-  echo "  Logs                : ${LOG_DIR}"
+  [[ -n "$_presets_summary" ]] && echo "$(t summary_presets "$_presets_summary")"
+  echo "$(t summary_port "$COMFYUI_PORT")"
+  echo "$(t summary_logs "$LOG_DIR")"
   echo -e "${C_BOLD}${C_CYAN}════════════════════════════════════════════════════${C_RESET}"
-  echo "  Prochaine étape : ./launch.sh"
+  echo "$(t summary_next_step)"
   echo ""
 }

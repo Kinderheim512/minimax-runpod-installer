@@ -44,32 +44,32 @@ resolve_comfyui_target() {
     return 0
   fi
 
-  log_warn "Impossible de déterminer la dernière release ComfyUI (réseau, ou dépôt sans tag \"vX.Y.Z\") — repli sur la branche ${COMFYUI_BRANCH}."
+  log_warn "$(t comfyui_release_resolve_failed "$COMFYUI_BRANCH")"
   printf '%s' "$COMFYUI_BRANCH"
 }
 
 clone_or_update_comfyui() {
-  log_step "Installation / mise à jour de ComfyUI"
+  log_step "$(t comfyui_install_step)"
 
   mkdir -p "$(dirname "$INSTALL_DIR")"
 
   local target
   target="$(resolve_comfyui_target)"
   if [[ "$COMFYUI_RELEASE_MODE" == "release" ]]; then
-    log_info "Dernière release ComfyUI détectée : ${target}"
+    log_info "$(t comfyui_latest_release_detected "$target")"
   fi
 
   if [[ -d "${INSTALL_DIR}/.git" ]]; then
-    log_info "ComfyUI déjà cloné dans ${INSTALL_DIR}, mise à jour..."
+    log_info "$(t comfyui_already_cloned "$INSTALL_DIR")"
     update_comfyui "$target"
   elif [[ -e "$INSTALL_DIR" ]] && [[ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
-    log_error "${INSTALL_DIR} existe déjà, n'est pas vide, et n'est pas un dépôt git ComfyUI."
-    log_error "Choisissez un autre INSTALL_DIR (dans config.env ou en variable d'environnement), ou videz ce dossier avant de relancer."
+    log_error "$(t comfyui_dir_conflict "$INSTALL_DIR")"
+    log_error "$(t comfyui_dir_conflict_fix)"
     exit 1
   else
-    log_info "Clonage de ${COMFYUI_REPO} (${target}) dans ${INSTALL_DIR}"
+    log_info "$(t comfyui_cloning "$COMFYUI_REPO" "$target" "$INSTALL_DIR")"
     retry "$DOWNLOAD_MAX_RETRIES" git clone --branch "$target" "$COMFYUI_REPO" "$INSTALL_DIR" >>"$LOG_FILE" 2>&1
-    log_ok "ComfyUI cloné."
+    log_ok "$(t comfyui_cloned)"
   fi
 
   pin_comfyui_commit
@@ -86,13 +86,13 @@ clone_or_update_comfyui() {
 pin_comfyui_commit() {
   [[ -n "${COMFYUI_COMMIT:-}" ]] || return 0
 
-  log_step "Épinglage de ComfyUI au commit ${COMFYUI_COMMIT}"
+  log_step "$(t comfyui_pin_step "$COMFYUI_COMMIT")"
 
   local dirty
   dirty="$(git -C "$INSTALL_DIR" status --porcelain 2>/dev/null || true)"
   if [[ -n "$dirty" ]]; then
-    log_warn "Des modifications locales existent dans ${INSTALL_DIR} — checkout du commit épinglé sauté pour ne rien écraser."
-    log_warn "Lancez 'git stash' manuellement dans ce dossier puis relancez install.sh si vous voulez forcer le checkout."
+    log_warn "$(t comfyui_pin_local_changes "$INSTALL_DIR")"
+    log_warn "$(t comfyui_pin_local_changes_fix)"
     return 0
   fi
 
@@ -100,16 +100,16 @@ pin_comfyui_commit() {
   # profond, ou commit plus récent que le dernier fetch) : on le récupère
   # explicitement avant le checkout plutôt que de supposer qu'il y est déjà.
   if ! retry "$DOWNLOAD_MAX_RETRIES" git -C "$INSTALL_DIR" fetch origin "$COMFYUI_COMMIT" >>"$LOG_FILE" 2>&1; then
-    log_warn "Échec du fetch explicite du commit ${COMFYUI_COMMIT} — tentative de checkout direct (peut-être déjà présent localement)."
+    log_warn "$(t comfyui_pin_fetch_failed "$COMFYUI_COMMIT")"
   fi
 
   if ! git -C "$INSTALL_DIR" checkout "$COMFYUI_COMMIT" >>"$LOG_FILE" 2>&1; then
-    log_error "Impossible de checkout le commit ComfyUI épinglé (${COMFYUI_COMMIT})."
-    log_error "Vérifiez qu'il existe bien sur ${COMFYUI_REPO} et qu'il est orthographié correctement."
+    log_error "$(t comfyui_pin_checkout_failed "$COMFYUI_COMMIT")"
+    log_error "$(t comfyui_pin_checkout_failed_fix "$COMFYUI_REPO")"
     exit 1
   fi
 
-  log_ok "ComfyUI épinglé au commit ${COMFYUI_COMMIT} (COMFYUI_COMMIT dans config.env)."
+  log_ok "$(t comfyui_pinned "$COMFYUI_COMMIT")"
 }
 
 update_comfyui() {
@@ -121,8 +121,8 @@ update_comfyui() {
   local dirty
   dirty="$(git -C "$INSTALL_DIR" status --porcelain 2>/dev/null || true)"
   if [[ -n "$dirty" ]]; then
-    log_warn "Des modifications locales existent dans ${INSTALL_DIR} — mise à jour git sautée pour ne rien écraser."
-    log_warn "Lancez 'git stash' manuellement dans ce dossier puis relancez update.sh si vous voulez forcer la mise à jour."
+    log_warn "$(t comfyui_update_local_changes "$INSTALL_DIR")"
+    log_warn "$(t comfyui_update_local_changes_fix)"
     return 0
   fi
   {
@@ -135,14 +135,14 @@ update_comfyui() {
       retry "$DOWNLOAD_MAX_RETRIES" git -C "$INSTALL_DIR" pull --ff-only origin "$target"
     fi
   } >>"$LOG_FILE" 2>&1
-  log_ok "ComfyUI mis à jour (${target})."
+  log_ok "$(t comfyui_updated "$target")"
 }
 
 print_comfyui_version() {
   local rev version_str
-  rev="$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo inconnu)"
-  version_str="$(git -C "$INSTALL_DIR" describe --tags --always 2>/dev/null || echo inconnu)"
-  log_info "ComfyUI — commit ${rev} (${version_str})"
+  rev="$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || t comfyui_unknown)"
+  version_str="$(git -C "$INSTALL_DIR" describe --tags --always 2>/dev/null || t comfyui_unknown)"
+  log_info "$(t comfyui_version_line "$rev" "$version_str")"
 
   # Comparaison best-effort avec MIN_COMFYUI_VERSION (avertissement seulement,
   # ComfyUI ne tague pas systématiquement chaque commit de master).
@@ -150,13 +150,13 @@ print_comfyui_version() {
     local maj="${BASH_REMATCH[1]}" min="${BASH_REMATCH[2]}"
     IFS='.' read -r req_maj req_min _ <<< "$MIN_COMFYUI_VERSION"
     if (( maj < req_maj || (maj == req_maj && min < req_min) )); then
-      log_warn "Version ComfyUI (${version_str}) potentiellement antérieure à ${MIN_COMFYUI_VERSION} requis pour MiniMax H3 natif."
+      log_warn "$(t comfyui_version_older_warn "$version_str" "$MIN_COMFYUI_VERSION")"
     else
-      log_ok "Version ComfyUI compatible MiniMax H3 natif (>= ${MIN_COMFYUI_VERSION})."
+      log_ok "$(t comfyui_version_ok "$MIN_COMFYUI_VERSION")"
     fi
   elif [[ "$COMFYUI_RELEASE_MODE" == "release" ]]; then
-    log_info "Impossible de comparer précisément à ${MIN_COMFYUI_VERSION} (tag non reconnu) — dernière release ComfyUI installée, ce qui inclut le support H3 le plus récent."
+    log_info "$(t comfyui_version_unknown_release "$MIN_COMFYUI_VERSION")"
   else
-    log_info "Impossible de comparer précisément à ${MIN_COMFYUI_VERSION} (pas de tag exact) — branche ${COMFYUI_BRANCH} à jour, ce qui inclut le support H3 le plus récent."
+    log_info "$(t comfyui_version_unknown_branch "$MIN_COMFYUI_VERSION" "$COMFYUI_BRANCH")"
   fi
 }
