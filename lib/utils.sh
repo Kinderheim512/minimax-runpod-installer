@@ -27,6 +27,9 @@ LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
 mkdir -p "$LOG_DIR"
 LOG_FILE="${LOG_FILE:-${LOG_DIR}/install.log}"
 
+# shellcheck source=lib/i18n.sh
+source "${PROJECT_ROOT}/lib/i18n.sh"
+
 _ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
 log_info()  { echo -e "${C_BLUE}[INFO]${C_RESET}  $*" | tee -a "$LOG_FILE" >&2; }
@@ -47,13 +50,13 @@ log_raw()   { echo "$*" >> "$LOG_FILE"; }
 log_error_tail() {
   local label="$1"
   local n="${2:-25}"
-  echo -e "${C_RED}${C_BOLD}----- Dernières lignes de sortie : ${label} -----${C_RESET}" >&2
+  echo -e "${C_RED}${C_BOLD}$(t log_tail_header "$label")${C_RESET}" >&2
   if [[ -f "$LOG_FILE" ]]; then
     while IFS= read -r _line; do echo "    ${_line}"; done < <(tail -n "$n" "$LOG_FILE") >&2
   else
-    echo "    (log introuvable : ${LOG_FILE})" >&2
+    echo "$(t log_tail_missing "$LOG_FILE")" >&2
   fi
-  echo -e "${C_RED}${C_BOLD}----- Fin de sortie (log complet : ${LOG_FILE}) -----${C_RESET}" >&2
+  echo -e "${C_RED}${C_BOLD}$(t log_tail_footer "$LOG_FILE")${C_RESET}" >&2
 }
 
 # ----------------------------------------------------------------------------
@@ -65,8 +68,8 @@ log_error_tail() {
 _on_error() {
   local exit_code=$?
   local line_no=$1
-  log_error "Échec ligne ${line_no} (code ${exit_code}) dans ${BASH_SOURCE[1]:-?}."
-  log_error "Consultez ${LOG_FILE} pour le détail. Vous pouvez relancer install.sh : les étapes déjà validées seront sautées."
+  log_error "$(t err_failed_line "$line_no" "$exit_code" "${BASH_SOURCE[1]:-?}")"
+  log_error "$(t err_see_log "$LOG_FILE")"
   exit "$exit_code"
 }
 enable_error_trap() {
@@ -82,7 +85,7 @@ confirm() {
   local prompt="$1"
   if [[ "$ASSUME_YES" == "true" ]]; then return 0; fi
   local reply
-  read -r -p "$(echo -e "${C_YELLOW}?${C_RESET} ${prompt} [o/N] ")" reply || true
+  read -r -p "$(echo -e "${C_YELLOW}?${C_RESET} ${prompt}$(t confirm_suffix)")" reply || true
   [[ "$reply" =~ ^([oOyY])([uUeE][iIsS])?$ ]]
 }
 
@@ -99,10 +102,10 @@ retry() {
   local i=1
   until "$@"; do
     if (( i >= n )); then
-      log_error "Échec après ${n} tentatives : $*"
+      log_error "$(t retry_failed "$n" "$*")"
       return 1
     fi
-    log_warn "Tentative ${i}/${n} échouée, nouvelle tentative dans 5s..."
+    log_warn "$(t retry_attempt "$i" "$n")"
     sleep 5
     ((i++))
   done
@@ -126,17 +129,17 @@ wait_for_apt_lock() {
   fi
   while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
     if (( waited == 0 )); then
-      log_info "Verrou dpkg occupé par un autre processus (apt-get de démarrage du pod probable) — attente jusqu'à ${timeout}s avant de lancer apt-get."
+      log_info "$(t apt_lock_wait "$timeout")"
     fi
     if (( waited >= timeout )); then
-      log_warn "Verrou dpkg toujours occupé après ${timeout}s — on tente quand même apt-get."
+      log_warn "$(t apt_lock_timeout "$timeout")"
       return 0
     fi
     sleep 5
     ((waited+=5))
   done
   if (( waited > 0 )); then
-    log_info "Verrou dpkg libéré après ${waited}s — poursuite."
+    log_info "$(t apt_lock_released "$waited")"
   fi
 }
 
@@ -173,9 +176,9 @@ announce_download() {
   local filename="$1"
   DOWNLOAD_FILE_INDEX=$(( DOWNLOAD_FILE_INDEX + 1 ))
   if [[ "$DOWNLOAD_FILE_TOTAL" -gt 0 ]]; then
-    log_step "Téléchargement [${DOWNLOAD_FILE_INDEX}/${DOWNLOAD_FILE_TOTAL}] : ${filename}"
+    log_step "$(t download_progress "$DOWNLOAD_FILE_INDEX" "$DOWNLOAD_FILE_TOTAL" "$filename")"
   else
-    log_step "Téléchargement : ${filename}"
+    log_step "$(t download_single "$filename")"
   fi
 }
 
@@ -246,7 +249,7 @@ run_step() {
   # run_step <nom_etape> <fonction> [force]
   local name="$1" fn="$2" force="${3:-false}"
   if [[ "$force" != "true" ]] && step_done "$name"; then
-    log_ok "Étape '${name}' déjà réalisée, on passe. (--force pour refaire)"
+    log_ok "$(t step_skipped "$name")"
     return 0
   fi
   "$fn"

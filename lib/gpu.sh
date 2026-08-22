@@ -17,18 +17,18 @@ GPU_CUDA_VERSION=""
 GPU_TIER_RECOMMENDED=""
 
 detect_gpu() {
-  log_step "Détection du GPU"
+  log_step "$(t gpu_detect_step)"
 
   if ! require_cmd nvidia-smi; then
-    log_error "nvidia-smi introuvable : aucun GPU NVIDIA détecté sur ce pod."
-    log_error "MiniMax H3 nécessite un GPU CUDA. Choisissez un template RunPod avec GPU NVIDIA."
+    log_error "$(t gpu_no_nvidia_smi)"
+    log_error "$(t gpu_needs_cuda)"
     exit 1
   fi
 
   local line
   line="$(nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader,nounits | head -n1)"
   if [[ -z "$line" ]]; then
-    log_error "nvidia-smi n'a retourné aucun GPU."
+    log_error "$(t gpu_no_gpu_returned)"
     exit 1
   fi
 
@@ -38,23 +38,23 @@ detect_gpu() {
   GPU_VRAM_GB=$(( GPU_VRAM_MB / 1000 ))
   GPU_CUDA_VERSION="$(nvidia-smi | grep -oP 'CUDA Version:\s*\K[0-9.]+' | head -n1 || true)"
 
-  log_info "GPU détecté   : ${GPU_NAME}"
-  log_info "VRAM          : ${GPU_VRAM_GB} Go"
-  log_info "Driver NVIDIA : ${GPU_DRIVER}"
-  log_info "CUDA (driver) : ${GPU_CUDA_VERSION:-inconnu}"
+  log_info "$(t gpu_detected_name "$GPU_NAME")"
+  log_info "$(t gpu_vram "$GPU_VRAM_GB")"
+  log_info "$(t gpu_driver "$GPU_DRIVER")"
+  log_info "$(t gpu_cuda_driver "${GPU_CUDA_VERSION:-$(t gpu_cuda_unknown)}")"
 
   local known="false"
   for k in "${GPU_KNOWN_LIST[@]}"; do
     if [[ "$GPU_NAME" == *"$k"* ]]; then known="true"; break; fi
   done
   if [[ "$known" == "true" ]]; then
-    log_ok "Carte reconnue dans la liste des GPU testés."
+    log_ok "$(t gpu_known_ok)"
   else
-    log_warn "Carte non répertoriée dans la liste testée (${GPU_NAME}) — on continue sur la seule base de la VRAM."
+    log_warn "$(t gpu_unknown_card "$GPU_NAME")"
   fi
 
   if (( GPU_VRAM_GB < MIN_VRAM_GB )); then
-    log_error "VRAM insuffisante : ${GPU_VRAM_GB} Go détectés, ${MIN_VRAM_GB} Go minimum requis pour MiniMax H3."
+    log_error "$(t gpu_vram_insufficient "$GPU_VRAM_GB" "$MIN_VRAM_GB")"
     exit 1
   fi
 
@@ -75,7 +75,7 @@ detect_gpu() {
   elif (( vram_for_tier >= H3_TIER_MIN_VRAM_PRUNED_GB ));   then GPU_TIER_RECOMMENDED="pruned"
   else                                                           GPU_TIER_RECOMMENDED="light"
   fi
-  log_info "Palier de poids H3 recommandé : ${GPU_TIER_RECOMMENDED} (VRAM détectée : ${GPU_VRAM_GB} Go, marge de sécurité appliquée : ${H3_TIER_VRAM_SAFETY_MARGIN_GB} Go)"
+  log_info "$(t gpu_tier_recommended "$GPU_TIER_RECOMMENDED" "$GPU_VRAM_GB" "$H3_TIER_VRAM_SAFETY_MARGIN_GB")"
 
   export GPU_NAME GPU_VRAM_GB GPU_DRIVER GPU_CUDA_VERSION GPU_TIER_RECOMMENDED
 }
@@ -102,7 +102,7 @@ detect_system_ram() {
   # Ordre de détection : cgroup v2 -> cgroup v1 -> repli sur la RAM totale de
   # la machine hôte (/proc/meminfo) si aucun cgroup memory n'est actif (hors
   # conteneur, ou conteneur sans limite imposée).
-  log_step "Détection de la RAM système (limite réelle du pod)"
+  log_step "$(t ram_detect_step)"
 
   local host_kb
   host_kb="$(awk '/^MemTotal:/{print $2; exit}' /proc/meminfo 2>/dev/null || echo 0)"
@@ -136,37 +136,40 @@ detect_system_ram() {
   if [[ -n "$limit_bytes" ]]; then
     SYSTEM_RAM_LIMIT_GB=$(( limit_bytes / 1024 / 1024 / 1024 ))
     SYSTEM_RAM_LIMIT_SOURCE="$source"
-    log_info "Limite mémoire ${source} détectée : ${SYSTEM_RAM_LIMIT_GB} Go (RAM totale machine hôte : ${SYSTEM_RAM_TOTAL_GB} Go)."
+    log_info "$(t ram_limit_detected "$source" "$SYSTEM_RAM_LIMIT_GB" "$SYSTEM_RAM_TOTAL_GB")"
   else
     SYSTEM_RAM_LIMIT_GB="$SYSTEM_RAM_TOTAL_GB"
-    SYSTEM_RAM_LIMIT_SOURCE="hôte (aucun cgroup memory détecté)"
-    log_info "Aucune limite cgroup memory détectée — RAM totale machine hôte utilisée : ${SYSTEM_RAM_LIMIT_GB} Go."
+    SYSTEM_RAM_LIMIT_SOURCE="$(t ram_no_cgroup)"
+    log_info "$(t ram_no_cgroup_msg "$SYSTEM_RAM_LIMIT_GB")"
   fi
 
   export SYSTEM_RAM_LIMIT_GB SYSTEM_RAM_TOTAL_GB SYSTEM_RAM_LIMIT_SOURCE
 }
 
 check_cuda_stack() {
-  log_step "Vérification de la pile CUDA / PyTorch"
+  log_step "$(t cuda_check_step)"
 
   if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
-    log_warn "Environnement virtuel non encore créé, vérification différée après l'étape Python."
+    log_warn "$(t cuda_venv_missing)"
     return 0
   fi
 
+  # Low-level diagnostic output, kept in English regardless of
+  # INSTALLER_LANG (technical dump, not translated via lib/i18n.sh — python
+  # doesn't share the bash t() helper).
   "${VENV_DIR}/bin/python" - <<'PYEOF'
 import importlib.util, sys
 
 def status(name):
-    return "présent" if importlib.util.find_spec(name) else "absent"
+    return "present" if importlib.util.find_spec(name) else "absent"
 
 try:
     import torch
-    print(f"[torch]   version {torch.__version__} — CUDA dispo: {torch.cuda.is_available()}")
+    print(f"[torch]   version {torch.__version__} — CUDA available: {torch.cuda.is_available()}")
     if torch.cuda.is_available():
         print(f"[torch]   device 0: {torch.cuda.get_device_name(0)}")
 except Exception as e:
-    print(f"[torch]   non installé ou en erreur ({e})")
+    print(f"[torch]   not installed or errored ({e})")
 
 print(f"[xformers]        {status('xformers')}")
 print(f"[flash_attn]      {status('flash_attn')}")

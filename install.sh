@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
-# install.sh — installateur automatique MiniMax H3 pour RunPod + ComfyUI.
+# install.sh — automatic MiniMax H3 installer for RunPod + ComfyUI.
 #
-# Usage :
-#   bash install.sh                       installation complète
-#   bash install.sh --skip-models         installe tout sauf les poids H3
-#   bash install.sh --only-models         (ré)télécharge uniquement les poids
-#   bash install.sh --tier=light          force un palier de poids
-#   bash install.sh --workflows=t2v,r2v   choisit les workflows préparés
-#   bash install.sh --preset=dasiwa_mmh3v12  télécharge le jeu de modèles/
-#                                          le workflow d'un preset (voir
-#                                          H3_PRESET_NAMES, config.env —
-#                                          certains presets remplacent le
-#                                          palier standard, d'autres sont
-#                                          additifs, cf. commentaire de
+# Usage:
+#   bash install.sh                       full install
+#   bash install.sh --skip-models         installs everything except the H3 weights
+#   bash install.sh --only-models         (re)downloads only the weights
+#   bash install.sh --tier=light          forces a specific weight tier
+#   bash install.sh --workflows=t2v,r2v   picks which bundled workflows to install
+#   bash install.sh --preset=dasiwa_mmh3v12  downloads a preset's model set/
+#                                          workflow (see H3_PRESET_NAMES,
+#                                          config.env — some presets replace
+#                                          the standard tier, others are
+#                                          additive, see the comment on
 #                                          H3_PRESET_REPLACES_STANDARD_TIER)
-#   bash install.sh --yes                 non interactif (répond "oui" partout)
-#   bash install.sh --force               ignore l'état déjà validé (réexécute tout)
+#   bash install.sh --yes                 non-interactive (answers "yes" everywhere)
+#   bash install.sh --force               ignores already-completed steps (redoes everything)
 
 set -Eeuo pipefail
 # Conversion automatique des scripts Windows -> Linux
@@ -40,7 +39,10 @@ for arg in "$@"; do
     --preset=*) H3_PRESETS="${arg#*=}" ;;
     -h|--help)
       sed -n '2,/^[^#]/{/^#/p}' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "Option inconnue : $arg" >&2; exit 1 ;;
+    # Note: config.env/lib/utils.sh (and thus t()/INSTALLER_LANG) aren't
+    # sourced yet at this point in argument parsing, so this one error
+    # stays hardcoded in English rather than going through t().
+    *) echo "Unknown option: $arg" >&2; exit 1 ;;
   esac
 done
 
@@ -86,13 +88,13 @@ source "${PROJECT_ROOT}/lib/personal_storage.sh"
 
 echo -e "${C_BOLD}${C_CYAN}"
 echo "  ┌────────────────────────────────────────────────────┐"
-echo "  │  Installateur MiniMax H3 pour RunPod + ComfyUI      │"
+printf '  │  %-50s│\n' "$(t install_banner_title)"
 echo "  └────────────────────────────────────────────────────┘"
 echo -e "${C_RESET}"
 
 if [[ "$ONLY_MODELS" == "true" ]]; then
   if [[ ! -f "${INSTALL_DIR}/main.py" ]]; then
-    log_error "ComfyUI n'est pas installé dans ${INSTALL_DIR}. Lancez d'abord : bash install.sh"
+    log_error "$(t install_comfyui_missing "$INSTALL_DIR")"
     exit 1
   fi
   # detect_gpu (lib/gpu.sh) vérifie déjà nvidia-smi lui-même et quitte
@@ -122,7 +124,7 @@ if [[ "$ONLY_MODELS" == "true" ]]; then
   run_step "hf_login" hf_login "$FORCE"
   H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
   if [[ "$(preset_replaces_standard_tier "$H3_ACTIVE_PRESETS")" == "true" ]]; then
-    log_info "Preset '${H3_ACTIVE_PRESETS}' replaces the standard H3_TIER (see H3_PRESET_REPLACES_STANDARD_TIER, config.env) — standard tier download skipped."
+    log_info "$(t install_preset_replaces_tier "$H3_ACTIVE_PRESETS")"
   else
     if download_h3_models; then mark_step_done "h3_models"; fi
   fi
@@ -135,7 +137,7 @@ if [[ "$ONLY_MODELS" == "true" ]]; then
       install_preset_symlinks "$H3_ACTIVE_PRESETS"
       install_preset_workflows "$H3_ACTIVE_PRESETS"
     else
-      log_warn "Download of preset(s) '${H3_ACTIVE_PRESETS}' incomplete — re-run later: bash install.sh --only-models --preset=${H3_ACTIVE_PRESETS}"
+      log_warn "$(t install_preset_download_incomplete "$H3_ACTIVE_PRESETS" "$H3_ACTIVE_PRESETS")"
     fi
   fi
   print_summary
@@ -176,7 +178,7 @@ H3_ACTIVE_PRESETS="$(resolve_h3_presets)"
 if [[ "$SKIP_MODELS" == "false" ]]; then
   run_step "hf_login" hf_login "$FORCE"
   if [[ "$(preset_replaces_standard_tier "$H3_ACTIVE_PRESETS")" == "true" ]]; then
-    log_info "Preset '${H3_ACTIVE_PRESETS}' replaces the standard H3_TIER (see H3_PRESET_REPLACES_STANDARD_TIER, config.env) — standard tier download skipped."
+    log_info "$(t install_preset_replaces_tier "$H3_ACTIVE_PRESETS")"
   elif ! step_done "h3_models" || [[ "$FORCE" == "true" ]]; then
     # Estimation dynamique de l'espace requis : mêmes fonctions que celles
     # utilisées à l'intérieur de download_h3_models() (lib/models.sh), donc
@@ -191,23 +193,23 @@ if [[ "$SKIP_MODELS" == "false" ]]; then
     H3_PREFLIGHT_FREE_GB="$(free_disk_gb "$INSTALL_DIR")"
 
     if [[ -n "$H3_PREFLIGHT_FREE_GB" ]] && awk -v f="$H3_PREFLIGHT_FREE_GB" -v e="$H3_PREFLIGHT_EST_GB" 'BEGIN{exit !(f < e)}'; then
-      log_error "Pas assez d'espace disque."
-      log_error "Requis (estimation, palier ${H3_PREFLIGHT_TIER}, workflows ${H3_PREFLIGHT_WORKFLOWS}) : ~${H3_PREFLIGHT_EST_GB} Go — libre : ${H3_PREFLIGHT_FREE_GB} Go."
+      log_error "$(t install_disk_insufficient_title)"
+      log_error "$(t install_disk_insufficient_detail "$H3_PREFLIGHT_TIER" "$H3_PREFLIGHT_WORKFLOWS" "$H3_PREFLIGHT_EST_GB" "$H3_PREFLIGHT_FREE_GB")"
       exit 1
     fi
 
     if download_h3_models; then
       mark_step_done "h3_models"
     else
-      log_warn "Téléchargement des modèles incomplet — relancez plus tard : bash install.sh --only-models"
+      log_warn "$(t install_models_incomplete)"
     fi
   else
-    log_ok "Modèles H3 déjà téléchargés, étape sautée."
+    log_ok "$(t install_models_already_done)"
   fi
   install_turbo_node
   install_turbo_lora
 else
-  log_info "--skip-models : téléchargement des poids H3 sauté (à faire plus tard via menu.sh ou --only-models)."
+  log_info "$(t install_skip_models_notice)"
 fi
 
 # --- Presets (additif, indépendant de --skip-models : un --preset= explicite
@@ -220,7 +222,7 @@ if [[ -n "$H3_ACTIVE_PRESETS" ]]; then
     install_preset_symlinks "$H3_ACTIVE_PRESETS"
     install_preset_workflows "$H3_ACTIVE_PRESETS"
   else
-    log_warn "Download of preset(s) '${H3_ACTIVE_PRESETS}' incomplete — re-run later: bash install.sh --only-models --preset=${H3_ACTIVE_PRESETS}"
+    log_warn "$(t install_preset_download_incomplete "$H3_ACTIVE_PRESETS" "$H3_ACTIVE_PRESETS")"
   fi
 fi
 
@@ -232,7 +234,7 @@ fi
 # été installé plus haut par install_preset_workflows(), indépendamment de
 # ce garde-fou.
 if [[ "$(preset_replaces_standard_tier "$H3_ACTIVE_PRESETS")" == "true" ]]; then
-  log_info "Preset '${H3_ACTIVE_PRESETS}' replaces the standard H3_TIER — official t2v/i2v/r2v workflows not copied (they would reference weights that aren't installed)."
+  log_info "$(t install_preset_workflows_skipped "$H3_ACTIVE_PRESETS")"
 else
   run_step "workflows" install_workflows "$FORCE"
 fi
@@ -240,4 +242,4 @@ run_step "optimization" compute_optimization_flags "$FORCE"
 verify_installation || true
 print_summary
 
-log_ok "Installation terminée. Lancez ComfyUI avec : ./launch.sh"
+log_ok "$(t install_done)"

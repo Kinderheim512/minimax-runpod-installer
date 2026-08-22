@@ -13,6 +13,27 @@
 set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# --- Language / Langue ---------------------------------------------------
+# This wizard's own prompts stay in English. This choice only controls the
+# language of everything install.sh / launch.sh / lib/*.sh print during the
+# actual installation and later runs (see lib/i18n.sh). Defaults to
+# whatever INSTALLER_LANG already is (config.env, or an inline override
+# such as `INSTALLER_LANG=fr bash wizard.sh`), so this question is skipped
+# entirely when it's already set on the command line.
+if [[ -z "${INSTALLER_LANG:-}" ]]; then
+  echo ""
+  echo "  Installer language for the rest of the install (English/Français) :"
+  echo "   1) English  [default]"
+  echo "   2) Français"
+  read -r -p "  Choice [1-2, Enter = default] : " _lang_choice
+  case "$_lang_choice" in
+    2) INSTALLER_LANG="fr" ;;
+    *) INSTALLER_LANG="en" ;;
+  esac
+  unset _lang_choice
+fi
+export INSTALLER_LANG
+
 ask_choice() {
   # ask_choice <title> <result_var> <default_value> <option1> [option2...]
   # Each "optionN" is of the form "value|description".

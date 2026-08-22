@@ -113,7 +113,7 @@ select_pytorch_build() {
     if [[ -n "${TORCH_VERSION_OVERRIDE:-}" && -n "${TORCH_CUDA_INDEX_OVERRIDE:-}" ]]; then
         SELECTED_TORCH_VERSION="$TORCH_VERSION_OVERRIDE"
         SELECTED_TORCH_CUDA_INDEX="$TORCH_CUDA_INDEX_OVERRIDE"
-        log_info "Build PyTorch forcé via config.env (TORCH_VERSION_OVERRIDE) : ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX}"
+        log_info "$(t py_torch_forced "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX")"
         # Échappatoire de reproductibilité stricte : aucun repli automatique
         # ici, volontairement — si vous forcez un build précis, c'est que
         # vous savez ce que vous faites (ou que vous voulez reproduire une
@@ -121,12 +121,12 @@ select_pytorch_build() {
         # dans son dos. Pour un cu130 "tenté puis vérifié avec repli sûr",
         # utilisez PREFER_CUDA130=true plutôt que cet override.
     elif [[ -z "$detected" ]]; then
-        log_warn "Impossible de détecter la version CUDA du pilote (nvidia-smi absent ou GPU non visible)."
+        log_warn "$(t py_torch_cuda_undetected)"
         local fallback="${PYTORCH_BUILD_TABLE[-1]}"
         SELECTED_TORCH_VERSION="$(cut -d: -f2 <<< "$fallback")"
         SELECTED_TORCH_CUDA_INDEX="$(cut -d: -f3 <<< "$fallback")"
-        log_warn "Repli sur le build le plus récent connu : ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX}."
-        log_warn "Si ce n'est pas le bon choix, définissez TORCH_VERSION_OVERRIDE / TORCH_CUDA_INDEX_OVERRIDE dans config.env."
+        log_warn "$(t py_torch_fallback_latest "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX")"
+        log_warn "$(t py_torch_fallback_override_hint)"
     else
         local entry cuda_min
         for entry in "${PYTORCH_BUILD_TABLE[@]}"; do
@@ -144,8 +144,8 @@ select_pytorch_build() {
             local lowest="${PYTORCH_BUILD_TABLE[0]}"
             SELECTED_TORCH_VERSION="$(cut -d: -f2 <<< "$lowest")"
             SELECTED_TORCH_CUDA_INDEX="$(cut -d: -f3 <<< "$lowest")"
-            log_warn "CUDA ${detected} est plus ancien que tous les builds connus — utilisation du plus ancien (${SELECTED_TORCH_CUDA_INDEX})."
-            log_warn "Une mise à jour du pilote GPU du pod est recommandée."
+            log_warn "$(t py_torch_cuda_too_old "$detected" "$SELECTED_TORCH_CUDA_INDEX")"
+            log_warn "$(t py_torch_driver_update_recommended)"
         fi
 
         # PREFER_CUDA130 (config.env) : le champ "CUDA Version" de nvidia-smi
@@ -169,10 +169,10 @@ select_pytorch_build() {
                 PREFER_CUDA130_FALLBACK_INDEX="$SELECTED_TORCH_CUDA_INDEX"
                 SELECTED_TORCH_VERSION="$(cut -d: -f2 <<< "$cu130_entry")"
                 SELECTED_TORCH_CUDA_INDEX="$(cut -d: -f3 <<< "$cu130_entry")"
-                log_warn "PREFER_CUDA130=true : tentative de PyTorch ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} malgré un CUDA détecté (${detected}) normalement associé à ${PREFER_CUDA130_FALLBACK_INDEX}."
-                log_warn "Repli automatique et vérifié sur ${PREFER_CUDA130_FALLBACK_VERSION}+${PREFER_CUDA130_FALLBACK_INDEX} si cu130 s'avère incompatible avec le pilote de ce pod."
+                log_warn "$(t py_prefer_cuda130_attempt "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX" "$detected" "$PREFER_CUDA130_FALLBACK_INDEX")"
+                log_warn "$(t py_prefer_cuda130_fallback_note "$PREFER_CUDA130_FALLBACK_VERSION" "$PREFER_CUDA130_FALLBACK_INDEX")"
             else
-                log_warn "PREFER_CUDA130=true mais aucune entrée cu130 dans PYTORCH_BUILD_TABLE — ignoré."
+                log_warn "$(t py_prefer_cuda130_no_entry)"
             fi
         fi
     fi
@@ -192,12 +192,12 @@ select_pytorch_build() {
 ################################################################################
 
 setup_python_venv() {
-    log_step "Configuration de l'environnement Python"
+    log_step "$(t py_venv_step)"
 
     local pybin="python3"
 
     if ! require_cmd "$pybin"; then
-        log_error "python3 introuvable."
+        log_error "$(t py_python3_missing)"
         exit 1
     fi
 
@@ -209,17 +209,17 @@ setup_python_venv() {
 
     if (( major < PY_MIN_MAJOR || (major == PY_MIN_MAJOR && minor < PY_MIN_MINOR) ))
     then
-        log_warn "Python ${ver} détecté."
+        log_warn "$(t py_python_version_warn "$ver")"
     else
-        log_ok "Python ${ver} OK."
+        log_ok "$(t py_python_version_ok "$ver")"
     fi
 
     if [[ ! -d "$VENV_DIR" ]]
     then
-        log_info "Création du venv"
+        log_info "$(t py_venv_creating)"
         "$pybin" -m venv "$VENV_DIR"
     else
-        log_ok "Venv déjà présent."
+        log_ok "$(t py_venv_exists)"
     fi
 
     # shellcheck disable=SC1091  # ${VENV_DIR}/bin/activate n'existe pas encore
@@ -228,7 +228,7 @@ setup_python_venv() {
     python -m pip install --upgrade pip setuptools wheel
     deactivate
 
-    log_ok "Environnement virtuel prêt."
+    log_ok "$(t py_venv_ready)"
 }
 
 ################################################################################
@@ -262,13 +262,13 @@ except Exception:
     ok = False
 sys.exit(0 if ok else 1)
 " 2>/dev/null; then
-        log_ok "PyTorch ${expected} déjà installé avec CUDA opérationnel — pas de réinstallation."
+        log_ok "$(t py_build_already_installed "$expected")"
         deactivate
         return 0
     fi
 
-    log_info "Installation de PyTorch ${expected} (index ${index})..."
-    log_info "(le PyTorch éventuellement préinstallé dans l'image de base, s'il ne correspond pas exactement, sera remplacé)"
+    log_info "$(t py_build_installing "$expected" "$index")"
+    log_info "$(t py_build_installing_note)"
 
     # Désinstallation explicite AVANT d'installer, plutôt que de laisser pip
     # gérer un uninstall-puis-install combiné dans la même transaction —
@@ -290,13 +290,13 @@ sys.exit(0 if ok else 1)
         --index-url "https://download.pytorch.org/whl/${index}"
     then
         deactivate
-        log_error "Échec de l'installation de PyTorch ${expected} depuis l'index ${index}."
-        log_error "Si l'erreur pip ci-dessus indique qu'aucune version ne correspond (ex: 'Could not find a version that satisfies...'), l'index ${index} ne publie probablement plus/pas encore ${version} : vérifiez https://download.pytorch.org/whl/${index}/ et corrigez la ligne correspondante dans PYTORCH_BUILD_TABLE (lib/python.sh)."
+        log_error "$(t py_build_install_failed "$expected" "$index")"
+        log_error "$(t py_build_install_failed_hint "$index" "$version" "$index")"
         return 1
     fi
 
     deactivate
-    log_ok "PyTorch ${expected} installé."
+    log_ok "$(t py_build_installed "$expected")"
 }
 
 ################################################################################
@@ -326,6 +326,10 @@ sys.exit(0 if ok else 1)
 ################################################################################
 
 bake_pytorch_best_guess() {
+    # Note i18n : fonction appelée UNIQUEMENT par docker-build-steps-heavy.sh au
+    # moment de la construction de l'image Docker (jamais par install.sh ni
+    # par un pod utilisateur) — jamais vue par l'utilisateur final, laissée
+    # en français pour ne pas alourdir ce fichier avec des clés inutiles.
     log_step "Pré-installation de PyTorch dans l'image (pari : le build le plus récent connu)"
 
     local latest="${PYTORCH_BUILD_TABLE[-1]}"
@@ -494,19 +498,19 @@ PYEOF
 }
 
 install_pytorch() {
-    log_step "Sélection et installation de PyTorch"
+    log_step "$(t py_install_step)"
 
     local detected
     detected="$(detect_cuda_runtime)"
     select_pytorch_build "$detected"
 
-    log_info "CUDA runtime détecté : ${detected:-inconnu}"
-    log_info "Build PyTorch retenu : ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX}"
+    log_info "$(t py_cuda_detected "${detected:-$(t gpu_cuda_unknown)}")"
+    log_info "$(t py_build_selected "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX")"
 
     _install_pytorch_build "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX" || return 1
 
     if verify_cuda; then
-        log_ok "PyTorch ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} installé (une seule fois) et fonctionnel."
+        log_ok "$(t py_installed_functional "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX")"
         return 0
     fi
 
@@ -520,12 +524,12 @@ install_pytorch() {
     # retombe automatiquement sur ce build "sûr" plutôt que de laisser le
     # pod dans un état cassé.
     if [[ -z "${PREFER_CUDA130_FALLBACK_VERSION:-}" ]]; then
-        log_error "CUDA indisponible après installation de PyTorch ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} — vérifiez le pilote GPU du pod (nvidia-smi) et ${LOG_FILE}."
+        log_error "$(t py_cuda_unavailable_nofallback "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX" "$LOG_FILE")"
         return 1
     fi
 
-    log_warn "CUDA indisponible avec ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} (pilote du pod probablement trop ancien pour ce build — détail dans ${LOG_FILE})."
-    log_warn "PREFER_CUDA130=true : repli automatique sur le build associé au CUDA détecté (${detected:-inconnu}) : ${PREFER_CUDA130_FALLBACK_VERSION}+${PREFER_CUDA130_FALLBACK_INDEX}..."
+    log_warn "$(t py_cuda_unavailable_fallback_try "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX" "$LOG_FILE")"
+    log_warn "$(t py_cuda_fallback_attempt "${detected:-$(t gpu_cuda_unknown)}" "$PREFER_CUDA130_FALLBACK_VERSION" "$PREFER_CUDA130_FALLBACK_INDEX")"
 
     SELECTED_TORCH_VERSION="$PREFER_CUDA130_FALLBACK_VERSION"
     SELECTED_TORCH_CUDA_INDEX="$PREFER_CUDA130_FALLBACK_INDEX"
@@ -537,11 +541,11 @@ install_pytorch() {
     _install_pytorch_build "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX" || return 1
 
     if ! verify_cuda; then
-        log_error "CUDA toujours indisponible après repli sur ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} — le pilote GPU de ce pod semble trop ancien pour tout build PyTorch connu de PYTORCH_BUILD_TABLE. Vérifiez 'nvidia-smi --query-gpu=driver_version --format=csv,noheader' et ${LOG_FILE}."
+        log_error "$(t py_cuda_still_unavailable "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX" "$LOG_FILE")"
         return 1
     fi
 
-    log_ok "Repli automatique réussi : PyTorch ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX} installé et fonctionnel."
+    log_ok "$(t py_fallback_success "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX")"
 }
 
 ################################################################################
@@ -551,11 +555,11 @@ install_pytorch() {
 ################################################################################
 
 install_comfyui_requirements() {
-    log_step "Installation des dépendances ComfyUI"
+    log_step "$(t py_comfy_reqs_step)"
 
     local req="${INSTALL_DIR}/requirements.txt"
     [[ -f "$req" ]] || {
-        log_error "requirements.txt introuvable dans ${INSTALL_DIR} (ComfyUI a-t-il bien été cloné ?)."
+        log_error "$(t py_requirements_missing "$INSTALL_DIR")"
         exit 1
     }
 
@@ -570,12 +574,12 @@ install_comfyui_requirements() {
     # même fait dévier torch de la version voulue, on le sait tout de suite
     # plutôt que de découvrir un CUDA cassé au lancement.
     verify_cuda || {
-        log_error "CUDA indisponible après l'installation des dépendances ComfyUI."
-        log_error "Une dépendance de requirements.txt a peut-être modifié torch — vérifiez ${LOG_FILE}."
+        log_error "$(t py_cuda_unavailable_after_comfy_deps)"
+        log_error "$(t py_comfy_deps_maybe_shifted_torch "$LOG_FILE")"
         return 1
     }
 
-    log_ok "ComfyUI prêt (PyTorch ${SELECTED_TORCH_VERSION}+${SELECTED_TORCH_CUDA_INDEX})."
+    log_ok "$(t py_comfy_ready "$SELECTED_TORCH_VERSION" "$SELECTED_TORCH_CUDA_INDEX")"
 }
 
 ################################################################################
@@ -637,11 +641,11 @@ pip_install_requirements() {
 ################################################################################
 
 install_comfyui_requirements_no_torch() {
-    log_step "Installation des dépendances ComfyUI (sans PyTorch — image Docker)"
+    log_step "$(t py_comfy_reqs_no_torch_step)"
 
     local req="${INSTALL_DIR}/requirements.txt"
     [[ -f "$req" ]] || {
-        log_error "requirements.txt introuvable dans ${INSTALL_DIR} (ComfyUI a-t-il bien été cloné ?)."
+        log_error "$(t py_requirements_missing "$INSTALL_DIR")"
         exit 1
     }
 
@@ -660,7 +664,7 @@ install_comfyui_requirements_no_torch() {
     deactivate
     rm -f "$req_no_torch"
 
-    log_ok "Dépendances ComfyUI installées (PyTorch volontairement exclu à ce stade — voir docker-entrypoint.sh)."
+    log_ok "$(t py_comfy_no_torch_done)"
 }
 
 ################################################################################
@@ -668,11 +672,11 @@ install_comfyui_requirements_no_torch() {
 ################################################################################
 
 install_extra_requirements() {
-    log_step "Installation des dépendances additionnelles du projet"
+    log_step "$(t py_extra_reqs_step)"
 
     local req="${PROJECT_ROOT}/requirements.txt"
     if [[ ! -f "$req" ]]; then
-        log_warn "requirements.txt du projet introuvable, on saute."
+        log_warn "$(t py_extra_reqs_missing)"
         return 0
     fi
 
@@ -682,7 +686,7 @@ install_extra_requirements() {
     python -m pip install -U hf_xet
     deactivate
 
-    log_ok "Dépendances additionnelles (Hugging Face CLI, hf_xet...) installées."
+    log_ok "$(t py_extra_reqs_done)"
 }
 
 ################################################################################
@@ -773,7 +777,7 @@ _sage_ensure_nvidia_cuda_apt_repo() {
   fi
 
   if ! require_cmd curl && ! require_cmd wget; then
-    log_warn "Ni curl ni wget disponibles — impossible de configurer le dépôt apt CUDA de NVIDIA."
+    log_warn "$(t py_sage_no_curl_wget)"
     return 1
   fi
 
@@ -786,7 +790,7 @@ _sage_ensure_nvidia_cuda_apt_repo() {
     ver_id="$(. /etc/os-release && echo "$VERSION_ID")"
   fi
   if [[ -z "$ver_id" ]]; then
-    log_warn "Impossible de déterminer la version d'Ubuntu (/etc/os-release absent ou incomplet) — dépôt apt CUDA NVIDIA non configuré."
+    log_warn "$(t py_sage_no_ubuntu_version)"
     return 1
   fi
   distro="ubuntu${ver_id//./}"
@@ -796,7 +800,7 @@ _sage_ensure_nvidia_cuda_apt_repo() {
     x86_64) nvidia_arch="x86_64" ;;
     aarch64|arm64) nvidia_arch="sbsa" ;;
     *)
-      log_warn "Architecture ${arch} non reconnue pour le dépôt apt CUDA NVIDIA — installation sautée."
+      log_warn "$(t py_sage_unknown_arch "$arch")"
       return 1
       ;;
   esac
@@ -804,7 +808,7 @@ _sage_ensure_nvidia_cuda_apt_repo() {
   local keyring_url="https://developer.download.nvidia.com/compute/cuda/repos/${distro}/${nvidia_arch}/cuda-keyring_1.1-1_all.deb"
   local keyring_deb="/tmp/cuda-keyring_1.1-1_all.deb"
 
-  log_info "Dépôt apt CUDA NVIDIA absent (paquets cuda-toolkit-* introuvables sans lui sur une image Ubuntu nue) — configuration depuis ${keyring_url}."
+  log_info "$(t py_sage_repo_missing_configuring "$keyring_url")"
 
   local sudo_cmd=""
   [[ "$(id -u)" -ne 0 ]] && require_cmd sudo && sudo_cmd="sudo"
@@ -816,32 +820,32 @@ _sage_ensure_nvidia_cuda_apt_repo() {
   fi
 
   if [[ ! -s "$keyring_deb" ]]; then
-    log_warn "Échec du téléchargement de cuda-keyring (${distro}/${nvidia_arch}) — dépôt apt CUDA NVIDIA non configuré, cuda-toolkit-* restera introuvable."
+    log_warn "$(t py_sage_keyring_download_failed "$distro" "$nvidia_arch")"
     rm -f "$keyring_deb"
     return 1
   fi
 
   if ! $sudo_cmd dpkg -i "$keyring_deb" >>"$LOG_FILE" 2>&1; then
-    log_warn "Échec de l'installation de cuda-keyring — dépôt apt CUDA NVIDIA non configuré, cuda-toolkit-* restera introuvable."
+    log_warn "$(t py_sage_keyring_install_failed)"
     rm -f "$keyring_deb"
     return 1
   fi
   rm -f "$keyring_deb"
 
   if ! $sudo_cmd apt-get update -y >>"$LOG_FILE" 2>&1; then
-    log_warn "apt-get update a échoué après l'ajout du dépôt CUDA NVIDIA — on tente quand même la suite."
+    log_warn "$(t py_sage_apt_update_failed_after_repo)"
   fi
 
-  log_ok "Dépôt apt CUDA NVIDIA configuré (${distro}/${nvidia_arch}) — cuda-toolkit-* devrait maintenant être installable."
+  log_ok "$(t py_sage_repo_configured "$distro" "$nvidia_arch")"
   return 0
 }
 
 install_sageattention() {
-  log_step "SageAttention (accélération / réduction VRAM des nœuds H3)"
+  log_step "$(t py_sage_step)"
 
   local mode="${SAGE_ATTENTION:-auto}"
   if [[ "$mode" == "false" ]]; then
-    log_info "SAGE_ATTENTION=false — installation sautée."
+    log_info "$(t py_sage_disabled)"
     return 0
   fi
 
@@ -849,7 +853,7 @@ install_sageattention() {
   source "${VENV_DIR}/bin/activate"
 
   if python -c "import sageattention" 2>/dev/null; then
-    log_ok "SageAttention déjà installé et importable — pas de recompilation."
+    log_ok "$(t py_sage_already_installed)"
     deactivate
     return 0
   fi
@@ -859,21 +863,21 @@ install_sageattention() {
 
   if [[ "$mode" == "auto" ]]; then
     if [[ -z "$cc" ]] || ! awk -v c="$cc" -v m="$SAGEATTENTION_MIN_COMPUTE_CAP" 'BEGIN{exit !(c+0 >= m+0)}'; then
-      log_info "SAGE_ATTENTION=auto, compute capability ${cc:-inconnue} < ${SAGEATTENTION_MIN_COMPUTE_CAP} (ou non détectée) — installation sautée."
-      log_info "Forcez avec SAGE_ATTENTION=true dans config.env si vous voulez tenter quand même."
+      log_info "$(t py_sage_auto_skip "${cc:-$(t gpu_cuda_unknown)}" "$SAGEATTENTION_MIN_COMPUTE_CAP")"
+      log_info "$(t py_sage_force_hint)"
       deactivate
       return 0
     fi
-    log_info "SAGE_ATTENTION=auto, compute capability ${cc} >= ${SAGEATTENTION_MIN_COMPUTE_CAP} — tentative d'installation."
+    log_info "$(t py_sage_auto_attempt "$cc" "$SAGEATTENTION_MIN_COMPUTE_CAP")"
   else
-    log_info "SAGE_ATTENTION=true (forcé) — tentative d'installation (compute capability détectée : ${cc:-inconnue})."
+    log_info "$(t py_sage_forced_attempt "${cc:-$(t gpu_cuda_unknown)}")"
   fi
 
   # --- 1) source de vérité : torch.version.cuda, lu dans le venv actif ----
   local torch_cuda=""
   torch_cuda="$(python -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)"
   if [[ -z "$torch_cuda" ]]; then
-    log_warn "Impossible de lire torch.version.cuda dans le venv (torch non importable ou build CPU) — SageAttention sauté."
+    log_warn "$(t py_sage_no_torch_cuda)"
     deactivate
     return 0
   fi
@@ -883,7 +887,7 @@ install_sageattention() {
   torch_major="$(cut -d. -f1 <<< "$torch_cuda")"
   torch_minor="$(cut -d. -f2 <<< "$torch_cuda")"
   torch_cuda_norm="${torch_major}.${torch_minor}"
-  log_info "Torch installé dans le venv : CUDA ${torch_cuda_norm} (torch.version.cuda) — c'est la seule référence utilisée ci-dessous pour choisir le toolkit de compilation."
+  log_info "$(t py_sage_torch_cuda_ref "$torch_cuda_norm")"
 
   # --- 1bis) wheel pré-compilée dans l'image Docker, si présente ET cohérente
   # avec le torch réellement retenu (voir bake_sageattention_wheel() et
@@ -900,17 +904,17 @@ install_sageattention() {
       local baked_whl=""
       baked_whl="$(find "$baked_dir" -maxdepth 1 -name '*.whl' 2>/dev/null | head -n1)"
       if [[ -n "$baked_whl" ]]; then
-        log_info "Wheel SageAttention pré-compilée dans l'image trouvée (${baked_whl##*/}, ${baked_index}) — installation directe, sans compilation."
+        log_info "$(t py_sage_baked_wheel_found "${baked_whl##*/}" "$baked_index")"
         if python -m pip install --quiet "$baked_whl" >>"$LOG_FILE" 2>&1 && python -c "import sageattention" 2>/dev/null; then
-          log_ok "SageAttention installé depuis la wheel pré-compilée — aucune compilation nécessaire sur ce pod."
+          log_ok "$(t py_sage_baked_wheel_installed)"
           deactivate
           return 0
         fi
-        log_warn "Échec d'installation de la wheel pré-compilée (${baked_whl##*/}) — bascule sur la compilation depuis les sources ci-dessous."
-        log_error_tail "installation de la wheel pré-compilée"
+        log_warn "$(t py_sage_baked_wheel_failed "${baked_whl##*/}")"
+        log_error_tail "$(t py_sage_label_baked_wheel)"
       fi
     else
-      log_info "Wheel pré-compilée présente dans l'image mais pour un autre index CUDA (${baked_index:-inconnu} != ${current_index}, probablement un repli PREFER_CUDA130) — ignorée, compilation depuis les sources."
+      log_info "$(t py_sage_baked_wheel_wrong_index "${baked_index:-$(t gpu_cuda_unknown)}" "$current_index")"
     fi
   fi
 
@@ -928,19 +932,19 @@ install_sageattention() {
   fi
 
   if [[ -n "$matched_cuda_home" ]]; then
-    log_ok "Toolkit CUDA branche ${torch_major}.x déjà présent et vérifié (${matched_cuda_home}/bin/nvcc, release ${matched_nvcc_ver}) — cohérent avec torch CUDA ${torch_cuda_norm}, pas de réinstallation."
+    log_ok "$(t py_sage_toolkit_present "$torch_major" "$matched_cuda_home" "$matched_nvcc_ver" "$torch_cuda_norm")"
   elif require_cmd apt-get; then
     local toolkit_pkg="cuda-toolkit-${torch_cuda_norm/./-}"
     local sudo_cmd=""
     [[ "$(id -u)" -ne 0 ]] && require_cmd sudo && sudo_cmd="sudo"
     _sage_ensure_nvidia_cuda_apt_repo || true
-    log_info "Aucun nvcc de la branche CUDA ${torch_major}.x (build torch) trouvé — installation de ${toolkit_pkg} (peut prendre plusieurs minutes, ~3-4 Go)."
+    log_info "$(t py_sage_toolkit_installing "$torch_major" "$toolkit_pkg")"
     wait_for_apt_lock
     if ! $sudo_cmd apt-get update -y >>"$LOG_FILE" 2>&1; then
-      log_warn "apt-get update a échoué — on tente quand même l'installation du toolkit CUDA."
+      log_warn "$(t py_sage_apt_update_failed)"
     fi
     if retry "$DOWNLOAD_MAX_RETRIES" $sudo_cmd apt-get install -y "$toolkit_pkg" >>"$LOG_FILE" 2>&1; then
-      log_ok "${toolkit_pkg} installé — vérification de la version réelle de nvcc avant toute compilation."
+      log_ok "$(t py_sage_toolkit_installed "$toolkit_pkg")"
     else
       # Repli : certaines versions mineures (ex: 12.7) ne publient pas de
       # paquet cuda-toolkit-<major>-<minor> dédié — le paquet majeur seul
@@ -949,15 +953,15 @@ install_sageattention() {
       # que torch attend : c'est vérifié explicitement juste après, jamais
       # supposé.
       local major_pkg="cuda-toolkit-${torch_major}"
-      log_warn "${toolkit_pkg} indisponible — repli sur ${major_pkg} (la version réelle obtenue sera vérifiée avant de compiler, pas supposée correcte)."
+      log_warn "$(t py_sage_toolkit_fallback "$toolkit_pkg" "$major_pkg")"
       if ! retry "$DOWNLOAD_MAX_RETRIES" $sudo_cmd apt-get install -y "$major_pkg" >>"$LOG_FILE" 2>&1; then
-        log_warn "Échec d'installation de ${toolkit_pkg} et ${major_pkg} — SageAttention sera sauté cette fois."
-        log_error_tail "apt-get install ${toolkit_pkg} / ${major_pkg}"
-        log_warn "H3 restera fonctionnel sans SageAttention, juste plus lent / plus gourmand en VRAM."
+        log_warn "$(t py_sage_toolkit_install_failed "$toolkit_pkg" "$major_pkg")"
+        log_error_tail "$(t py_sage_label_toolkit_install "$toolkit_pkg" "$major_pkg")"
+        log_warn "$(t py_sage_stays_functional)"
         deactivate
         return 0
       fi
-      log_ok "${major_pkg} installé (repli) — vérification de la version réelle de nvcc avant toute compilation."
+      log_ok "$(t py_sage_toolkit_fallback_installed "$major_pkg")"
     fi
     # Étape 2b : re-scan après l'installation apt — jamais de confiance dans
     # le simple fait que `apt-get install` ait réussi : seule la version
@@ -969,19 +973,19 @@ install_sageattention() {
       matched_nvcc_ver="${_match##*:}"
     fi
   else
-    log_warn "apt-get indisponible — recherche d'un toolkit déjà présent sur le pod de la branche CUDA ${torch_major}.x."
+    log_warn "$(t py_sage_no_apt "$torch_major")"
   fi
 
   if [[ -z "$matched_cuda_home" ]]; then
-    log_warn "Aucun nvcc de la branche CUDA ${torch_major}.x (build torch : ${torch_cuda_norm}) n'a pu être installé ou localisé."
-    log_warn "Compiler SageAttention avec un nvcc d'une autre branche MAJEURE produirait un échec opaque (ou pire, un module qui s'importe mais plante à l'exécution) — compilation annulée par précaution."
-    log_warn "H3 reste pleinement fonctionnel sans SageAttention, juste plus lent / plus gourmand en VRAM. Si plusieurs toolkits sont installés sur ce pod, vérifiez /usr/local/cuda-*."
+    log_warn "$(t py_sage_no_nvcc_found "$torch_major" "$torch_cuda_norm")"
+    log_warn "$(t py_sage_wrong_branch_risk)"
+    log_warn "$(t py_sage_stays_functional_check)"
     deactivate
     return 0
   fi
 
-  log_ok "nvcc cohérent sélectionné : ${matched_cuda_home}/bin/nvcc (release ${matched_nvcc_ver}) — même branche majeure que torch.version.cuda=${torch_cuda_norm} (compatibilité mineure garantie par NVIDIA)."
-  log_info "CUDA_HOME/PATH pour la compilation seront positionnés localement au sous-shell de build (aucune modification permanente de l'environnement du script)."
+  log_ok "$(t py_sage_nvcc_selected "$matched_cuda_home" "$matched_nvcc_ver" "$torch_cuda_norm")"
+  log_info "$(t py_sage_cuda_home_local)"
 
   # --- Triton (dépendance de compilation/exécution) -----------------------
   # Jamais de `pip install triton` non versionné : le wheel torch installé
@@ -994,7 +998,7 @@ install_sageattention() {
   # figée en dur ici — reste correcte quel que soit le build torch retenu
   # par PYTORCH_BUILD_TABLE, cu118 comme cu130).
   if python -c "import triton" 2>/dev/null; then
-    log_ok "Triton déjà présent et importable ($(python -c 'import triton; print(triton.__version__)' 2>/dev/null)) — pas de réinstallation."
+    log_ok "$(t py_sage_triton_present "$(python -c 'import triton; print(triton.__version__)' 2>/dev/null)")"
   else
     local triton_req=""
     triton_req="$(python - <<'PYEOF'
@@ -1010,12 +1014,12 @@ for r in reqs:
 PYEOF
 )"
     if [[ -n "$triton_req" ]]; then
-      log_info "Triton absent — installation de la contrainte exacte requise par torch : ${triton_req}"
+      log_info "$(t py_sage_triton_installing "$triton_req")"
       if ! python -m pip install --quiet "$triton_req" >>"$LOG_FILE" 2>&1; then
-        log_warn "Échec d'installation de ${triton_req} — la compilation de SageAttention risque d'échouer (non bloquant, consultez ${LOG_FILE})."
+        log_warn "$(t py_sage_triton_install_failed "$triton_req" "$LOG_FILE")"
       fi
     else
-      log_warn "Impossible de déterminer la contrainte Triton requise par torch dans ses métadonnées — Triton non installé (jamais d'installation non versionnée, cf. commentaire ci-dessus). La compilation de SageAttention risque d'échouer sans Triton."
+      log_warn "$(t py_sage_triton_constraint_unknown)"
     fi
   fi
 
@@ -1024,22 +1028,22 @@ PYEOF
   # install.sh entier sous `set -e`, seulement sauter cette étape (cf.
   # commentaire d'en-tête de la fonction : best-effort, non bloquant).
   if ! mkdir -p "$(dirname "$SAGEATTENTION_CACHE_DIR")" 2>>"$LOG_FILE"; then
-    log_warn "Impossible de créer $(dirname "$SAGEATTENTION_CACHE_DIR") — SageAttention sauté (consultez ${LOG_FILE})."
+    log_warn "$(t py_sage_mkdir_failed "$(dirname "$SAGEATTENTION_CACHE_DIR")" "$LOG_FILE")"
     deactivate
     return 0
   fi
   if [[ -d "${SAGEATTENTION_CACHE_DIR}/.git" ]]; then
     if [[ "${SAGEATTENTION_UPDATE:-false}" == "true" ]]; then
-      log_info "Cache SageAttention existant — mise à jour demandée (SAGEATTENTION_UPDATE=true, git pull)."
+      log_info "$(t py_sage_cache_update)"
       git -C "$SAGEATTENTION_CACHE_DIR" pull --ff-only >>"$LOG_FILE" 2>&1 || \
-        log_warn "git pull a échoué sur le cache existant — on compile la version déjà présente."
+        log_warn "$(t py_sage_cache_pull_failed)"
     else
-      log_info "Cache SageAttention existant — compilation de la version déjà clonée (pas de mise à jour automatique ; SAGEATTENTION_UPDATE=true dans config.env pour en forcer une)."
+      log_info "$(t py_sage_cache_reuse)"
     fi
   else
-    log_info "Clonage de SageAttention (${SAGEATTENTION_REPO})..."
+    log_info "$(t py_sage_cloning "$SAGEATTENTION_REPO")"
     if ! retry "$DOWNLOAD_MAX_RETRIES" git clone "$SAGEATTENTION_REPO" "$SAGEATTENTION_CACHE_DIR" >>"$LOG_FILE" 2>&1; then
-      log_warn "Échec du clonage de SageAttention — installation sautée (consultez ${LOG_FILE})."
+      log_warn "$(t py_sage_clone_failed "$LOG_FILE")"
       deactivate
       return 0
     fi
@@ -1052,7 +1056,7 @@ PYEOF
   # ferait sortir tout install.sh) ; placé comme premier membre d'une liste
   # OR, son échec est exempté (seul l'échec du DERNIER membre compte pour
   # errexit — ici une simple affectation, qui ne peut pas échouer).
-  log_info "Compilation de SageAttention (10-20 min selon le pod, MAX_JOBS=${SAGEATTENTION_BUILD_JOBS})..."
+  log_info "$(t py_sage_compiling "$SAGEATTENTION_BUILD_JOBS")"
   local build_rc=0
   (
     cd "$SAGEATTENTION_CACHE_DIR" || exit 1
@@ -1074,21 +1078,21 @@ PYEOF
   ) >>"$LOG_FILE" 2>&1 || build_rc=$?
 
   if [[ "$build_rc" -ne 0 ]]; then
-    log_warn "Échec de compilation de SageAttention (code ${build_rc}) — installation sautée."
-    log_error_tail "compilation SageAttention"
-    log_warn "H3 restera fonctionnel sans SageAttention, juste plus lent / plus gourmand en VRAM."
+    log_warn "$(t py_sage_compile_failed "$build_rc")"
+    log_error_tail "$(t py_sage_label_compile)"
+    log_warn "$(t py_sage_stays_functional)"
     deactivate
     return 0
   fi
 
   local import_err=""
   if import_err="$(python -c "import sageattention" 2>&1 >/dev/null)"; then
-    log_ok "SageAttention compilé et importable."
+    log_ok "$(t py_sage_compiled_ok)"
   else
-    log_warn "Compilation terminée sans erreur mais le module ne s'importe pas — installation considérée en échec."
-    echo -e "${C_RED}${C_BOLD}----- Erreur à l'import de sageattention -----${C_RESET}" >&2
+    log_warn "$(t py_sage_import_fail_after_compile)"
+    echo -e "${C_RED}${C_BOLD}$(t py_sage_import_error_header)${C_RESET}" >&2
     while IFS= read -r _line; do echo "    ${_line}"; done <<<"$import_err" >&2
-    echo -e "${C_RED}${C_BOLD}----- Fin -----${C_RESET}" >&2
+    echo -e "${C_RED}${C_BOLD}$(t py_sage_import_error_footer)${C_RESET}" >&2
   fi
 
   deactivate
@@ -1100,46 +1104,45 @@ PYEOF
 ################################################################################
 
 verify_cuda() {
-    log_step "Vérification PyTorch / CUDA"
+    log_step "$(t py_verify_cuda_step)"
 
     local detected
     detected="$(detect_cuda_runtime)"
 
     # shellcheck disable=SC1091  # cf. note dans setup_python_venv.
     source "${VENV_DIR}/bin/activate"
-    CUDA_RUNTIME_DETECTED="${detected:-inconnu}" python << 'EOF'
+    CUDA_RUNTIME_DETECTED="${detected:-unknown}" python << 'EOF'
 import os
 import torch
 
-detected = os.environ.get("CUDA_RUNTIME_DETECTED", "inconnu")
+detected = os.environ.get("CUDA_RUNTIME_DETECTED", "unknown")
 
 print("=" * 60)
 print(f"CUDA runtime detected : {detected}")
 print(f"PyTorch installed     : {torch.__version__}")
-print(f"GPU disponible         : {torch.cuda.is_available()}")
+print(f"GPU available          : {torch.cuda.is_available()}")
 print("=" * 60)
 
 if not torch.cuda.is_available():
     raise SystemExit(1)
 
-# Avertissement si le build PyTorch installé a été compilé pour une version
-# de CUDA plus ancienne que le runtime détecté sur le pod : PyTorch reste
-# généralement utilisable (compatibilité ascendante des pilotes NVIDIA),
-# mais certaines opérations optimisées pour le runtime le plus récent
-# peuvent ne pas être disponibles (c'est exactement le message rapporté par
-# MiniMax H3 sur les pods CUDA 13.x avec un build plus ancien).
+# Warn if the installed PyTorch build was compiled for an older CUDA
+# version than the runtime detected on the pod: PyTorch usually still
+# works (NVIDIA driver backward compatibility), but some operations
+# optimized for the newest runtime may be unavailable (this is exactly
+# the message MiniMax H3 reports on CUDA 13.x pods with an older build).
 try:
-    if detected != "inconnu":
+    if detected != "unknown":
         runtime_major = float(detected)
         torch_cuda = torch.version.cuda or "0"
         torch_major = float(torch_cuda)
         if torch_major < runtime_major:
             print(
-                f"[WARN] PyTorch a été compilé pour CUDA {torch_cuda}, plus ancien que le "
-                f"runtime détecté ({detected}). Certaines opérations optimisées pour ce "
-                f"runtime peuvent être indisponibles ou plus lentes. Si un nœud/modèle "
-                f"réclame explicitement un cu plus récent, ajoutez l'entrée correspondante "
-                f"dans PYTORCH_BUILD_TABLE (lib/python.sh) puis relancez l'installation."
+                f"[WARN] PyTorch was built for CUDA {torch_cuda}, older than the "
+                f"detected runtime ({detected}). Some operations optimized for that "
+                f"runtime may be unavailable or slower. If a node/model explicitly "
+                f"requires a newer cu build, add the matching entry to "
+                f"PYTORCH_BUILD_TABLE (lib/python.sh) and re-run the install."
             )
 except Exception:
     pass
@@ -1150,5 +1153,5 @@ EOF
     if [[ "$rc" -ne 0 ]]; then
         return 1
     fi
-    log_ok "CUDA opérationnel."
+    log_ok "$(t py_cuda_ok)"
 }

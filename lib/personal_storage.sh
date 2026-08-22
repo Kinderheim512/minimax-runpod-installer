@@ -94,7 +94,7 @@ _personal_storage_hf_ready() {
   # il ne sert que de filet de sécurité si cette fonction venait à être
   # appelée depuis un autre contexte à l'avenir.
   if [[ ! -f "${VENV_DIR}/bin/activate" ]]; then
-    log_warn "Environnement virtuel pas encore créé — synchronisation HF du stockage perso reportée (sera retentée par update.sh ou un futur redémarrage)."
+    log_warn "$(t ps_venv_missing)"
     return 1
   fi
 
@@ -102,14 +102,14 @@ _personal_storage_hf_ready() {
   source "${VENV_DIR}/bin/activate"
   detect_hf_cli
   if [[ -z "$HF_CLI" ]]; then
-    log_warn "Ni 'hf' ni 'huggingface-cli' disponibles dans le venv — synchronisation HF du stockage perso sautée."
+    log_warn "$(t ps_no_hf_cli)"
     deactivate
     return 1
   fi
   local whoami_output
   if ! whoami_output="$("$HF_CLI" auth whoami 2>/dev/null || "$HF_CLI" whoami 2>/dev/null)" \
     || [[ -z "$whoami_output" ]] || [[ "$whoami_output" == *"Not logged in"* ]]; then
-    log_warn "Non authentifié à Hugging Face — synchronisation du stockage perso sautée (lancez 'bash install.sh' au moins une fois pour vous authentifier, ou définissez HF_TOKEN)."
+    log_warn "$(t ps_not_authenticated)"
     deactivate
     return 1
   fi
@@ -154,7 +154,7 @@ _personal_storage_process_manifest_loras() {
     name="$(awk '{print $2}' <<< "$line")"
 
     if [[ ! "$url" =~ ^https?:// ]]; then
-      log_warn "Ligne ignorée dans ${manifest_filename} (URL invalide) : ${line}"
+      log_warn "$(t ps_manifest_invalid_line "$manifest_filename" "$line")"
       continue
     fi
 
@@ -167,16 +167,16 @@ _personal_storage_process_manifest_loras() {
       ok=$((ok + 1))
     else
       failed=$((failed + 1))
-      log_warn "Échec d'installation depuis le manifeste : ${url} (non bloquant, consultez ${LOG_FILE})."
+      log_warn "$(t ps_manifest_lora_install_failed "$url" "$LOG_FILE")"
     fi
   done < "$manifest_file"
 
   if [[ "$total" -eq 0 ]]; then
-    log_info "${manifest_filename} présent mais vide (aucune URL exploitable)."
+    log_info "$(t ps_manifest_empty "$manifest_filename")"
   elif [[ "$failed" -eq 0 ]]; then
-    log_ok "LoRA du manifeste : ${ok}/${total} installés (${manifest_filename})."
+    log_ok "$(t ps_manifest_loras_ok "$ok" "$total" "$manifest_filename")"
   else
-    log_warn "LoRA du manifeste : ${ok}/${total} installés, ${failed} échec(s) (${manifest_filename}) — voir ${LOG_FILE}."
+    log_warn "$(t ps_manifest_loras_partial "$ok" "$total" "$failed" "$manifest_filename" "$LOG_FILE")"
   fi
 }
 
@@ -222,7 +222,7 @@ _personal_storage_process_manifest_nodes() {
     [[ "$allow_pip" == "false" ]] || allow_pip="true"
 
     if [[ ! "$url" =~ ^https?:// ]]; then
-      log_warn "Ligne ignorée dans ${manifest_filename} (URL invalide) : ${line}"
+      log_warn "$(t ps_manifest_invalid_line "$manifest_filename" "$line")"
       continue
     fi
 
@@ -231,9 +231,9 @@ _personal_storage_process_manifest_nodes() {
   done < "$manifest_file"
 
   if [[ "$total" -eq 0 ]]; then
-    log_info "${manifest_filename} présent mais vide (aucune URL exploitable)."
+    log_info "$(t ps_manifest_empty "$manifest_filename")"
   else
-    log_ok "Nœuds custom du manifeste : ${total} dépôt(s) traité(s) (${manifest_filename}, détail des succès/échecs individuels ci-dessus)."
+    log_ok "$(t ps_manifest_nodes_ok "$total" "$manifest_filename")"
   fi
 }
 
@@ -242,10 +242,10 @@ _personal_storage_process_manifest_nodes() {
 # conteneur, AVANT que ComfyUI ne soit lancé. Appelée depuis install.sh (tout
 # début, après vérification des prérequis) et depuis docker-entrypoint.sh.
 sync_personal_storage_pull() {
-  log_step "Stockage perso (LoRAs/presets/outputs/workflows + manifestes nœuds) — restauration"
+  log_step "$(t ps_pull_step)"
 
   if [[ -z "${PERSONAL_STORAGE_HF_REPO:-}" && -z "${PERSONAL_LORAS_GITHUB_RELEASE_URL:-}" ]]; then
-    log_info "PERSONAL_STORAGE_HF_REPO et PERSONAL_LORAS_GITHUB_RELEASE_URL vides — fonctionnalité désactivée, étape sautée."
+    log_info "$(t ps_pull_disabled)"
     return 0
   fi
 
@@ -253,7 +253,7 @@ sync_personal_storage_pull() {
 
   if [[ -n "${PERSONAL_STORAGE_HF_REPO:-}" ]]; then
     if _personal_storage_hf_ready; then
-      log_info "Récupération du coffre HF ${PERSONAL_STORAGE_HF_REPO}..."
+      log_info "$(t ps_pull_hf_fetching "$PERSONAL_STORAGE_HF_REPO")"
       local staging
       staging="$(mktemp -d)"
       # shellcheck disable=SC1091
@@ -277,7 +277,7 @@ sync_personal_storage_pull() {
           [[ -d "${staging}/outputs" ]]   && cp -a "${staging}/outputs/."   "$(PERSONAL_STORAGE_OUTPUTS_DIR)/"
           [[ -d "${staging}/workflows" ]] && cp -a "${staging}/workflows/." "$(PERSONAL_STORAGE_WORKFLOWS_DIR)/"
         fi
-        log_ok "Coffre HF restauré (${PERSONAL_STORAGE_HF_REPO})."
+        log_ok "$(t ps_pull_hf_restored "$PERSONAL_STORAGE_HF_REPO")"
 
         # Manifestes déclaratifs (loras_manifest.txt / nodes_manifest.txt à
         # la racine du dépôt HF, déjà présents dans $staging — aucun appel
@@ -288,7 +288,7 @@ sync_personal_storage_pull() {
         _personal_storage_process_manifest_loras "$staging"
         _personal_storage_process_manifest_nodes "$staging"
       else
-        log_warn "Échec de récupération du coffre HF ${PERSONAL_STORAGE_HF_REPO} (consultez ${LOG_FILE}) — étape non bloquante, on continue."
+        log_warn "$(t ps_pull_hf_failed "$PERSONAL_STORAGE_HF_REPO" "$LOG_FILE")"
       fi
       deactivate
       rm -rf "$staging"
@@ -299,7 +299,7 @@ sync_personal_storage_pull() {
     _personal_storage_pull_github_release_loras
   fi
 
-  log_ok "Restauration du stockage perso terminée."
+  log_ok "$(t ps_pull_done)"
 }
 
 # _personal_storage_pull_github_release_loras
@@ -314,7 +314,7 @@ _personal_storage_pull_github_release_loras() {
   local url="${PERSONAL_LORAS_GITHUB_RELEASE_URL}"
 
   if ! require_cmd curl; then
-    log_warn "curl introuvable — récupération des LoRAs figés (GitHub Releases) sautée."
+    log_warn "$(t ps_gh_no_curl)"
     return 0
   fi
 
@@ -325,16 +325,16 @@ _personal_storage_pull_github_release_loras() {
     repo="${BASH_REMATCH[2]}"
     tag="${BASH_REMATCH[3]}"
   else
-    log_warn "PERSONAL_LORAS_GITHUB_RELEASE_URL mal formée (attendu : https://github.com/<owner>/<repo>/releases/tag/<tag>) — étape sautée."
+    log_warn "$(t ps_gh_bad_url)"
     return 0
   fi
 
-  log_info "Récupération des LoRAs figés depuis la release GitHub ${owner}/${repo}@${tag}..."
+  log_info "$(t ps_gh_fetching "$owner" "$repo" "$tag")"
 
   local api_url="https://api.github.com/repos/${owner}/${repo}/releases/tags/${tag}"
   local assets_json
   if ! assets_json="$(curl -fsSL "$api_url" 2>>"$LOG_FILE")"; then
-    log_warn "Impossible de contacter l'API GitHub (${api_url}) — étape non bloquante, LoRAs figés sautés."
+    log_warn "$(t ps_gh_api_unreachable "$api_url")"
     return 0
   fi
 
@@ -346,7 +346,7 @@ _personal_storage_pull_github_release_loras() {
   urls="$(grep -o '"browser_download_url": *"[^"]*"' <<< "$assets_json" | sed 's/.*: *"//;s/"$//')"
 
   if [[ -z "$urls" ]]; then
-    log_warn "Aucun asset trouvé sur la release ${owner}/${repo}@${tag} — rien à télécharger."
+    log_warn "$(t ps_gh_no_assets "$owner" "$repo" "$tag")"
     return 0
   fi
 
@@ -357,17 +357,17 @@ _personal_storage_pull_github_release_loras() {
     name="$(sed -n "${i}p" <<< "$names")"
     [[ -n "$name" ]] || name="$(basename "$url_i")"
     if [[ -f "${dest_dir}/${name}" ]]; then
-      log_ok "${name} déjà présent — téléchargement sauté."
+      log_ok "$(t ps_gh_already_present "$name")"
       continue
     fi
     announce_download "$name"
     if ! retry "$DOWNLOAD_MAX_RETRIES" curl -fL -o "${dest_dir}/${name}.part" "$url_i" >>"$LOG_FILE" 2>&1; then
-      log_warn "Échec du téléchargement de ${name} (non bloquant, consultez ${LOG_FILE})."
+      log_warn "$(t ps_gh_download_failed "$name" "$LOG_FILE")"
       rm -f "${dest_dir}/${name}.part"
       continue
     fi
     mv "${dest_dir}/${name}.part" "${dest_dir}/${name}"
-    log_ok "${name} téléchargé."
+    log_ok "$(t ps_gh_downloaded "$name")"
   done <<< "$urls"
 }
 
@@ -402,17 +402,17 @@ _personal_storage_hf_upload() {
     echo "$out" >> "$LOG_FILE"
 
     if grep -qi '403 Forbidden\|correct permissions' <<< "$out"; then
-      log_error "Permission refusée par Hugging Face (403) sur ${PERSONAL_STORAGE_HF_REPO}/${path_in_repo} — votre HF_TOKEN n'a probablement pas les droits d'écriture."
-      log_error "Créez un token avec la permission \"Write\" sur https://huggingface.co/settings/tokens, mettez à jour HF_TOKEN, puis relancez bash sync_push.sh."
+      log_error "$(t ps_upload_403 "$PERSONAL_STORAGE_HF_REPO" "$path_in_repo")"
+      log_error "$(t ps_upload_403_fix)"
       return 2
     fi
 
     if (( attempt >= DOWNLOAD_MAX_RETRIES )); then
-      log_error "Échec après ${DOWNLOAD_MAX_RETRIES} tentatives : hf upload ${PERSONAL_STORAGE_HF_REPO} ${local_dir} ${path_in_repo} --repo-type dataset"
+      log_error "$(t ps_upload_failed "$DOWNLOAD_MAX_RETRIES" "$PERSONAL_STORAGE_HF_REPO" "$local_dir" "$path_in_repo")"
       return 1
     fi
 
-    log_warn "Tentative ${attempt}/${DOWNLOAD_MAX_RETRIES} échouée, nouvelle tentative dans 5s..."
+    log_warn "$(t retry_attempt "$attempt" "$DOWNLOAD_MAX_RETRIES")"
     sleep 5
     ((attempt++))
   done
@@ -445,19 +445,19 @@ _personal_storage_warn_non_personal_loras() {
   done < <(find "$root_dir" -maxdepth 1 -type f -name '*.safetensors' -print0 2>/dev/null)
 
   if [[ ${#stray[@]} -gt 0 ]]; then
-    log_warn "${#stray[@]} LoRA présent(s) dans ${root_dir} (hors personal/) ne seront PAS sauvegardés — seul ${root_dir}/personal/ est envoyé vers le coffre HF :"
+    log_warn "$(t ps_stray_loras_warn "${#stray[@]}" "$root_dir" "$root_dir")"
     for name in "${stray[@]}"; do
       log_warn "    - ${name}"
     done
-    log_warn "  Pour les inclure : bash install_lora.sh --personal <URL> (nouveaux téléchargements), ou déplacez-les manuellement : mv \"${root_dir}/<fichier>\" \"${root_dir}/personal/\" puis relancez bash sync_push.sh."
+    log_warn "$(t ps_stray_loras_fix "$root_dir" "$root_dir")"
   fi
 }
 
 sync_personal_storage_push() {
-  log_step "Stockage perso (LoRAs/presets/outputs) — sauvegarde"
+  log_step "$(t ps_push_step)"
 
   if [[ -z "${PERSONAL_STORAGE_HF_REPO:-}" ]]; then
-    log_info "PERSONAL_STORAGE_HF_REPO vide — sauvegarde HF désactivée, étape sautée."
+    log_info "$(t ps_push_disabled)"
     return 0
   fi
 
@@ -470,7 +470,7 @@ sync_personal_storage_push() {
   # shellcheck disable=SC1091
   source "${VENV_DIR}/bin/activate"
   local ok="true" rc
-  log_info "Envoi vers le coffre HF ${PERSONAL_STORAGE_HF_REPO} (peut prendre du temps selon le volume d'outputs)..."
+  log_info "$(t ps_push_uploading "$PERSONAL_STORAGE_HF_REPO")"
 
   if [[ -n "$(ls -A "$(PERSONAL_STORAGE_LORAS_DIR)" 2>/dev/null)" ]]; then
     _personal_storage_hf_upload "$(PERSONAL_STORAGE_LORAS_DIR)" loras; rc=$?
@@ -493,10 +493,10 @@ sync_personal_storage_push() {
   deactivate
 
   if [[ "$ok" == "true" ]]; then
-    log_ok "Sauvegarde du stockage perso terminée (${PERSONAL_STORAGE_HF_REPO})."
+    log_ok "$(t ps_push_done "$PERSONAL_STORAGE_HF_REPO")"
   elif [[ "${rc:-0}" -eq 2 ]]; then
-    log_warn "Sauvegarde du stockage perso interrompue (permission refusée) — corrigez HF_TOKEN puis relancez 'bash sync_push.sh'."
+    log_warn "$(t ps_push_403)"
   else
-    log_warn "Sauvegarde du stockage perso incomplète — consultez ${LOG_FILE}. Relancez 'bash sync_push.sh' pour réessayer."
+    log_warn "$(t ps_push_incomplete "$LOG_FILE")"
   fi
 }
