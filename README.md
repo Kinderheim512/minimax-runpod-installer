@@ -170,6 +170,7 @@ default:
 | Question | Options |
 |-|-|
 | Preset | None (standard tiers) · `dasiwa_mmh3v12` **(default)** · `muse_director_seedhunt` |
+| Checkpoint(s) *(only if `dasiwa_mmh3v12` selected)* | `pruned` — Normal pruned, 2 files **(default)** · `dasiwa_hybrid` — Pruned, modified by DaSiWa, 1 file |
 | Model tier *(skipped if the preset replaces it)* | `auto` **(default)** · `light` · `pruned` · `pruned_scaled` · `balanced` · `max` |
 | Turbo LoRA | On **(default)** · Off |
 | SageAttention | On **(default)** · Off |
@@ -190,6 +191,10 @@ Preset (model/workflow set):
  3) muse_director_seedhunt — Director/Seed Hunt, pruned weights (replaces the standard tier)
 Choice [1-3, Enter = default]:
 → 'dasiwa_mmh3v12' provides its own set of weights and its own workflow.
+DaSiWa preset — diffusion checkpoint(s) :
+ 1) Normal pruned — 2 official Comfy-Org INT8 ConvRot checkpoints, FL2VA + REF2VA (recommended, well-tested)  [default]
+ 2) Pruned, modified by DaSiWa — 1 community checkpoint covering both FL2VA and REF2VA (darksidewalker, CivitAI, experimental)
+Choice [1-2, Enter = default]:
 MiniMax H3 Turbo LoRA (accelerated generation):
  1) Enabled (download + custom node, automatic)  [default]
  2) Disabled
@@ -197,6 +202,7 @@ Choice [1-2, Enter = default]:
 ...
 Summary:
  - Preset        : dasiwa_mmh3v12
+ - Checkpoint(s) : pruned
  - Tier          : (n/a — provided by the preset)
  - Turbo LoRA    : on
  - SageAttention : on
@@ -351,16 +357,34 @@ is ignored with a warning, never a hard failure.
 
 |Preset|What it installs|
 |-|-|
-|`dasiwa_mmh3v12` **(default)**|"DaSiWa - MiniMaxH3 MythicAlchemy v12" (T2VA/I2VA/FLF2VA/REF2VA) checkpoints — INT8 ConvRot FL2VA + REF2VA (Comfy-Org/MiniMax-H3, outside the standard tiers) and the INT4 ConvRot text encoder (Abiray/MiniMax-H3-GGUF) as selected in the workflow's Settings node — plus the fp16 video VAE and fp32 audio VAE (already used by the standard install, repeated here so the preset is self-contained), the TAE fast-preview model (Kijai/MiniMax-H3-TAE), the AnimeSharpV4 upscale model (Kim2091/2x-AnimeSharpV4), the RIFE 4.26 frame-interpolation model (Comfy-Org/frame_interpolation), and the `ComfyUI-DaSiWa-Nodes` custom node (required by the workflow's LoRA loader and Director nodes). 4 diffusion/VAE files also get symlinked into a `MiniMaxH3/` subfolder under `diffusion_models/`/`vae/`, matching the node pack's own naming convention. **Replaces the standard `H3_TIER` download** (see above) — INT8 ConvRot was kept deliberately over FP8 scaled: community benchmarks and the upstream Comfy-Org README both favor INT8 ConvRot on Ampere-class cards.|
-|`muse_director_seedhunt`|"Muse Minimax Director (Seed Hunt)" — a timeline/CUT-based director node on top of the stock `MiniMaxH3ReferenceToVideo`/`MiniMaxH3ImageToVideo` nodes, with a Seed Hunt toggle that scouts 4 candidate seeds at low resolution before a full-res refine pass. Downloads the pruned INT8 ConvRot FL2VA + REF2VA checkpoints (Comfy-Org/MiniMax-H3, same files as `dasiwa_mmh3v12` — deduplicated automatically if both are active), the NVFP4 AWQ text encoder and fp16/fp32 video/audio VAE (already used by the standard install, repeated here so the preset is self-contained), and the TAE fast-preview model (Kijai/MiniMax-H3-TAE). Clones the `MiniMaxH3-Director-Seed-Hunt` custom node (muse-collective-26) and installs its one extra pip dependency (`av`, for decoding uploaded reference video/audio clips — declared only in the node's README, not in a requirements.txt, hence handled separately by this preset). Installs the bundled example workflow `muse_minimax_h3_director_scout_v1.json`. **Replaces the standard `H3_TIER` download** (see above) — it downloads its own complete FL2VA/REF2VA set.|
+|`dasiwa_mmh3v12` **(default)**|"DaSiWa - MiniMaxH3 MythicAlchemy v12" (T2VA/I2VA/FLF2VA/REF2VA) checkpoints — INT8 ConvRot FL2VA + REF2VA (Comfy-Org/MiniMax-H3, outside the standard tiers) and the INT4 ConvRot text encoder (Abiray/MiniMax-H3-GGUF) as selected in the workflow's Settings node — plus the fp16 video VAE and fp32 audio VAE (already used by the standard install, repeated here so the preset is self-contained), the TAE fast-preview model (Kijai/MiniMax-H3-TAE), the AnimeSharpV4 upscale model (Kim2091/2x-AnimeSharpV4), the RIFE 4.26 frame-interpolation model (Comfy-Org/frame_interpolation), and the `ComfyUI-DaSiWa-Nodes` custom node (required by the workflow's LoRA loader and Director nodes). 4 diffusion/VAE files also get symlinked into a `MiniMaxH3/` subfolder under `diffusion_models/`/`vae/`, matching the node pack's own naming convention. **Replaces the standard `H3_TIER` download** (see above) — INT8 ConvRot was kept deliberately over FP8 scaled: community benchmarks and the upstream Comfy-Org README both favor INT8 ConvRot on Ampere-class cards. **Checkpoint choice** (`H3_DASIWA_CHECKPOINT_VARIANT`, `config.env`, or asked by `wizard.sh`): `pruned` **(default)** keeps the two official Comfy-Org files above (FL2VA + REF2VA, 2 downloads); `dasiwa_hybrid` swaps both for the single community "DaSiWa Hybrid" checkpoint (darksidewalker, CivitAI — this one file handles both the FL2VA and REF2VA roles equally well, so only 1 file is downloaded, experimental, opt-in). Either way the workflow needs no edit: the downloaded file(s) are symlinked to the same filenames the workflow already expects.|
+|`muse_director_seedhunt`|"Muse Minimax Director (Seed Hunt)" — a timeline/CUT-based director node on top of the stock `MiniMaxH3ReferenceToVideo`/`MiniMaxH3ImageToVideo` nodes, with a Seed Hunt toggle that scouts 4 candidate seeds at low resolution before a full-res refine pass. Downloads the pruned INT8 ConvRot FL2VA + REF2VA checkpoints (Comfy-Org/MiniMax-H3, same files as `dasiwa_mmh3v12`'s `pruned` variant — deduplicated automatically if both are active), the NVFP4 AWQ text encoder and fp16/fp32 video/audio VAE (already used by the standard install, repeated here so the preset is self-contained), and the TAE fast-preview model (Kijai/MiniMax-H3-TAE). Clones the `MiniMaxH3-Director-Seed-Hunt` custom node (muse-collective-26) and installs its one extra pip dependency (`av`, for decoding uploaded reference video/audio clips — declared only in the node's README, not in a requirements.txt, hence handled separately by this preset). Installs the bundled example workflow `muse_minimax_h3_director_scout_v1.json`. **Replaces the standard `H3_TIER` download** (see above) — it downloads its own complete FL2VA/REF2VA set.|
+
+**`dasiwa_mmh3v12`'s checkpoint variant**, in more detail:
+
+```bash
+H3_DASIWA_CHECKPOINT_VARIANT="pruned"         # default — 2 official Comfy-Org pruned INT8 ConvRot checkpoints (FL2VA + REF2VA)
+H3_DASIWA_CHECKPOINT_VARIANT="dasiwa_hybrid"  # 1 community "DaSiWa Hybrid" checkpoint, from CivitAI — covers both roles
+```
+
+or inline: `H3_DASIWA_CHECKPOINT_VARIANT=dasiwa_hybrid bash install.sh --preset=dasiwa_mmh3v12`.
+`wizard.sh` asks this as a dedicated question ("Normal pruned" vs. "Pruned,
+modified by DaSiWa") whenever `dasiwa_mmh3v12` is selected. The
+`dasiwa_hybrid` checkpoint is served directly from CivitAI (no HuggingFace
+repo hosts it); selecting it downloads that single file only and skips both
+official pruned downloads entirely (no duplicate ~40 GB) — the one file is
+then symlinked under both the FL2VA and REF2VA filenames the workflow
+expects. Any other value falls back to `pruned`.
 
 Adding a new preset later only means: a manifest entry in `config.env`
 (`PRESET_<NAME>`, `H3_PRESET_NAMES`, optionally `H3_PRESET_WORKFLOWS`,
 `PRESET_<NAME>_NODE_REPOS`, `PRESET_<NAME>_PIP_PACKAGES` (for a custom node
 whose dependencies aren't in a `requirements.txt`), `PRESET_<NAME>_SYMLINKS`,
-and `H3_PRESET_REPLACES_STANDARD_TIER` if it should replace rather than
-supplement the standard tier) and a workflow file under `presets/<name>/` —
-nothing in `lib/presets.sh` needs to change.
+`PRESET_<NAME>_CIVITAI_MODELS` (optional, for a file served directly from
+CivitAI rather than a HuggingFace repo), and `H3_PRESET_REPLACES_STANDARD_TIER`
+if it should replace rather than supplement the standard tier) and a
+workflow file under `presets/<name>/` — nothing in `lib/presets.sh` needs to
+change.
 
 ### Installing only ComfyUI/CUDA/PyTorch + a preset's own models
 

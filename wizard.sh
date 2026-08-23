@@ -170,8 +170,24 @@ WIZ_SAGE_ONOFF="off"
 WIZ_SAGE="false"
 WIZ_SPECTRUM="off"
 
+WIZ_DASIWA_CHECKPOINT_VARIANT="pruned"
+
 case "$WIZ_PRESET" in
   dasiwa_mmh3v12)
+    # Checkpoint variant: choice between the two official Comfy-Org pruned
+    # INT8 ConvRot checkpoints (FL2VA + REF2VA, unchanged historical
+    # default — 2 files) and the single community "DaSiWa Hybrid"
+    # checkpoint (darksidewalker, CivitAI). The hybrid file is NOT
+    # REF2VA-only: it handles both the FL2VA and REF2VA roles equally well,
+    # so only 1 file is downloaded and it is symlinked under both names the
+    # workflow expects. Either way the workflow itself needs no edit (see
+    # PRESET_DASIWA_MMH3V12_SYMLINKS, config.env). Env var passed through to
+    # install.sh below (H3_DASIWA_CHECKPOINT_VARIANT), same pattern as
+    # SAGE_ATTENTION.
+    ask_choice "DaSiWa preset — diffusion checkpoint(s) :" WIZ_DASIWA_CHECKPOINT_VARIANT "pruned" \
+      "pruned|Normal pruned — 2 official Comfy-Org INT8 ConvRot checkpoints, FL2VA + REF2VA (recommended, well-tested)" \
+      "dasiwa_hybrid|Pruned, modified by DaSiWa — 1 community checkpoint covering both FL2VA and REF2VA (darksidewalker, CivitAI, experimental)"
+
     # Turbo LoRA: the workflow's LoRA loader stays on "None" — unused,
     # no question.
     # Spectrum: no Spectrum node in this workflow — no question.
@@ -223,6 +239,9 @@ fi
 echo ""
 echo "  Summary :"
 echo "   - Preset       : ${WIZ_PRESET:-none}"
+if [[ "$WIZ_PRESET" == "dasiwa_mmh3v12" ]]; then
+  echo "   - Checkpoint(s): ${WIZ_DASIWA_CHECKPOINT_VARIANT}"
+fi
 if [[ -n "$WIZ_TIER" ]]; then
   echo "   - Tier         : ${WIZ_TIER}"
   echo "   - Workflows    : ${WIZ_WORKFLOWS}"
@@ -251,6 +270,7 @@ else
   export MINIMAX_H3_TURBO_NODE_AUTO_INSTALL="false"
 fi
 export SAGE_ATTENTION="$WIZ_SAGE"
+export H3_DASIWA_CHECKPOINT_VARIANT="$WIZ_DASIWA_CHECKPOINT_VARIANT"
 if [[ "$WIZ_SPECTRUM" == "on" ]]; then
   export INSTALL_SPECTRUM="true"
 else

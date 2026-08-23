@@ -10,6 +10,48 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### ✨ Feature: `dasiwa_mmh3v12` preset — choice of diffusion checkpoint(s) (official pruned pair vs. single community "DaSiWa Hybrid")
+
+- New `H3_DASIWA_CHECKPOINT_VARIANT` setting (`config.env`, or `--preset=dasiwa_mmh3v12`
+  wizard question, or `H3_DASIWA_CHECKPOINT_VARIANT=dasiwa_hybrid` inline env var):
+  - `pruned` **(default, unchanged behavior)** — the two official
+    Comfy-Org/MiniMax-H3 pruned INT8 ConvRot checkpoints (FL2VA + REF2VA),
+    the same files this preset already downloaded before this option
+    existed. 2 files downloaded.
+  - `dasiwa_hybrid` — the single community **"DaSiWa Hybrid" checkpoint**
+    (darksidewalker, published on CivitAI:
+    `https://civitai.red/api/download/models/3251526?fileId=3135537`). This
+    is **not** a REF2VA-only file: the same checkpoint performs equally
+    well for both the FL2VA and REF2VA roles, so only **1** file is
+    downloaded and it is symlinked under both filenames the workflow
+    expects. Opt-in, experimental, not an official Comfy-Org release.
+- `wizard.sh` now asks a dedicated "DaSiWa preset — diffusion checkpoint(s)"
+  question whenever the `dasiwa_mmh3v12` preset is selected, offering
+  "Normal pruned" (2 files) vs. "Pruned, modified by DaSiWa" (1 file) —
+  shown in the run summary and passed to `install.sh` via the
+  `H3_DASIWA_CHECKPOINT_VARIANT` env var (same pattern as
+  `SAGE_ATTENTION`/`INSTALL_SPECTRUM`).
+- Downloading: the `dasiwa_hybrid` file is served directly from CivitAI (no
+  HuggingFace repo hosts it) via the existing `download_civitai_model()`
+  (`lib/models.sh`, same function already used by `MODEL_SOURCE=civitai` for
+  the standard tier) — no new download code path. When `dasiwa_hybrid` is
+  selected, **neither** official pruned file (FL2VA nor REF2VA) is
+  additionally downloaded (it would just duplicate ~40 GB for no benefit);
+  when `pruned` (default) is selected, nothing changes from before.
+- Compatibility: the workflow itself is never modified. Whichever variant is
+  active, the real downloaded file(s) are symlinked to the exact filenames
+  the DaSiWa workflow already expects under `diffusion_models/MiniMaxH3/`
+  (`PRESET_DASIWA_MMH3V12_SYMLINKS`, `config.env`) — for `dasiwa_hybrid`,
+  both the FL2VA and REF2VA expected names are symlinked to the same single
+  downloaded file — so switching variants between installs on the same
+  volume never requires touching the bundled `.json` workflow files.
+- `lib/presets.sh`: new `_preset_civitai_models_ref()` helper and a
+  `PRESET_<NAME>_CIVITAI_MODELS` manifest convention (`"url|path_under_models"`,
+  optional, empty for every existing preset) so a future preset can mix
+  HuggingFace and CivitAI-hosted files the same way, without a new download
+  function each time. `download_preset_models()`'s `[i/N]` progress counter
+  now also accounts for these files.
+
 ### 🐛 Fix: `update.sh` never ensured system packages (silently defeated the `python3-dev` fix below on already-installed pods)
 
 - `bootstrap.sh` routes any pod where `${COMFY_DIR}/main.py` already exists

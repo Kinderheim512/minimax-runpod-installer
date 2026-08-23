@@ -55,6 +55,21 @@ _preset_manifest_ref() {
   echo "PRESET_${name^^}"
 }
 
+# _preset_civitai_models_ref <nom> -> nom de variable du manifeste CivitAI du
+# preset (PRESET_<NOM_MAJ>_CIVITAI_MODELS) sur stdout. Même convention que
+# _preset_manifest_ref() ci-dessus, tableau distinct et optionnel : la
+# plupart des presets n'ont aucun fichier servi directement par CivitAI (ils
+# viennent tous de HuggingFace, cf. PRESET_<NOM> ci-dessus) — absent de
+# config.env dans ce cas, ce n'est pas une erreur. Format d'une entrée :
+# "url|chemin_relatif_a_models" (pas de sous-dossier séparé, contrairement à
+# PRESET_<NOM> : le chemin complet, y compris diffusion_models/ etc., est
+# porté par l'entrée elle-même — un fichier CivitAI n'a pas de "chemin dans
+# le repo" à répliquer).
+_preset_civitai_models_ref() {
+  local name="$1"
+  echo "PRESET_${name^^}_CIVITAI_MODELS"
+}
+
 # preset_required_repos <presets_csv> -> liste dédoublonnée (une par ligne,
 # via echo "${arr[*]}") des dépôts HuggingFace référencés par les presets
 # actifs — même contrat que h3_required_repos() (lib/models.sh), pour
@@ -109,12 +124,20 @@ download_preset_models() {
   # Compteur global "[i/N]" affiché par announce_download() (lib/utils.sh) —
   # somme des entrées de tous les presets actifs, indépendant du compteur
   # utilisé par download_missing_models() pour l'installation standard.
-  local total=0 name ref entry
+  local total=0 name ref entry civitai_ref
   for name in "${names[@]}"; do
     [[ -z "$name" ]] && continue
     ref="$(_preset_manifest_ref "$name")"
     local -n manifest_count="$ref"
     total=$((total + ${#manifest_count[@]}))
+    # + fichier(s) servis directement par CivitAI pour ce preset (variante
+    # dasiwa_hybrid, etc.) — même compteur global "[i/N]" que le manifeste
+    # HuggingFace ci-dessus, voir _preset_civitai_models_ref().
+    civitai_ref="$(_preset_civitai_models_ref "$name")"
+    if declare -p "$civitai_ref" &>/dev/null; then
+      local -n civitai_count_arr="$civitai_ref"
+      total=$((total + ${#civitai_count_arr[@]}))
+    fi
   done
   export DOWNLOAD_FILE_TOTAL="$total"
   export DOWNLOAD_FILE_INDEX=0
@@ -137,6 +160,26 @@ download_preset_models() {
       dest_dir="$(dirname "${dest_root}/${path}")"
       mkdir -p "$dest_dir"
       download_hf_file "$repo" "$path" "$dest_root" || return 1
+    done
+  done
+
+  # Fichier(s) CivitAI additionnels — après le manifeste HuggingFace, jamais
+  # à la place : un preset peut mélanger les deux sources selon la variante
+  # active (ex. dasiwa_mmh3v12/H3_DASIWA_CHECKPOINT_VARIANT, config.env).
+  # download_civitai_model() (lib/models.sh, déjà sourcé avant lib/presets.sh
+  # dans install.sh) gère elle-même reprise/retry/log — aucune logique de
+  # téléchargement dupliquée ici.
+  local civitai_entry civitai_url civitai_path
+  for name in "${names[@]}"; do
+    [[ -z "$name" ]] && continue
+    civitai_ref="$(_preset_civitai_models_ref "$name")"
+    declare -p "$civitai_ref" &>/dev/null || continue
+    local -n civitai_manifest="$civitai_ref"
+    [[ ${#civitai_manifest[@]} -eq 0 ]] && continue
+    for civitai_entry in "${civitai_manifest[@]}"; do
+      IFS='|' read -r civitai_url civitai_path <<< "$civitai_entry"
+      [[ -z "$civitai_url" || -z "$civitai_path" ]] && continue
+      download_civitai_model "$civitai_url" "${base}/${civitai_path}" || return 1
     done
   done
 
