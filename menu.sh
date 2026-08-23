@@ -39,7 +39,7 @@ while true; do
     6) bash "${PROJECT_ROOT}/launch.sh" --tmux || true ;;
     7) bash "${PROJECT_ROOT}/launch.sh" --stop || true ;;
     8) bash "${PROJECT_ROOT}/uninstall.sh" || true ;;
-    9) echo "$(t menu_goodbye)"; exit 0 ;;
-    *) echo "$(t menu_invalid)" ;;
+    9) techo menu_goodbye; exit 0 ;;
+    *) techo menu_invalid ;;
   esac
 done

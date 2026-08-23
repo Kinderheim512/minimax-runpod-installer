@@ -15,7 +15,14 @@
 #     INSTALLER_LANG must never block an install.
 #
 # This file is meant to be sourced, never executed directly.
-if [[ -n "${MINIMAX_I18N_LOADED:-}" ]]; then return 0 2>/dev/null || exit 0; fi
+if [[ -n "${MINIMAX_I18N_LOADED:-}" ]]; then
+  # shellcheck disable=SC2317  # deliberate double guard: `return` succeeds
+  # when this file is sourced (the intended, only supported usage) so the
+  # `exit 0` after it never actually runs then — but if someone runs this
+  # file directly instead of sourcing it, `return` itself fails and `exit 0`
+  # is what actually stops execution. Keep both.
+  return 0 2>/dev/null || exit 0
+fi
 MINIMAX_I18N_LOADED=1
 
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -53,4 +60,17 @@ t() {
   else
     printf '%s' "$msg"
   fi
+}
+
+# techo <key> [args...]
+# Same as t(), but prints the result as a standalone line (with a trailing
+# newline) directly to stdout — use this wherever the call is its own
+# statement (e.g. `techo wf_copied_header`) instead of `echo "$(t
+# wf_copied_header)"`, which ShellCheck flags as SC2005 (useless echo).
+# Still use `log_info "$(t key)"` / `"...$(t key)..."` form for
+# interpolation into a larger string; that pattern is fine and not flagged.
+techo() {
+  # shellcheck disable=SC2005  # intentional: this IS the one place that
+  # turns t()'s no-newline output into a normal `echo`-style printed line.
+  echo "$(t "$@")"
 }

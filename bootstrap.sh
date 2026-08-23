@@ -17,12 +17,13 @@ COMFY_DIR="/workspace/ComfyUI"
 # l'un ni l'autre n'a réussi (premier message "Bootstrap..." ci-dessous),
 # pour ne jamais planter le script si les deux tentatives échouent.
 t() { local key="$1"; shift || true; printf '%s' "$key"; }
+techo() { local key="$1"; shift || true; echo "$key"; }
 # shellcheck disable=SC1091
 [[ -f "${INSTALL_DIR}/lib/i18n.sh" ]] && source "${INSTALL_DIR}/lib/i18n.sh"
 
 echo
 echo "=============================================================="
-echo "$(t bootstrap_title)"
+techo bootstrap_title
 echo "=============================================================="
 echo
 
@@ -79,9 +80,9 @@ if [[ -z "${HF_TOKEN:-}" ]]; then
     echo
     echo "[WARNING] $(t bootstrap_no_hf_token)"
     echo
-    echo "$(t bootstrap_no_hf_token_detail)"
+    techo bootstrap_no_hf_token_detail
     echo
-    echo "$(t bootstrap_no_hf_token_fix)"
+    techo bootstrap_no_hf_token_fix
     echo
 
 fi

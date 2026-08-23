@@ -54,7 +54,7 @@ log_error_tail() {
   if [[ -f "$LOG_FILE" ]]; then
     while IFS= read -r _line; do echo "    ${_line}"; done < <(tail -n "$n" "$LOG_FILE") >&2
   else
-    echo "$(t log_tail_missing "$LOG_FILE")" >&2
+    techo log_tail_missing "$LOG_FILE" >&2
   fi
   echo -e "${C_RED}${C_BOLD}$(t log_tail_footer "$LOG_FILE")${C_RESET}" >&2
 }

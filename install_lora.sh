@@ -70,6 +70,7 @@ else
     source "${PROJECT_ROOT}/lib/i18n.sh"
   else
     t() { local key="$1"; shift || true; printf '%s' "$key"; }
+    techo() { local key="$1"; shift || true; echo "$key"; }
   fi
 fi
 
@@ -509,10 +510,10 @@ list_loras() {
     files+=("$f")
   done < <(find "$dir" -maxdepth 1 -type f -name '*.safetensors' -print0 | sort -z)
 
-  echo "$(t loracli_installed_header "$dir")"
+  techo loracli_installed_header "$dir"
 
   if [[ ${#files[@]} -eq 0 ]]; then
-    echo "$(t loracli_none_installed "$dir")"
+    techo loracli_none_installed "$dir"
     return 0
   fi
 
@@ -528,8 +529,8 @@ list_loras() {
   done
 
   echo "---------------------------------------"
-  echo "$(t loracli_total_loras "${#files[@]}")"
-  echo "$(t loracli_total_size "$(format_size "$total_bytes")")"
+  techo loracli_total_loras "${#files[@]}"
+  techo loracli_total_size "$(format_size "$total_bytes")"
 }
 
 # remove_lora <dossier> <fichier>
@@ -553,7 +554,7 @@ remove_lora() {
     exit 1
   fi
 
-  echo "$(t loracli_about_to_remove)"
+  techo loracli_about_to_remove
   echo "  ${target}"
   read -r -p "$(t loracli_confirm_remove)" reply
   case "$reply" in
@@ -596,17 +597,17 @@ install_lora() {
   fi
 
   if [[ -s "$dest_file" && "$force" != "true" ]]; then
-    echo "$(t loracli_echo_already_installed)"
+    techo loracli_echo_already_installed
     log_ok "$(t loracli_already_installed "$filename" "$dest_file")"
     exit 0
   fi
 
   if [[ -s "$dest_file" && "$force" == "true" ]]; then
     log_warn "$(t loracli_force_redownload "$filename")"
-    echo "$(t loracli_echo_download_again)"
+    techo loracli_echo_download_again
   fi
 
-  echo "$(t loracli_echo_downloading)"
+  techo loracli_echo_downloading
 
   local dl_status=0
   download_lora "$url" "$dest_file" || dl_status=$?
@@ -628,7 +629,7 @@ install_lora() {
   fi
 
   log_ok "$(t loracli_install_success)"
-  echo "$(t loracli_echo_installed)"
+  techo loracli_echo_installed
   echo "  ${dest_file}"
 }
 

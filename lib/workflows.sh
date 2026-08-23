@@ -29,7 +29,7 @@ install_workflows() {
   local dest="${INSTALL_DIR}/user/default/workflows"
 
   echo "------------------------------------------------"
-  echo "$(t wf_installing_header)"
+  techo wf_installing_header
 
   if [[ ! -d "$src" ]]; then
     log_warn "$(t wf_src_missing "$src")"
@@ -80,7 +80,7 @@ install_workflows() {
   done < <(find "$src" -type f -iname "*.json" -print0 | sort -z)
 
   if (( ${#skipped[@]} > 0 )); then
-    echo "$(t wf_skipped_header "$workflows")"
+    techo wf_skipped_header "$workflows"
     for rel in "${skipped[@]}"; do
       echo "- ${rel}"
     done
@@ -92,13 +92,13 @@ install_workflows() {
     return 0
   fi
 
-  echo "$(t wf_copied_header)"
+  techo wf_copied_header
   for rel in "${copied[@]}"; do
     echo "- ${rel}"
   done
 
   if (( ${#patched[@]} > 0 )); then
-    echo "$(t wf_adapted_header "$tier")"
+    techo wf_adapted_header "$tier"
     for rel in "${patched[@]}"; do
       echo "- ${rel}"
     done
@@ -111,7 +111,7 @@ install_workflows() {
 
   _warn_stale_tier_filenames "${copied[@]}"
 
-  echo "$(t wf_success_footer)"
+  techo wf_success_footer
   echo "------------------------------------------------"
 
   log_ok "$(t wf_installed_ok "$dest" "${#copied[@]}" "$tier")"

@@ -121,8 +121,8 @@ attach_tmux_if_interactive() {
     exec tmux attach-session -t "$TMUX_SESSION_NAME"
   fi
 
-  echo "$(t launch_tmux_no_tty "$TMUX_SESSION_NAME")"
-  echo "$(t launch_tmux_reattach_hint "$TMUX_SESSION_NAME")"
+  techo launch_tmux_no_tty "$TMUX_SESSION_NAME"
+  techo launch_tmux_reattach_hint "$TMUX_SESSION_NAME"
   # ComfyUI tourne déjà dans la session tmux détachée : on doit s'arrêter ici,
   # sinon le flux repasserait dans launch_in_tmux() puis dans le corps
   # principal de ce script et lancerait un second ComfyUI hors tmux.
@@ -131,7 +131,7 @@ attach_tmux_if_interactive() {
 
 launch_in_tmux() {
   if ! command -v tmux >/dev/null 2>&1; then
-    echo "$(t launch_tmux_missing)" >&2
+    techo launch_tmux_missing >&2
     exit 1
   fi
 
@@ -152,17 +152,17 @@ launch_in_tmux() {
   # ComfyUI au premier plan dans le pane courant — exactement ce qu'il faut
   # puisqu'on est déjà dans tmux.
   if [[ -n "${TMUX:-}" ]]; then
-    echo "$(t launch_tmux_already_inside)"
+    techo launch_tmux_already_inside
     return 0
   fi
 
   if tmux has-session -t "$TMUX_SESSION_NAME" 2>/dev/null; then
-    echo "$(t launch_tmux_existing "$TMUX_SESSION_NAME")"
+    techo launch_tmux_existing "$TMUX_SESSION_NAME"
     attach_tmux_if_interactive
   fi
 
-  echo "$(t launch_tmux_launching)"
-  echo "$(t launch_tmux_creating "$TMUX_SESSION_NAME")"
+  techo launch_tmux_launching
+  techo launch_tmux_creating "$TMUX_SESSION_NAME"
   # La session relance simplement ce même script (sans --tmux) : c'est lui
   # qui sait déjà activer le bon venv et détecter une instance déjà en
   # cours (message "ComfyUI est déjà lancé." ci-dessous). Aucune logique de
@@ -251,7 +251,7 @@ if [[ -n "${RUNPOD_POD_ID:-}" ]]; then
   echo ""
   log_ok "$(t launch_url_runpod)"
   echo -e "  ${C_BOLD}https://${RUNPOD_POD_ID}-${COMFYUI_PORT}.proxy.runpod.net${C_RESET}"
-  echo "$(t launch_url_runpod_hint "$COMFYUI_PORT")"
+  techo launch_url_runpod_hint "$COMFYUI_PORT"
 else
   echo ""
   log_ok "$(t launch_url_local)"

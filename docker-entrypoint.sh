@@ -41,11 +41,16 @@
 PROJECT_ROOT="/opt/minimax-runpod-installer"
 # shellcheck disable=SC1091
 [[ -f "${PROJECT_ROOT}/config.env" ]] && source "${PROJECT_ROOT}/config.env"
+# Repli minimal si lib/i18n.sh est exceptionnellement absent de l'image
+# (jamais le cas normalement — voir docker-build-steps-light.sh) : évite un
+# "command not found" sur t()/techo() plutôt qu'un vrai message traduit.
+t() { local key="$1"; shift || true; printf '%s' "$key"; }
+techo() { local key="$1"; shift || true; echo "$key"; }
 # shellcheck disable=SC1091
 [[ -f "${PROJECT_ROOT}/lib/i18n.sh" ]] && source "${PROJECT_ROOT}/lib/i18n.sh"
 
 if [[ "${MINIMAX_DEBUG_SLEEP:-false}" == "true" ]]; then
-  echo "$(t entrypoint_debug_sleep)"
+  techo entrypoint_debug_sleep
   exec sleep infinity
 fi
 

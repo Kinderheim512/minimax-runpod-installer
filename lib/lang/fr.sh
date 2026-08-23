@@ -2,6 +2,8 @@
 # lib/lang/fr.sh — chaînes françaises pour le t() de lib/i18n.sh.
 # Garder les clés dans le même ordre/groupement que lib/lang/en.sh pour que
 # les deux fichiers restent faciles à comparer quand une clé est ajoutée.
+# shellcheck disable=SC2034  # lu par le t()/techo() de lib/i18n.sh une fois
+# ce fichier sourcé depuis là-bas — bien utilisé, juste pas depuis ce fichier.
 declare -gA MSG=(
   # -- lib/utils.sh -----------------------------------------------------
   [log_tail_header]="----- Dernières lignes de sortie : %s -----"

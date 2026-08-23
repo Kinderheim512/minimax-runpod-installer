@@ -2,6 +2,8 @@
 # lib/lang/en.sh — English strings for lib/i18n.sh's t() lookup.
 # Keep keys in the same order/grouping as lib/lang/fr.sh so the two stay
 # easy to diff when a new key is added.
+# shellcheck disable=SC2034  # read by lib/i18n.sh's t()/techo() after this
+# file is sourced from there — genuinely used, just not from this file.
 declare -gA MSG=(
   # -- lib/utils.sh -----------------------------------------------------
   [log_tail_header]="----- Last lines of output: %s -----"
