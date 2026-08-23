@@ -72,15 +72,21 @@ install_extra_requirements
 # du pod obtenu supporte déjà ce build.
 bake_pytorch_best_guess
 
-# Pré-compile SageAttention en wheel réutilisable (voir lib/python.sh
-# ::bake_sageattention_wheel pour le détail complet) : évite qu'un conteneur
-# démarré depuis cette image ait à recompiler SageAttention depuis les
-# sources à chaque fois — c'est ce chemin qui échoue le plus souvent selon
-# l'état du pod. Best-effort et non bloquant : si ça échoue pendant le build
-# (ex: nvcc indisponible dans ce contexte CI), install_sageattention()
-# recompilera normalement au démarrage du conteneur, comme avant ce
-# mécanisme — aucune régression possible.
-bake_sageattention_wheel
+# SageAttention n'est plus pré-compilée pendant le build de l'image : cette
+# étape (bake_sageattention_wheel(), lib/python.sh) installait en plus le
+# toolkit CUDA complet via apt (plusieurs Go, requis pour disposer de nvcc)
+# par-dessus tout ce qui est déjà téléchargé (torch, stack nvidia-*, assets
+# ComfyUI), ce qui fait planter le build sur des environnements à l'espace
+# disque limité — c'est exactement pour ça que SAGEATTENTION_DOCKER_BAKE=false
+# était déjà forcé autour de `RUN ./docker-build-steps-heavy.sh` dans le
+# Dockerfile. Reste sans impact fonctionnel : SageAttention est de toute
+# façon désactivée par défaut sur les deux presets (dasiwa_mmh3v12,
+# muse_director_seedhunt — voir wizard.sh), et install_sageattention()
+# (lib/python.sh, appelée par install.sh au démarrage du conteneur) continue
+# de fonctionner normalement si SAGE_ATTENTION=true/auto est activé
+# volontairement sur un pod : elle compile alors depuis les sources à ce
+# moment-là (10-20 min), exactement comme avant que ce mécanisme de
+# pré-compilation n'existe.
 
 # Marque ces étapes comme faites dans le state file
 # (.minimax_installer_state, cf. lib/utils.sh::run_step/step_done), qui fait

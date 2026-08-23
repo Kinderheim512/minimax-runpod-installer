@@ -145,3 +145,49 @@ l'écran sans rien y toucher. Revérifié avec le même serveur HTTP local que
 précédemment : la barre de progression réapparaît bien, le code HTTP est
 toujours correctement capturé (200 → succès, 401 → message dédié), dans les
 deux cas.
+
+## Correctif additionnel n°3 : [FAIL] FL2VA/REF2VA "manquant" alors qu'ils sont bien installés
+Retour utilisateur après les deux correctifs précédents : le téléchargement
+réussit désormais (barre de progression + fichier récupéré), mais le
+résumé final de vérification (`bash install.sh`, section "Verifying the
+installation") affiche quand même :
+```
+[FAIL]  FL2VA diffusion model missing ...
+[FAIL]  REF2VA diffusion model missing ...
+```
+malgré un `MiniMax H3 text encoder present` et un `video + audio VAE
+present` corrects juste à côté — laissant penser à tort que quelque chose
+d'important a échoué (l'utilisateur note lui-même "qui ne semble pas
+bloquant", et effectivement ComfyUI démarre normalement, seul l'affichage
+du bilan est en cause).
+
+**Cause** : `lib/verify.sh` détecte les modèles installés via
+`find "$base" -type f -iname "minimax_h3_fl2va_*.safetensors"` (et
+équivalent REF2VA/text encoder/VAE). `-type f` exclut les liens
+symboliques. Or en variante `dasiwa_hybrid`, les fichiers portant
+précisément les noms attendus (`minimax_h3_fl2va_pruned_int8_convrot.
+safetensors` et `minimax_h3_ref2va_pruned_int8_convrot.safetensors`, sous
+`diffusion_models/MiniMaxH3/`) sont justement les deux liens symboliques
+créés vers l'unique checkpoint hybride téléchargé — jamais vus par `find
+-type f`, d'où le "manquant" alors même que ComfyUI les charge sans
+problème.
+
+**Correctif** :
+- Les 5 appels `find` de la section de détection des modèles H3 (`lib/
+  verify.sh`) utilisent maintenant `find -L` (suit les liens symboliques)
+  au lieu de `find` seul — comportement inchangé pour la variante
+  `"pruned"` (fichiers réels, déjà détectés avant) et pour tous les autres
+  presets, mais détection désormais correcte pour tout modèle exposé
+  uniquement via un lien symbolique.
+- Les 3 appels `du -h "$f"` (taille affichée dans le résumé informatif sous
+  chaque ligne `[ OK ]`) sont passés en `du -Lh "$f"` pour la même raison —
+  sans `-L`, `du` mesure la taille du lien lui-même (quasi nulle) plutôt
+  que celle du fichier cible, ce qui aurait affiché une taille trompeuse
+  (proche de 0) à côté d'une détection pourtant correcte.
+
+Testé avec une arborescence simulée reproduisant exactement le cas
+`dasiwa_hybrid` (1 fichier réel + 2 symlinks) : sans `-L`, `find` ne
+retourne effectivement rien (bug reproduit) ; avec `-L`, les deux modèles
+sont détectés avec la taille réelle correctement affichée. Non-régression
+vérifiée sur la variante `"pruned"` classique (fichiers réels non
+symlinkés, comportement identique à avant).

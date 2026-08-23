@@ -95,27 +95,14 @@ COPY lib/utils.sh lib/system.sh lib/comfyui.sh lib/python.sh ${PROJECT_ROOT}/lib
 RUN find "${PROJECT_ROOT}" -name "*.sh" -exec sed -i 's/\r$//' {} \; \
     && find "${PROJECT_ROOT}" -name "*.sh" -exec chmod +x {} \;
 
-# SAGEATTENTION_DOCKER_BAKE=false UNIQUEMENT pour cette étape : la
-# pré-compilation de la wheel SageAttention (bake_sageattention_wheel(),
-# lib/python.sh) installe en plus le toolkit CUDA complet via apt
-# (cuda-toolkit-13-0, plusieurs Go) pour disposer de nvcc — ajouté à tout ce
-# qui est déjà téléchargé avant (torch x2, stack nvidia-*, assets ComfyUI),
-# ça sature très probablement l'espace disque d'un runner GitHub Actions
-# standard (~14 Go libres), qui plante sans message d'erreur exploitable
-# (écriture du log elle-même en échec). Deux tentatives ont échoué
-# exactement au même endroit, y compris après réduction de
-# SAGEATTENTION_BUILD_JOBS — ce qui exclut la RAM/le parallélisme et pointe
-# vers le disque. Désactiver le bake ici est sans risque : c'est un
-# mécanisme best-effort (voir bake_sageattention_wheel()) — si la wheel
-# n'est pas pré-compilée dans l'image, install_sageattention() la compile
-# normalement au premier démarrage du conteneur, comme avant ce mécanisme.
-# Repassé à vide juste après pour ne PAS changer ce comportement sur un pod
-# qui utiliserait cette image comme base pour un build custom.
-ENV SAGEATTENTION_DOCKER_BAKE=false
-ENV SAGEATTENTION_BUILD_JOBS=4
+# SageAttention n'est plus pré-compilée à la construction de l'image (voir
+# docker-build-steps-heavy.sh : l'appel à bake_sageattention_wheel() a été
+# retiré — le toolkit CUDA complet qu'il installait en plus faisait planter
+# le build par manque d'espace disque). install_sageattention()
+# (lib/python.sh) continue de fonctionner normalement au démarrage d'un
+# conteneur si SAGE_ATTENTION=true/auto est activé : elle compile alors
+# depuis les sources à ce moment-là, comme sur un pod nu sans image Docker.
 RUN ./docker-build-steps-heavy.sh
-ENV SAGEATTENTION_DOCKER_BAKE=
-ENV SAGEATTENTION_BUILD_JOBS=
 
 # --- Étape 2/2 : reste du dépôt, pour les étapes bon marché uniquement ----
 # docker-build-steps-light.sh a besoin du reste du dépôt (presets,

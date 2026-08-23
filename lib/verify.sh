@@ -9,6 +9,16 @@
 # (bf16, fp16, fp32, nvfp4_awq, int8_convrot, pruned_int8_convrot, etc.) est
 # couvert par le caractère générique, sans avoir à toucher ce script si de
 # nouvelles variantes sortent plus tard.
+#
+# CORRECTIF (problème 2) : `find -L` (suit les liens symboliques) au lieu de
+# `find` seul sur toutes les recherches de modèles ci-dessous — sans `-L`,
+# `-type f` exclut les liens symboliques, donc tout modèle exposé au
+# workflow UNIQUEMENT via un lien symbolique (ex. le checkpoint CivitAI
+# unique de PRESET_DASIWA_MMH3V12_CIVITAI_MODELS en variante
+# H3_DASIWA_CHECKPOINT_VARIANT=dasiwa_hybrid, symlinké deux fois sous
+# minimax_h3_fl2va_*.safetensors ET minimax_h3_ref2va_*.safetensors — voir
+# config.env, PRESET_DASIWA_MMH3V12_SYMLINKS) était signalé "manquant" à
+# tort alors qu'il était bel et bien présent et fonctionnel pour ComfyUI.
 
 VERIFY_FAILED=0
 
@@ -95,15 +105,15 @@ verify_installation() {
 
   local _fl2va_files=() _ref2va_files=()
   if [[ -d "$base" ]]; then
-    mapfile -t _fl2va_files < <(find "$base" -type f -iname "minimax_h3_fl2va_*.safetensors" 2>/dev/null)
-    mapfile -t _ref2va_files < <(find "$base" -type f -iname "minimax_h3_ref2va_*.safetensors" 2>/dev/null)
+    mapfile -t _fl2va_files < <(find -L "$base" -type f -iname "minimax_h3_fl2va_*.safetensors" 2>/dev/null)
+    mapfile -t _ref2va_files < <(find -L "$base" -type f -iname "minimax_h3_ref2va_*.safetensors" 2>/dev/null)
   fi
 
   if _workflow_needs "$workflows" t2v i2v; then
     if (( ${#_fl2va_files[@]} > 0 )); then
       _v_ok "$(t verify_fl2va_ok)"
       for f in "${_fl2va_files[@]}"; do
-        log_info "   - ${f#"$base"/} ($(du -h "$f" 2>/dev/null | cut -f1))"
+        log_info "   - ${f#"$base"/} ($(du -Lh "$f" 2>/dev/null | cut -f1))"
       done
     else
       _v_fail "$(t verify_fl2va_fail)"
@@ -114,7 +124,7 @@ verify_installation() {
     if (( ${#_ref2va_files[@]} > 0 )); then
       _v_ok "$(t verify_ref2va_ok)"
       for f in "${_ref2va_files[@]}"; do
-        log_info "   - ${f#"$base"/} ($(du -h "$f" 2>/dev/null | cut -f1))"
+        log_info "   - ${f#"$base"/} ($(du -Lh "$f" 2>/dev/null | cut -f1))"
       done
     else
       _v_fail "$(t verify_ref2va_fail)"
@@ -123,12 +133,12 @@ verify_installation() {
 
   local _text_encoder_files=()
   if [[ -d "$base" ]]; then
-    mapfile -t _text_encoder_files < <(find "$base" -type f -iname "*qwen3vl*" -iname "*minimax_h3*" -iname "*.safetensors" 2>/dev/null)
+    mapfile -t _text_encoder_files < <(find -L "$base" -type f -iname "*qwen3vl*" -iname "*minimax_h3*" -iname "*.safetensors" 2>/dev/null)
   fi
   if (( ${#_text_encoder_files[@]} > 0 )); then
     _v_ok "$(t verify_text_encoder_ok)"
     for f in "${_text_encoder_files[@]}"; do
-      log_info "   - ${f#"$base"/} ($(du -h "$f" 2>/dev/null | cut -f1))"
+      log_info "   - ${f#"$base"/} ($(du -Lh "$f" 2>/dev/null | cut -f1))"
     done
   else
     _v_warn "$(t verify_text_encoder_warn)"
@@ -136,8 +146,8 @@ verify_installation() {
 
   local _video_vae="" _audio_vae=""
   if [[ -d "$base" ]]; then
-    _video_vae="$(find "$base" -type f -iname "minimax_h3_video_vae_*.safetensors" 2>/dev/null | head -n1)"
-    _audio_vae="$(find "$base" -type f -iname "minimax_h3_audio_vae_*.safetensors" 2>/dev/null | head -n1)"
+    _video_vae="$(find -L "$base" -type f -iname "minimax_h3_video_vae_*.safetensors" 2>/dev/null | head -n1)"
+    _audio_vae="$(find -L "$base" -type f -iname "minimax_h3_audio_vae_*.safetensors" 2>/dev/null | head -n1)"
   fi
   if [[ -n "$_video_vae" && -n "$_audio_vae" ]]; then
     _v_ok "$(t verify_vae_ok)"

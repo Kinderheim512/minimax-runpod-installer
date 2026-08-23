@@ -10,6 +10,30 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🐛 Fix: post-install verification (`bash install.sh` summary) always reported FL2VA/REF2VA "missing" with `H3_DASIWA_CHECKPOINT_VARIANT=dasiwa_hybrid`, even after a successful download
+
+- `verify_installation()` (`lib/verify.sh`) detects installed H3 models with
+  `find "$base" -type f -iname "minimax_h3_fl2va_*.safetensors"` (and the
+  equivalent REF2VA/text-encoder/VAE patterns). `-type f` **excludes
+  symlinks** — but in `dasiwa_hybrid` mode, the files carrying those exact
+  expected names (`minimax_h3_fl2va_pruned_int8_convrot.safetensors` /
+  `minimax_h3_ref2va_pruned_int8_convrot.safetensors`, under
+  `diffusion_models/MiniMaxH3/`) are precisely the two symlinks pointing at
+  the single downloaded hybrid checkpoint (see the `dasiwa_mmh3v12` preset
+  entry below) — they were silently skipped, so the check always reported
+  both models missing regardless of how successful the actual download and
+  symlinking had been.
+- All five `find` calls in the H3 model-detection section now use `find -L`
+  (follow symlinks), so a model exposed to the workflow only through a
+  symlink is now correctly detected as present. No behavior change for the
+  `pruned` variant (real files, already matched before) or for any other
+  preset.
+- The accompanying `du -h "$f"` size display (in the informational listing
+  under each `[ OK ]` line) is now `du -Lh "$f"` for the same reason —
+  without `-L`, `du` reports a symlink's own near-zero size instead of the
+  target file's real size, which would have shown a misleadingly tiny size
+  next to an otherwise-correct "present" result.
+
 ### 🐛 Fix: `download_civitai_model()` never sent `CIVITAI_API_KEY` — gated CivitAI files (e.g. `dasiwa_hybrid`) always failed with HTTP 401
 
 - `download_civitai_model()` (`lib/models.sh`, used by `MODEL_SOURCE=civitai`
