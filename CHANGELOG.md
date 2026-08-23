@@ -31,6 +31,13 @@ Changes since `v1.1.0`, not yet tagged.
 - A failed 401/403 response body (usually a short HTML/JSON error page, not
   binary model data) is now deleted after each attempt so it never
   corrupts a later `curl -C -` resume attempt.
+- Fixed a regression introduced by the first draft of this same fix: it
+  captured curl's HTTP status via `$(... 2>/dev/null)`, which silenced
+  curl's own progress meter (written to stderr) for the whole download —
+  for a large file this looked exactly like the installer had frozen, with
+  no output at all until completion. `2>/dev/null` removed; the HTTP status
+  (written by `-w` to stdout) is captured normally by `$(...)` without
+  touching stderr, so the progress meter is visible again.
 
 ### ✨ Feature: `dasiwa_mmh3v12` preset — choice of diffusion checkpoint(s) (official pruned pair vs. single community "DaSiWa Hybrid")
 

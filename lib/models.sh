@@ -337,7 +337,15 @@ download_civitai_model() {
 
   announce_download "$(basename "$dest")"
   while (( attempt <= max_retries )); do
-    http_code="$(curl -L -C - --retry 3 --retry-delay 2 "${auth_args[@]}" -o "$dest" -w '%{http_code}' "$url" 2>/dev/null || true)"
+    # 2>/dev/null NON utilisé ici volontairement : curl écrit sa barre de
+    # progression par défaut sur stderr, jamais capturée par $(...) (qui ne
+    # capture que stdout) — la supprimer explicitement couperait tout
+    # affichage pendant le téléchargement (fichier potentiellement gros,
+    # plusieurs minutes sans le moindre retour sinon, donnant l'impression
+    # à tort que le script est bloqué). Seul le stdout (le code HTTP, via
+    # -w) est capturé par http_code=$(...) ; le corps du fichier va dans
+    # $dest via -o, jamais sur stdout.
+    http_code="$(curl -L -C - --retry 3 --retry-delay 2 "${auth_args[@]}" -o "$dest" -w '%{http_code}' "$url" || true)"
 
     if [[ "$http_code" =~ ^2 ]] && [[ -s "$dest" ]]; then
       log_ok "$(t models_civitai_downloaded "$(basename "$dest")")"

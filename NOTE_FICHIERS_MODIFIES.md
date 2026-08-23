@@ -124,3 +124,24 @@ site) — il nécessite donc une clé API CivitAI, faute de quoi le site répond
 Testé avec un serveur HTTP local simulant le comportement CivitAI (401 sans
 en-tête `Authorization`, 200 avec la bonne clé) : le message d'erreur dédié
 s'affiche bien sans clé, et le téléchargement réussit bien avec.
+
+## Correctif additionnel n°2 : téléchargement CivitAI silencieux ("rien ne se passe")
+Retour utilisateur après le correctif 401 : une fois la clé API en place (ou
+même sans, avant échec), le téléchargement `[7/7]` du checkpoint CivitAI
+n'affichait plus RIEN à l'écran après la ligne "Download [7/7]" — donnant
+l'impression que le script était bloqué.
+
+**Cause** : le correctif précédent capturait le code HTTP via
+`http_code="$(curl ... -w '%{http_code}' ... 2>/dev/null || true)"`. Le
+`2>/dev/null` supprimait la barre de progression de curl (écrite sur
+stderr par défaut), donc plus aucun retour visuel pendant tout le
+téléchargement — pour un gros fichier, plusieurs minutes sans le moindre
+caractère affiché.
+
+**Correctif** : suppression du `2>/dev/null`. La substitution de commande
+`$(...)` ne capture que stdout (où `-w '%{http_code}'` écrit son résultat) ;
+stderr (la barre de progression) continue de s'afficher normalement à
+l'écran sans rien y toucher. Revérifié avec le même serveur HTTP local que
+précédemment : la barre de progression réapparaît bien, le code HTTP est
+toujours correctement capturé (200 → succès, 401 → message dédié), dans les
+deux cas.
