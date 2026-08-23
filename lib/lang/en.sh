@@ -200,6 +200,8 @@ declare -gA MSG=(
   [models_civitai_downloaded]="Downloaded (CivitAI): %s"
   [models_civitai_attempt_failed]="CivitAI download failed (attempt %s/%s): %s"
   [models_civitai_final_failed]="CivitAI download permanently failed: %s"
+  [models_civitai_attempt_failed_auth]="CivitAI download failed — authentication required (attempt %s/%s): %s"
+  [models_civitai_final_failed_auth]="CivitAI download permanently failed (401/403 — this file requires an account): set the CIVITAI_API_KEY environment variable (create one at https://civitai.com/user/account under \"API Keys\") and re-run: %s"
   [models_sha256_tool_missing]="sha256sum/shasum not found — SHA256 check skipped for %s."
   [models_source_unknown]="MODEL_SOURCE='%s' unknown — falling back to 'huggingface'."
   [models_civitai_deprecated_1]="MODEL_SOURCE=civitai is no longer available: CivitAI only hosts the"

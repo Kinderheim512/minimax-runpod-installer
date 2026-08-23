@@ -376,6 +376,19 @@ official pruned downloads entirely (no duplicate ~40 GB) — the one file is
 then symlinked under both the FL2VA and REF2VA filenames the workflow
 expects. Any other value falls back to `pruned`.
 
+> ⚠️ **This particular CivitAI checkpoint is gated (login-required
+> content).** Downloading it needs a `CIVITAI_API_KEY` environment variable
+> (create one at <https://civitai.com/user/account>, "API Keys" section —
+> same variable already used by `install_lora.sh`, see below). Without it
+> the download fails with an HTTP 401, retried a few times then reported as
+> a clear "authentication required" error telling you to set the key:
+>
+> ```bash
+> CIVITAI_API_KEY=xxxxx H3_DASIWA_CHECKPOINT_VARIANT=dasiwa_hybrid bash install.sh --preset=dasiwa_mmh3v12
+> # or, already installed and only the checkpoint failed:
+> CIVITAI_API_KEY=xxxxx H3_DASIWA_CHECKPOINT_VARIANT=dasiwa_hybrid bash install.sh --only-models --preset=dasiwa_mmh3v12
+> ```
+
 Adding a new preset later only means: a manifest entry in `config.env`
 (`PRESET_<NAME>`, `H3_PRESET_NAMES`, optionally `H3_PRESET_WORKFLOWS`,
 `PRESET_<NAME>_NODE_REPOS`, `PRESET_<NAME>_PIP_PACKAGES` (for a custom node

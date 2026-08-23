@@ -312,28 +312,56 @@ estimate_missing_download_size_gb() {
 # - crée le dossier de destination si nécessaire
 # - reprend un téléchargement interrompu (-C -)
 # - suit les redirections (-L)
-# - échoue proprement sur erreur HTTP (--fail) et réessaie
+# - authentification optionnelle via CIVITAI_API_KEY (en-tête "Authorization:
+#   Bearer ...") — même convention que install_lora.sh et
+#   _download_preset_workflow_from_civitai() (lib/presets.sh). Jamais requise
+#   pour un fichier public, mais INDISPENSABLE pour tout fichier marqué
+#   NSFW/accès restreint sur CivitAI (ex. certains checkpoints communautaires
+#   comme celui de PRESET_DASIWA_MMH3V12_CIVITAI_MODELS) — sans elle, CivitAI
+#   répond 401 même avec une URL de téléchargement par ailleurs correcte.
+# - suit le code HTTP réel (curl -w) plutôt que --fail seul, pour distinguer
+#   une erreur d'authentification (401/403 — message dédié suggérant
+#   CIVITAI_API_KEY) d'une erreur réseau/serveur classique (message générique,
+#   déjà existant).
 download_civitai_model() {
   local url="$1"
   local dest="$2"
   local dest_dir; dest_dir="$(dirname "$dest")"
   mkdir -p "$dest_dir"
 
+  local -a auth_args=()
+  [[ -n "${CIVITAI_API_KEY:-}" ]] && auth_args=(-H "Authorization: Bearer ${CIVITAI_API_KEY}")
+
   local max_retries="${DOWNLOAD_MAX_RETRIES:-5}"
-  local attempt=1
+  local attempt=1 http_code=""
 
   announce_download "$(basename "$dest")"
   while (( attempt <= max_retries )); do
-    if curl -L -C - --fail --retry 3 --retry-delay 2 -o "$dest" "$url"; then
+    http_code="$(curl -L -C - --retry 3 --retry-delay 2 "${auth_args[@]}" -o "$dest" -w '%{http_code}' "$url" 2>/dev/null || true)"
+
+    if [[ "$http_code" =~ ^2 ]] && [[ -s "$dest" ]]; then
       log_ok "$(t models_civitai_downloaded "$(basename "$dest")")"
       return 0
     fi
-    log_warn "$(t models_civitai_attempt_failed "$attempt" "$max_retries" "$(basename "$dest")")"
+
+    if [[ "$http_code" == "401" || "$http_code" == "403" ]]; then
+      # Réponse d'erreur (souvent une page HTML/JSON courte), jamais un
+      # fragment binaire valide : la supprimer pour ne pas fausser la
+      # reprise -C - de la tentative suivante (ou d'un futur --only-models).
+      rm -f -- "$dest" 2>/dev/null || true
+      log_warn "$(t models_civitai_attempt_failed_auth "$attempt" "$max_retries" "$(basename "$dest")")"
+    else
+      log_warn "$(t models_civitai_attempt_failed "$attempt" "$max_retries" "$(basename "$dest")")"
+    fi
     attempt=$((attempt + 1))
     [[ $attempt -le $max_retries ]] && sleep 2
   done
 
-  log_error "$(t models_civitai_final_failed "$url")"
+  if [[ "$http_code" == "401" || "$http_code" == "403" ]]; then
+    log_error "$(t models_civitai_final_failed_auth "$url")"
+  else
+    log_error "$(t models_civitai_final_failed "$url")"
+  fi
   return 1
 }
 

@@ -10,6 +10,28 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 Changes since `v1.1.0`, not yet tagged.
 
+### 🐛 Fix: `download_civitai_model()` never sent `CIVITAI_API_KEY` — gated CivitAI files (e.g. `dasiwa_hybrid`) always failed with HTTP 401
+
+- `download_civitai_model()` (`lib/models.sh`, used by `MODEL_SOURCE=civitai`
+  for the standard tier and by `PRESET_<NAME>_CIVITAI_MODELS`, e.g. the
+  `dasiwa_mmh3v12` preset's `dasiwa_hybrid` checkpoint) now sends
+  `Authorization: Bearer $CIVITAI_API_KEY` when that env var is set — same
+  convention already used by `install_lora.sh` and
+  `_download_preset_workflow_from_civitai()` (`lib/presets.sh`), just never
+  wired into this particular function. Login-gated CivitAI files (any file
+  marked NSFW/early-access on the site) always returned HTTP 401 through
+  this path before, regardless of how correct the download URL was.
+- The retry loop now inspects the real HTTP status (via `curl -w`) instead
+  of only `--fail`'s pass/fail signal, so a 401/403 is reported with a
+  dedicated message telling the user to set `CIVITAI_API_KEY` (new
+  `models_civitai_attempt_failed_auth` / `models_civitai_final_failed_auth`
+  keys, `lib/lang/en.sh` + `lib/lang/fr.sh`) instead of the generic
+  "download failed, retrying" message that gave no indication of the actual
+  cause.
+- A failed 401/403 response body (usually a short HTML/JSON error page, not
+  binary model data) is now deleted after each attempt so it never
+  corrupts a later `curl -C -` resume attempt.
+
 ### ✨ Feature: `dasiwa_mmh3v12` preset — choice of diffusion checkpoint(s) (official pruned pair vs. single community "DaSiWa Hybrid")
 
 - New `H3_DASIWA_CHECKPOINT_VARIANT` setting (`config.env`, or `--preset=dasiwa_mmh3v12`

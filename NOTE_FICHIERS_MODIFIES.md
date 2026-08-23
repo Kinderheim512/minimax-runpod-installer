@@ -92,3 +92,35 @@ Sans rien changer à sa config, un utilisateur existant garde exactement le
 même comportement qu'avant cette session (`H3_DASIWA_CHECKPOINT_VARIANT`
 vaut `"pruned"` par défaut → les deux fichiers officiels Comfy-Org
 téléchargés comme avant).
+
+## Correctif additionnel : erreur 401 lors du téléchargement du checkpoint CivitAI
+Retour utilisateur après un premier essai réel : le téléchargement du
+checkpoint `dasiwa_hybrid` échouait systématiquement avec `curl: (22) The
+requested URL returned error: 401`, jusqu'à épuisement des 5 tentatives.
+
+**Cause** : `download_civitai_model()` (`lib/models.sh`) n'envoyait jamais
+d'en-tête d'authentification. Ce checkpoint CivitAI précis est un contenu à
+accès restreint (soumis à connexion, comme tout contenu marqué NSFW sur ce
+site) — il nécessite donc une clé API CivitAI, faute de quoi le site répond
+401 même si l'URL de téléchargement est par ailleurs correcte.
+
+**Correctif** :
+- `download_civitai_model()` envoie maintenant l'en-tête `Authorization:
+  Bearer $CIVITAI_API_KEY` dès que cette variable d'environnement est
+  définie — même convention déjà utilisée par `install_lora.sh` et
+  `_download_preset_workflow_from_civitai()` (`lib/presets.sh`), qui ne
+  s'appliquait simplement pas encore à cette fonction précise.
+- La fonction distingue maintenant une erreur d'authentification (401/403 —
+  nouveau message dédié invitant à définir `CIVITAI_API_KEY`) d'une erreur
+  réseau/serveur classique (message générique inchangé).
+- Nouvelles clés de traduction `models_civitai_attempt_failed_auth` /
+  `models_civitai_final_failed_auth` dans `lib/lang/en.sh` et
+  `lib/lang/fr.sh`.
+- `config.env` (commentaire de `H3_DASIWA_HYBRID_CIVITAI_URL`), `wizard.sh`
+  (avertissement affiché dès que `dasiwa_hybrid` est choisi) et `README.md`
+  documentent maintenant explicitement ce besoin de `CIVITAI_API_KEY` pour
+  cette variante précise.
+
+Testé avec un serveur HTTP local simulant le comportement CivitAI (401 sans
+en-tête `Authorization`, 200 avec la bonne clé) : le message d'erreur dédié
+s'affiche bien sans clé, et le téléchargement réussit bien avec.

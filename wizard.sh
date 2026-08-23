@@ -188,6 +188,15 @@ case "$WIZ_PRESET" in
       "pruned|Normal pruned — 2 official Comfy-Org INT8 ConvRot checkpoints, FL2VA + REF2VA (recommended, well-tested)" \
       "dasiwa_hybrid|Pruned, modified by DaSiWa — 1 community checkpoint covering both FL2VA and REF2VA (darksidewalker, CivitAI, experimental)"
 
+    if [[ "$WIZ_DASIWA_CHECKPOINT_VARIANT" == "dasiwa_hybrid" ]]; then
+      echo ""
+      echo "  ⚠ This CivitAI checkpoint is gated (login-required content)."
+      echo "    Downloading it needs a CIVITAI_API_KEY environment variable"
+      echo "    (create a key at https://civitai.com/user/account, \"API Keys\"),"
+      echo "    e.g.: CIVITAI_API_KEY=xxxxx bash install.sh ..."
+      echo "    Without it, the download will fail with a 401 error."
+    fi
+
     # Turbo LoRA: the workflow's LoRA loader stays on "None" — unused,
     # no question.
     # Spectrum: no Spectrum node in this workflow — no question.

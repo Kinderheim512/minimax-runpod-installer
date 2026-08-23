@@ -200,6 +200,8 @@ declare -gA MSG=(
   [models_civitai_downloaded]="Téléchargé (CivitAI) : %s"
   [models_civitai_attempt_failed]="Échec du téléchargement CivitAI (tentative %s/%s) : %s"
   [models_civitai_final_failed]="Échec définitif du téléchargement CivitAI : %s"
+  [models_civitai_attempt_failed_auth]="Échec du téléchargement CivitAI — authentification requise (tentative %s/%s) : %s"
+  [models_civitai_final_failed_auth]="Échec définitif du téléchargement CivitAI (401/403 — ce fichier nécessite un compte) : définissez la variable d'environnement CIVITAI_API_KEY (créez-en une sur https://civitai.com/user/account, section « API Keys ») puis relancez : %s"
   [models_sha256_tool_missing]="sha256sum/shasum introuvable — vérification SHA256 ignorée pour %s."
   [models_source_unknown]="MODEL_SOURCE='%s' inconnu — retour à 'huggingface'."
   [models_civitai_deprecated_1]="MODEL_SOURCE=civitai n'est plus disponible : CivitAI héberge uniquement les"
