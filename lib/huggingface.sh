@@ -22,13 +22,13 @@ detect_hf_cli() {
 }
 
 hf_login() {
-  log_step "Authentification Hugging Face"
+  log_step "$(t hf_login_step)"
 
   # shellcheck disable=SC1091
   source "${VENV_DIR}/bin/activate"
   detect_hf_cli
   if [[ -z "$HF_CLI" ]]; then
-    log_error "Ni 'hf' ni 'huggingface-cli' ne sont disponibles dans le venv (installez requirements.txt d'abord)."
+    log_error "$(t hf_no_cli)"
     deactivate
     exit 1
   fi
@@ -36,24 +36,24 @@ hf_login() {
   # Déjà connecté ?
   if whoami_output="$("$HF_CLI" auth whoami 2>/dev/null || "$HF_CLI" whoami 2>/dev/null)"; then
     if [[ -n "$whoami_output" ]] && [[ "$whoami_output" != *"Not logged in"* ]]; then
-      log_ok "Déjà connecté à Hugging Face (${whoami_output})."
+      log_ok "$(t hf_already_logged_in "$whoami_output")"
       deactivate
       return 0
     fi
   fi
 
   if [[ -n "$HF_TOKEN" ]]; then
-    log_info "Connexion avec le token fourni (variable HF_TOKEN)..."
+    log_info "$(t hf_login_with_token)"
     "$HF_CLI" auth login --token "$HF_TOKEN" >>"$LOG_FILE" 2>&1
 
   else
-    log_info "Aucun token HF_TOKEN fourni : connexion interactive."
-    echo -e "${C_YELLOW}Créez un token (lecture suffit) sur https://huggingface.co/settings/tokens si besoin.${C_RESET}"
+    log_info "$(t hf_no_token_interactive)"
+    echo -e "${C_YELLOW}$(t hf_token_hint)${C_RESET}"
     "$HF_CLI" auth login || "$HF_CLI" login
   fi
   deactivate
 
-  log_ok "Authentification Hugging Face terminée."
+  log_ok "$(t hf_login_done)"
 }
 
 # Vérifie que l'utilisateur connecté a effectivement accès à UN dépôt gated
@@ -65,7 +65,7 @@ hf_login() {
 # seule fonction appelée par le reste du projet).
 hf_check_repo_access() {
   local repo="$1"
-  log_step "Vérification de l'accès au dépôt ${repo}"
+  log_step "$(t hf_access_check_step "$repo")"
 
   # shellcheck disable=SC1091
   source "${VENV_DIR}/bin/activate"
@@ -97,17 +97,17 @@ PYEOF
 
   case "$http_code" in
     200)
-      log_ok "Accès au dépôt ${repo} confirmé."
+      log_ok "$(t hf_access_confirmed "$repo")"
       return 0
       ;;
     401|403)
-      log_error "Accès refusé (HTTP ${http_code}) au dépôt gated ${repo}."
-      log_error "Rendez-vous sur https://huggingface.co/${repo} , connectez-vous, et acceptez la licence"
-      log_error "de ce dépôt avec le même compte que le token utilisé ici."
+      log_error "$(t hf_access_denied "$http_code" "$repo")"
+      log_error "$(t hf_access_denied_fix1 "$repo")"
+      log_error "$(t hf_access_denied_fix2)"
       return 1
       ;;
     *)
-      log_warn "Impossible de vérifier l'accès à ${repo} (réponse HTTP ${http_code} ou réseau indisponible). On tentera le téléchargement directement."
+      log_warn "$(t hf_access_check_failed "$repo" "$http_code")"
       return 0
       ;;
   esac

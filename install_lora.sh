@@ -41,36 +41,12 @@
 #   ./install_lora.sh --remove --personal <fichier>  idem, dans models/loras/personal/
 #   ./install_lora.sh --help                    aide détaillée
 #
-# Exemples :
-#   bash install_lora.sh https://huggingface.co/username/repo/resolve/main/mylora.safetensors
-#   bash install_lora.sh --personal https://civitai.com/api/download/models/123456
-#   bash install_lora.sh --personal https://civitai.red/api/download/models/3193337?fileId=3074134
-#   bash install_lora.sh --force https://civitai.com/api/download/models/123456
-#   bash install_lora.sh --filename my_turbo_lora.safetensors https://civitai.com/api/download/models/123456
-#   bash install_lora.sh --list
-#   bash install_lora.sh --remove anime_style.safetensors
-#   CIVITAI_API_KEY=xxxxx bash install_lora.sh https://civitai.com/api/download/models/123456
-#
-# --filename <nom> :
-#   Impose le nom du fichier local dans le dossier cible (models/loras/ ou
-#   models/loras/personal/ selon --personal), quelle que soit l'URL fournie
-#   (extension .safetensors garantie automatiquement si absente). Sans ce
-#   flag, comportement historique inchangé : nom déduit de l'URL directe, ou
-#   de l'en-tête Content-Disposition pour CivitAI. Un nom explicite évite
-#   aussi une requête réseau superflue (curl -I) rien que pour déterminer le
-#   nom quand il est déjà connu à l'avance.
-#
 # Script utilitaire additionnel : il ne modifie ni config.env, ni install.sh,
 # ni le flux d'installation existant (lib/*.sh non touchés, y compris
 # lib/personal_storage.sh — --personal se contente d'écrire dans le dossier
 # que cette dernière sait déjà lire). Il n'a besoin d'aucun outil/SDK
 # Hugging Face (pas de `hf`/`huggingface-cli`, pas de token) — uniquement
-# curl (et python3, en option, pour décoder les URL), y compris pour les
-# LoRA hébergés sur huggingface.co : un simple lien `resolve/main/...` est
-# un fichier statique téléchargeable via curl, au même titre qu'un lien
-# CivitAI ou tout autre lien .safetensors direct. La commande historique
-# `bash install_lora.sh <URL>` continue de fonctionner exactement comme
-# avant.
+# curl (et python3, en option, pour décoder les URL).
 
 set -Eeuo pipefail
 
@@ -89,6 +65,12 @@ else
   log_ok()    { echo -e "[ OK ] $*"; }
   log_warn()  { echo -e "[WARN] $*" >&2; }
   log_error() { echo -e "[FAIL] $*" >&2; }
+  # shellcheck disable=SC1091
+  if [[ -f "${PROJECT_ROOT}/lib/i18n.sh" ]]; then
+    source "${PROJECT_ROOT}/lib/i18n.sh"
+  else
+    t() { local key="$1"; shift || true; printf '%s' "$key"; }
+  fi
 fi
 
 INSTALL_DIR="${INSTALL_DIR:-/workspace/ComfyUI}"
@@ -105,8 +87,15 @@ PERSONAL_LORA_DIR="${LORA_DIR}/personal"
 MANIFEST_LORA_DIR="${LORA_DIR}/manifest"
 DOWNLOAD_MAX_RETRIES="${DOWNLOAD_MAX_RETRIES:-5}"
 
+# usage
+# Le texte d'aide (--help) est volumineux et fortement interpolé (chemins de
+# dossiers, nom du script) : gardé sous forme de deux heredocs FR/EN séparés
+# plutôt que dans lib/lang/*.sh, pour éviter la fragilité d'un printf à
+# vingt-et-quelques positions %s qui se désynchroniseraient au moindre futur
+# ajout de ligne dans une seule des deux langues.
 usage() {
-  cat <<EOF
+  if [[ "${INSTALLER_LANG:-en}" == "fr" ]]; then
+    cat <<EOF
 Usage : $0 [OPTIONS] <URL>
 
 Gestionnaire de LoRA pour ComfyUI — installe, liste ou supprime les LoRA
@@ -151,7 +140,7 @@ Authentification CivitAI (optionnelle) :
 Installation :
   $0 <URL>
       Installe le LoRA depuis <URL>. Si le fichier est déjà installé, le
-      téléchargement est sauté ("LoRA already installed.").
+      téléchargement est sauté ("LoRA déjà installé.").
 
       Exemples :
         $0 https://huggingface.co/username/repo/resolve/main/mylora.safetensors
@@ -204,11 +193,109 @@ Autres :
   -h, --help
       Affiche cette aide.
 EOF
+  else
+    cat <<EOF
+Usage: $0 [OPTIONS] <URL>
+
+LoRA manager for ComfyUI — installs, lists, or removes LoRAs found in:
+  ${LORA_DIR}
+  ${PERSONAL_LORA_DIR}  (with --personal)
+  ${MANIFEST_LORA_DIR}  (with --manifest)
+
+Supported sources (no authentication required for public content):
+  - Hugging Face: direct link .../resolve/main/file.safetensors
+  - CivitAI     : civitai.com and civitai.red
+  - any direct URL pointing to a .safetensors file
+
+--personal:
+  Installs (or lists/removes) in ${PERSONAL_LORA_DIR}
+  instead of ${LORA_DIR} — this is the ONLY subfolder
+  automatically backed up to your personal HF vault (see
+  PERSONAL_STORAGE_HF_REPO in config.env, and sync_push.sh). Use this flag
+  for any LoRA you want to find again on your next pod without
+  redownloading it. Combinable with --force, --filename, --list, --remove.
+
+--manifest:
+  Installs (or lists/removes) in ${MANIFEST_LORA_DIR}
+  instead of ${LORA_DIR} — this is the folder used internally by
+  lib/personal_storage.sh to process loras_manifest.txt (personal HF vault):
+  declarative content, re-downloaded on every restore, never itself backed
+  up to the HF vault. Mutually exclusive with --personal.
+  Combinable with --force, --filename, --list, --remove.
+
+  Example:
+    $0 --manifest https://civitai.com/api/download/models/123456
+
+CivitAI authentication (optional):
+  If the CIVITAI_API_KEY environment variable is set, it's automatically
+  used for CivitAI/civitai.red downloads (required for some restricted
+  LoRAs). No effect on other sources. Nothing to do if it isn't set.
+
+      Example:
+        CIVITAI_API_KEY=xxxxx $0 https://civitai.com/api/download/models/123456
+
+Install:
+  $0 <URL>
+      Installs the LoRA from <URL>. If the file is already installed, the
+      download is skipped ("LoRA already installed.").
+
+      Examples:
+        $0 https://huggingface.co/username/repo/resolve/main/mylora.safetensors
+        $0 https://civitai.com/api/download/models/123456
+        $0 https://civitai.red/api/download/models/3193337?fileId=3074134
+
+  $0 --personal <URL>
+      Installs in ${PERSONAL_LORA_DIR} — automatically
+      backed up by sync_push.sh / on the next "update.sh" (see
+      PERSONAL_STORAGE_HF_REPO, config.env).
+
+      Example:
+        $0 --personal https://civitai.com/api/download/models/123456
+
+  $0 --force <URL>
+      Forces a redownload even if the LoRA is already installed.
+
+      Example:
+        $0 --force https://civitai.com/api/download/models/123456
+
+  $0 --filename <name.safetensors> <URL>
+      Forces the local filename in the target folder, instead of the name
+      inferred from the URL / Content-Disposition header. Combinable with
+      --force and --personal. The .safetensors extension is guaranteed even
+      if omitted.
+
+      Example:
+        $0 --filename my_turbo_lora.safetensors https://civitai.com/api/download/models/123456
+
+Browse:
+  $0 --list [--personal]
+      Shows every LoRA installed in the relevant folder, numbered, with the
+      size of each (MB, or GB past 1 GB) plus the total count and total
+      size.
+
+      Examples:
+        $0 --list
+        $0 --list --personal
+
+Remove:
+  $0 --remove [--personal] <file.safetensors>
+      Removes a specific LoRA from the relevant folder (confirmation
+      required). Never removes the folder itself, only the given file.
+
+      Examples:
+        $0 --remove anime_style.safetensors
+        $0 --remove --personal H3-GalaxyAce.safetensors
+
+Other:
+  -h, --help
+      Shows this help.
+EOF
+  fi
 }
 
 check_comfyui_installed() {
   if [[ ! -f "${INSTALL_DIR}/main.py" ]]; then
-    log_error "ComfyUI n'est pas installé dans ${INSTALL_DIR}. Lancez d'abord : bash install.sh"
+    log_error "$(t install_comfyui_missing "$INSTALL_DIR")"
     exit 1
   fi
 }
@@ -216,7 +303,7 @@ check_comfyui_installed() {
 create_lora_folder() {
   local dir="$1"
   if [[ ! -d "$dir" ]]; then
-    log_info "Création du dossier ${dir}"
+    log_info "$(t loracli_creating_folder "$dir")"
     mkdir -p "$dir"
   fi
 }
@@ -337,26 +424,26 @@ download_lora() {
   mapfile -t auth_args < <(civitai_auth_curl_args "$url")
 
   while (( attempt <= DOWNLOAD_MAX_RETRIES )); do
-    log_info "Tentative ${attempt}/${DOWNLOAD_MAX_RETRIES}..."
+    log_info "$(t loracli_attempt "$attempt" "$DOWNLOAD_MAX_RETRIES")"
 
     local http_code
     http_code="$(curl -sS -L -C - --retry 3 --retry-delay 5 "${auth_args[@]}" -o "$dest_file" -w '%{http_code}' "$url" 2>/dev/null || true)"
 
     if [[ "$http_code" == "401" || "$http_code" == "403" ]]; then
       rm -f -- "$dest_file" 2>/dev/null || true
-      log_error "Authentication failed with CivitAI."
-      log_error "Please verify your CIVITAI_API_KEY environment variable."
+      log_error "$(t loracli_auth_failed)"
+      log_error "$(t loracli_check_apikey)"
       return 2
     fi
 
     if [[ "$http_code" == "429" ]]; then
       rm -f -- "$dest_file" 2>/dev/null || true
       if is_civitai_url "$url"; then
-        log_error "CivitAI rate limit reached."
-        log_error "Please wait a few minutes and try again."
+        log_error "$(t loracli_civitai_rate_limit)"
+        log_error "$(t loracli_wait_retry)"
       else
-        log_error "Rate limit reached (HTTP 429)."
-        log_error "Please wait a few minutes and try again."
+        log_error "$(t loracli_rate_limit_generic)"
+        log_error "$(t loracli_wait_retry)"
       fi
       return 3
     fi
@@ -364,11 +451,11 @@ download_lora() {
     if [[ "$http_code" == "503" ]]; then
       rm -f -- "$dest_file" 2>/dev/null || true
       if is_civitai_url "$url"; then
-        log_error "CivitAI is temporarily unavailable."
-        log_error "Please try again later."
+        log_error "$(t loracli_civitai_unavailable)"
+        log_error "$(t loracli_try_later)"
       else
-        log_error "Remote server temporarily unavailable (HTTP 503)."
-        log_error "Please try again later."
+        log_error "$(t loracli_remote_unavailable)"
+        log_error "$(t loracli_try_later)"
       fi
       return 4
     fi
@@ -377,10 +464,10 @@ download_lora() {
       if is_valid_safetensors_file "$dest_file"; then
         return 0
       fi
-      log_warn "Fichier téléchargé invalide (page d'erreur ou HTML reçu au lieu d'un .safetensors), nouvel essai."
+      log_warn "$(t loracli_invalid_file_retry)"
       rm -f -- "$dest_file"
     else
-      log_warn "Échec du téléchargement (tentative ${attempt}/${DOWNLOAD_MAX_RETRIES}, code HTTP : ${http_code:-inconnu})."
+      log_warn "$(t loracli_dl_attempt_failed "$attempt" "$DOWNLOAD_MAX_RETRIES" "${http_code:-$(t gpu_cuda_unknown)}")"
       rm -f -- "$dest_file" 2>/dev/null || true
     fi
 
@@ -422,10 +509,10 @@ list_loras() {
     files+=("$f")
   done < <(find "$dir" -maxdepth 1 -type f -name '*.safetensors' -print0 | sort -z)
 
-  echo "Installed LoRAs (${dir})"
+  echo "$(t loracli_installed_header "$dir")"
 
   if [[ ${#files[@]} -eq 0 ]]; then
-    echo "  (aucun LoRA installé dans ${dir})"
+    echo "$(t loracli_none_installed "$dir")"
     return 0
   fi
 
@@ -441,8 +528,8 @@ list_loras() {
   done
 
   echo "---------------------------------------"
-  printf "Total LoRAs : %d\n" "${#files[@]}"
-  printf "Total Size  : %s\n" "$(format_size "$total_bytes")"
+  echo "$(t loracli_total_loras "${#files[@]}")"
+  echo "$(t loracli_total_size "$(format_size "$total_bytes")")"
 }
 
 # remove_lora <dossier> <fichier>
@@ -454,7 +541,7 @@ remove_lora() {
   local dir="$1" requested="$2"
 
   if [[ "$requested" == */* ]]; then
-    log_error "Nom de fichier invalide : ${requested} (indiquez uniquement le nom du fichier, sans chemin)."
+    log_error "$(t loracli_invalid_filename "$requested")"
     exit 1
   fi
 
@@ -462,20 +549,20 @@ remove_lora() {
   local target="${dir}/${filename}"
 
   if [[ ! -f "$target" ]]; then
-    log_error "LoRA introuvable : ${filename} (recherché dans ${dir})"
+    log_error "$(t loracli_lora_not_found "$filename" "$dir")"
     exit 1
   fi
 
-  echo "Vous êtes sur le point de supprimer :"
+  echo "$(t loracli_about_to_remove)"
   echo "  ${target}"
-  read -r -p "Confirmer la suppression ? [y/N] " reply
+  read -r -p "$(t loracli_confirm_remove)" reply
   case "$reply" in
     y|Y|yes|Yes|YES|oui|Oui|OUI)
       rm -f -- "$target"
-      log_ok "LoRA supprimé : ${filename}"
+      log_ok "$(t loracli_removed "$filename")"
       ;;
     *)
-      log_info "Suppression annulée."
+      log_info "$(t loracli_remove_cancelled)"
       ;;
   esac
 }
@@ -483,7 +570,7 @@ remove_lora() {
 print_banner() {
   echo -e "${C_BOLD:-}${C_CYAN:-}"
   echo "  ┌────────────────────────────────────────────────────┐"
-  echo "  │  Gestionnaire de LoRA — MiniMax H3 / ComfyUI        │"
+  printf '  │  %-50s│\n' "$(t loracli_banner_title)"
   echo "  └────────────────────────────────────────────────────┘"
   echo -e "${C_RESET:-}"
 }
@@ -499,27 +586,27 @@ install_lora() {
   dest_file="${dir}/${filename}"
 
   if [[ -n "$filename_override" ]]; then
-    log_info "Nom de fichier imposé (--filename) : ${filename}"
+    log_info "$(t loracli_filename_forced "$filename")"
   else
-    log_info "Nom de fichier détecté : ${filename}"
+    log_info "$(t loracli_filename_detected "$filename")"
   fi
 
   if [[ -n "${CIVITAI_API_KEY:-}" ]] && is_civitai_url "$url"; then
-    log_info "Using CivitAI API authentication."
+    log_info "$(t loracli_civitai_auth)"
   fi
 
   if [[ -s "$dest_file" && "$force" != "true" ]]; then
-    echo "LoRA already installed."
-    log_ok "${filename} est déjà installé (${dest_file}). Utilisez --force pour retélécharger."
+    echo "$(t loracli_echo_already_installed)"
+    log_ok "$(t loracli_already_installed "$filename" "$dest_file")"
     exit 0
   fi
 
   if [[ -s "$dest_file" && "$force" == "true" ]]; then
-    log_warn "${filename} existe déjà, retéléchargement forcé (--force)."
-    echo "Download again."
+    log_warn "$(t loracli_force_redownload "$filename")"
+    echo "$(t loracli_echo_download_again)"
   fi
 
-  echo "Downloading LoRA..."
+  echo "$(t loracli_echo_downloading)"
 
   local dl_status=0
   download_lora "$url" "$dest_file" || dl_status=$?
@@ -529,19 +616,19 @@ install_lora() {
     # 2 = clé API invalide/expirée, 3 = limite de débit, 4 = service indisponible.
     exit 1
   elif [[ "$dl_status" -ne 0 ]]; then
-    log_error "Échec du téléchargement du LoRA après ${DOWNLOAD_MAX_RETRIES} tentatives."
+    log_error "$(t loracli_download_failed "$DOWNLOAD_MAX_RETRIES")"
     rm -f "$dest_file"
     exit 1
   fi
 
   if [[ ! -s "$dest_file" ]]; then
-    log_error "Le fichier téléchargé est vide : ${dest_file}"
+    log_error "$(t loracli_empty_file "$dest_file")"
     rm -f "$dest_file"
     exit 1
   fi
 
-  log_ok "LoRA installé avec succès."
-  echo "Installed:"
+  log_ok "$(t loracli_install_success)"
+  echo "$(t loracli_echo_installed)"
   echo "  ${dest_file}"
 }
 
@@ -568,7 +655,7 @@ main() {
         action="remove"
         shift
         if [[ $# -lt 1 ]]; then
-          log_error "--remove attend le nom d'un fichier en argument."
+          log_error "$(t loracli_remove_needs_arg)"
           usage
           exit 1
         fi
@@ -590,7 +677,7 @@ main() {
       --filename)
         shift
         if [[ $# -lt 1 ]]; then
-          log_error "--filename attend un nom de fichier en argument."
+          log_error "$(t loracli_filename_needs_arg)"
           usage
           exit 1
         fi
@@ -598,7 +685,7 @@ main() {
         shift
         ;;
       -*)
-        log_error "Option inconnue : $1"
+        log_error "$(t loracli_unknown_option "$1")"
         usage
         exit 1
         ;;
@@ -610,7 +697,7 @@ main() {
   done
 
   if [[ "$personal" == "true" && "$manifest" == "true" ]]; then
-    log_error "--personal et --manifest sont mutuellement exclusifs (deux dossiers cibles différents)."
+    log_error "$(t loracli_personal_manifest_exclusive)"
     exit 1
   fi
 
@@ -627,21 +714,21 @@ main() {
       ;;
     install)
       if [[ ${#positional[@]} -ne 1 ]]; then
-        log_error "Une seule URL est attendue en argument."
+        log_error "$(t loracli_one_url_expected)"
         usage
         exit 1
       fi
 
       local lora_url="${positional[0]}"
       if [[ ! "$lora_url" =~ ^https?:// ]]; then
-        log_error "URL invalide : ${lora_url}"
+        log_error "$(t loracli_invalid_url "$lora_url")"
         exit 1
       fi
 
       print_banner
       install_lora "$lora_url" "$force" "$filename_override" "$target_dir"
       if [[ "$personal" == "true" ]]; then
-        log_info "Installé dans le dossier perso — sera sauvegardé par 'bash sync_push.sh' (si PERSONAL_STORAGE_HF_REPO est configuré, voir config.env)."
+        log_info "$(t loracli_personal_saved_hint)"
       fi
       ;;
   esac

@@ -26,7 +26,7 @@ source "${PROJECT_ROOT}/lib/huggingface.sh"
 source "${PROJECT_ROOT}/lib/personal_storage.sh"
 
 if [[ ! -f "${VENV_DIR}/bin/activate" ]]; then
-  log_error "Environnement virtuel introuvable (${VENV_DIR}) — lancez d'abord bash install.sh."
+  log_error "$(t syncpush_venv_missing "$VENV_DIR")"
   exit 1
 fi
 

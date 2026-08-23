@@ -10,9 +10,19 @@ REPO_URL="https://github.com/Kinderheim512/minimax-runpod-installer.git"
 INSTALL_DIR="/workspace/minimax-runpod-installer"
 COMFY_DIR="/workspace/ComfyUI"
 
+# i18n : lib/i18n.sh n'existe pas encore avant le premier clone (dépôt pas
+# encore présent) — on tente de la sourcer une première fois (cas "dépôt déjà
+# présent"), sinon on retente juste après le clone, avant tout message
+# utilisateur qui en dépend. `t()` retombe sur un writer minimal tant que ni
+# l'un ni l'autre n'a réussi (premier message "Bootstrap..." ci-dessous),
+# pour ne jamais planter le script si les deux tentatives échouent.
+t() { local key="$1"; shift || true; printf '%s' "$key"; }
+# shellcheck disable=SC1091
+[[ -f "${INSTALL_DIR}/lib/i18n.sh" ]] && source "${INSTALL_DIR}/lib/i18n.sh"
+
 echo
 echo "=============================================================="
-echo "           MiniMax H3 Bootstrap for RunPod"
+echo "$(t bootstrap_title)"
 echo "=============================================================="
 echo
 
@@ -21,7 +31,7 @@ echo
 # --------------------------------------------------------------------------
 
 if ! command -v git >/dev/null 2>&1; then
-    echo "[ERREUR] Git n'est pas installé."
+    echo "[ERROR] $(t bootstrap_no_git)"
     exit 1
 fi
 
@@ -31,17 +41,20 @@ fi
 
 if [[ ! -d "$INSTALL_DIR/.git" ]]; then
 
-    echo "[INFO] Clonage du dépôt GitHub..."
+    echo "[INFO] $(t bootstrap_cloning)"
 
     git clone "$REPO_URL" "$INSTALL_DIR"
 
+    # shellcheck disable=SC1091
+    [[ -f "${INSTALL_DIR}/lib/i18n.sh" ]] && source "${INSTALL_DIR}/lib/i18n.sh"
+
 else
 
-    echo "[INFO] Dépôt déjà présent."
+    echo "[INFO] $(t bootstrap_already_present)"
 
     cd "$INSTALL_DIR"
 
-    echo "[INFO] Mise à jour..."
+    echo "[INFO] $(t bootstrap_updating)"
 
     git fetch origin
 
@@ -64,11 +77,11 @@ find . -name "*.sh" -exec chmod +x {} \;
 if [[ -z "${HF_TOKEN:-}" ]]; then
 
     echo
-    echo "[ATTENTION] HF_TOKEN n'est pas défini."
+    echo "[WARNING] $(t bootstrap_no_hf_token)"
     echo
-    echo "Les modèles MiniMax H3 ne pourront pas être téléchargés."
+    echo "$(t bootstrap_no_hf_token_detail)"
     echo
-    echo "Configure un Secret RunPod nommé HF_TOKEN."
+    echo "$(t bootstrap_no_hf_token_fix)"
     echo
 
 fi
@@ -86,7 +99,7 @@ fi
 if [[ ! -f "$COMFY_DIR/main.py" ]]; then
 
     echo
-    echo "[INFO] Première installation..."
+    echo "[INFO] $(t bootstrap_first_install)"
     echo
 
     ./install.sh "$@"
@@ -94,8 +107,8 @@ if [[ ! -f "$COMFY_DIR/main.py" ]]; then
 else
 
     echo
-    echo "[INFO] ComfyUI déjà installé."
-    echo "[INFO] Vérification des mises à jour..."
+    echo "[INFO] $(t bootstrap_already_installed)"
+    echo "[INFO] $(t bootstrap_checking_updates)"
     echo
 
     ./update.sh "$@" || true
@@ -107,7 +120,7 @@ fi
 # --------------------------------------------------------------------------
 
 echo
-echo "[INFO] Lancement de ComfyUI..."
+echo "[INFO] $(t bootstrap_launching)"
 echo
 
 exec ./launch.sh --tmux

@@ -2,26 +2,26 @@
 # lib/manager.sh — installation / mise à jour de ComfyUI-Manager.
 
 install_or_update_manager() {
-  log_step "ComfyUI-Manager"
+  log_step "$(t manager_step)"
 
   local nodes_dir="${INSTALL_DIR}/custom_nodes"
   local target="${nodes_dir}/ComfyUI-Manager"
   mkdir -p "$nodes_dir"
 
   if [[ -d "${target}/.git" ]]; then
-    log_info "ComfyUI-Manager déjà présent, mise à jour..."
+    log_info "$(t manager_updating)"
     local dirty
     dirty="$(git -C "$target" status --porcelain 2>/dev/null || true)"
     if [[ -n "$dirty" ]]; then
-      log_warn "Modifications locales détectées dans ComfyUI-Manager, mise à jour sautée."
+      log_warn "$(t manager_local_changes)"
     else
       retry "$DOWNLOAD_MAX_RETRIES" git -C "$target" pull --ff-only >>"$LOG_FILE" 2>&1
-      log_ok "ComfyUI-Manager mis à jour."
+      log_ok "$(t manager_updated)"
     fi
   else
-    log_info "Clonage de ComfyUI-Manager..."
+    log_info "$(t manager_cloning)"
     retry "$DOWNLOAD_MAX_RETRIES" git clone "$COMFYUI_MANAGER_REPO" "$target" >>"$LOG_FILE" 2>&1
-    log_ok "ComfyUI-Manager installé."
+    log_ok "$(t manager_installed)"
   fi
 
   if [[ -f "${target}/requirements.txt" ]]; then

@@ -38,13 +38,18 @@
 # script, qui les transmettrait tel quel à install.sh et ferait échouer sur
 # une option inconnue (vécu). Une variable d'environnement, elle, n'a pas
 # cette ambiguïté : la section "Environment Variables" de RunPod est fiable.
+PROJECT_ROOT="/opt/minimax-runpod-installer"
+# shellcheck disable=SC1091
+[[ -f "${PROJECT_ROOT}/config.env" ]] && source "${PROJECT_ROOT}/config.env"
+# shellcheck disable=SC1091
+[[ -f "${PROJECT_ROOT}/lib/i18n.sh" ]] && source "${PROJECT_ROOT}/lib/i18n.sh"
+
 if [[ "${MINIMAX_DEBUG_SLEEP:-false}" == "true" ]]; then
-  echo "MINIMAX_DEBUG_SLEEP=true — conteneur maintenu en vie sans installer ni lancer quoi que ce soit (mode debug). Connectez-vous (terminal web/SSH), diagnostiquez/corrigez, puis lancez 'bash docker-entrypoint.sh' vous-même une fois MINIMAX_DEBUG_SLEEP retiré ou passé à false pour la prochaine fois."
+  echo "$(t entrypoint_debug_sleep)"
   exec sleep infinity
 fi
 
 set -Eeuo pipefail
-PROJECT_ROOT="/opt/minimax-runpod-installer"
 cd "$PROJECT_ROOT"
 
 LOG_FILE="${PROJECT_ROOT}/logs/docker-entrypoint.log"
@@ -59,25 +64,25 @@ source "${PROJECT_ROOT}/lib/python.sh"
 
 echo -e "${C_BOLD}${C_CYAN}"
 echo "  ┌────────────────────────────────────────────────────┐"
-echo "  │  MiniMax H3 — image Docker pré-installée            │"
+printf '  │  %-50s│\n' "$(t entrypoint_banner_title)"
 echo "  └────────────────────────────────────────────────────┘"
 echo -e "${C_RESET}"
 
 if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
-  log_error "Venv introuvable dans ${VENV_DIR} — cette image a-t-elle bien été construite via le Dockerfile de ce projet (docker-build-steps-heavy.sh) ?"
+  log_error "$(t entrypoint_venv_missing "$VENV_DIR")"
   exit 1
 fi
 
 if ! command -v nvidia-smi >/dev/null 2>&1; then
-  log_error "nvidia-smi introuvable dans le conteneur — ce pod a-t-il bien un GPU NVIDIA attaché (runtime container NVIDIA) ?"
+  log_error "$(t entrypoint_no_nvidia_smi)"
   exit 1
 fi
 
-log_step "Installation de PyTorch pour le GPU de ce conteneur"
+log_step "$(t entrypoint_installing_pytorch)"
 install_pytorch
 
-log_step "Suite de l'installation (poids H3, workflows, stockage perso...)"
+log_step "$(t entrypoint_rest_of_install)"
 ./install.sh "$@"
 
-log_step "Lancement de ComfyUI"
+log_step "$(t entrypoint_launching)"
 exec ./launch.sh

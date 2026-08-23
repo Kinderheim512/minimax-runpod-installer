@@ -30,28 +30,28 @@ verify_local_file() {
   # verify_local_file <fichier_local> <taille_distante_attendue_ou_vide> <nom_pour_sha256_lookup>
   local file="$1" expected_size="$2" name="$3"
 
-  [[ -f "$file" ]] || { log_warn "Fichier absent après téléchargement : ${file}"; return 1; }
+  [[ -f "$file" ]] || { log_warn "$(t dl_file_missing_after "$file")"; return 1; }
 
   local local_size
   local_size="$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null)"
 
   if [[ -n "$expected_size" && "$expected_size" =~ ^[0-9]+$ ]]; then
     if [[ "$local_size" != "$expected_size" ]]; then
-      log_warn "Taille inattendue pour $(basename "$file") : ${local_size} octets (attendu ${expected_size})."
+      log_warn "$(t dl_unexpected_size "$(basename "$file")" "$local_size" "$expected_size")"
       return 1
     fi
   else
-    log_warn "Taille distante inconnue pour $(basename "$file"), vérification de taille sautée."
+    log_warn "$(t dl_remote_size_unknown "$(basename "$file")")"
   fi
 
   if [[ -n "${MODEL_SHA256[$name]:-}" ]]; then
-    log_info "Vérification SHA256 de ${name}..."
+    log_info "$(t dl_sha256_checking "$name")"
     local got; got="$(sha256sum "$file" | awk '{print $1}')"
     if [[ "$got" != "${MODEL_SHA256[$name]}" ]]; then
-      log_error "SHA256 invalide pour ${name} (attendu ${MODEL_SHA256[$name]}, obtenu ${got})."
+      log_error "$(t dl_sha256_invalid "$name" "${MODEL_SHA256[$name]}" "$got")"
       return 1
     fi
-    log_ok "SHA256 vérifié pour ${name}."
+    log_ok "$(t dl_sha256_ok "$name")"
   fi
 
   return 0
@@ -77,17 +77,17 @@ download_hf_file() {
   if [[ -f "$dest_file" ]]; then
     local expected; expected="$(remote_content_length "$repo" "$path")"
     if verify_local_file "$dest_file" "$expected" "$filename"; then
-      log_ok "${filename} déjà présent et valide, téléchargement sauté."
+      log_ok "$(t dl_already_valid "$filename")"
       return 0
     fi
-    log_warn "${filename} présent mais invalide/incomplet, nouveau téléchargement."
+    log_warn "$(t dl_invalid_incomplete "$filename")"
   fi
 
   announce_download "$filename"
 
   local attempt=1
   while (( attempt <= DOWNLOAD_MAX_RETRIES )); do
-    [[ "$attempt" -gt 1 ]] && log_info "Nouvelle tentative pour ${filename} (${attempt}/${DOWNLOAD_MAX_RETRIES})..."
+    [[ "$attempt" -gt 1 ]] && log_info "$(t dl_retrying "$filename" "$attempt" "$DOWNLOAD_MAX_RETRIES")"
 
     _download_via_hf_cli "$repo" "$path" "$dest_dir" && break
 
@@ -97,11 +97,11 @@ download_hf_file() {
 
   local expected; expected="$(remote_content_length "$repo" "$path")"
   if ! verify_local_file "$dest_file" "$expected" "$filename"; then
-    log_error "Échec de vérification pour ${filename} après ${DOWNLOAD_MAX_RETRIES} tentatives."
+    log_error "$(t dl_verify_failed "$filename" "$DOWNLOAD_MAX_RETRIES")"
     return 1
   fi
 
-  log_ok "${filename} téléchargé et vérifié ($(human_gb "${expected:-0}"))."
+  log_ok "$(t dl_done "$filename" "$(human_gb "${expected:-0}")")"
 }
 
 _download_via_hf_cli() {
@@ -123,7 +123,7 @@ _download_via_hf_cli() {
     run_with_progress -- hf download "$repo" "$path" --local-dir "$dest_dir" || { deactivate; return 1; }
 
     if [[ ! -f "$dest_file" ]]; then
-        log_error "Le fichier attendu est introuvable : $dest_file"
+        log_error "$(t dl_file_not_found "$dest_file")"
         deactivate
         return 1
     fi
@@ -134,7 +134,7 @@ _download_via_hf_cli() {
     run_with_progress -- huggingface-cli download "$repo" "$path" --local-dir "$dest_dir" || { deactivate; return 1; }
 
     if [[ ! -f "$dest_file" ]]; then
-        log_error "Le fichier attendu est introuvable : $dest_file"
+        log_error "$(t dl_file_not_found "$dest_file")"
         deactivate
         return 1
     fi

@@ -2,10 +2,10 @@
 # lib/system.sh — dépendances système (paquets apt).
 
 install_system_packages() {
-  log_step "Installation des paquets système"
+  log_step "$(t sys_step)"
 
   if ! require_cmd apt-get; then
-    log_warn "apt-get introuvable (image non-Debian ?). On suppose que git/wget/curl/ffmpeg/aria2/python3 sont déjà présents."
+    log_warn "$(t sys_no_apt)"
     return 0
   fi
 
@@ -25,9 +25,9 @@ install_system_packages() {
   done
 
   if [[ ${#missing[@]} -eq 0 ]]; then
-    log_ok "Tous les paquets système requis sont déjà installés."
+    log_ok "$(t sys_all_present)"
   else
-    log_info "Paquets manquants : ${missing[*]}"
+    log_info "$(t sys_missing "${missing[*]}")"
     local sudo_cmd=""
     if [[ "$(id -u)" -ne 0 ]]; then
       require_cmd sudo && sudo_cmd="sudo"
@@ -37,21 +37,21 @@ install_system_packages() {
     # empêche d'installer nos paquets depuis les dépôts Ubuntu officiels. On
     # ne bloque donc pas dessus, seule l'installation elle-même est requise.
     if ! $sudo_cmd apt-get update -y >>"$LOG_FILE" 2>&1; then
-      log_warn "apt-get update a rencontré une erreur (dépôt tiers indisponible ?) — on tente l'installation quand même."
+      log_warn "$(t sys_apt_update_warn)"
     fi
     if ! retry "$DOWNLOAD_MAX_RETRIES" $sudo_cmd apt-get install -y --no-install-recommends "${missing[@]}" >>"$LOG_FILE" 2>&1; then
-      log_error "Échec d'installation de : ${missing[*]}"
-      log_error "Consultez ${LOG_FILE} — un dépôt apt tiers cassé peut être en cause (voir 'apt-get update' ci-dessus)."
+      log_error "$(t sys_install_failed "${missing[*]}")"
+      log_error "$(t sys_install_failed_hint "$LOG_FILE")"
       exit 1
     fi
-    log_ok "Paquets système installés : ${missing[*]}"
+    log_ok "$(t sys_installed "${missing[*]}")"
   fi
 
   # pip à jour (pour l'utilisateur système ; le venv aura sa propre mise à jour)
   if require_cmd python3; then
     python3 -m pip install --upgrade pip --quiet >>"$LOG_FILE" 2>&1 || \
-      log_warn "Impossible de mettre à jour pip au niveau système (pas bloquant, le venv gère sa propre version)."
+      log_warn "$(t sys_pip_update_failed)"
   fi
 
-  log_ok "Dépendances système prêtes."
+  log_ok "$(t sys_ready)"
 }

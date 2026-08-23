@@ -53,7 +53,7 @@ notify_pod_ready_when_up() {
 
   local link=""
   [[ -n "${RUNPOD_POD_ID:-}" ]] && link="https://${RUNPOD_POD_ID}-${COMFYUI_PORT}.proxy.runpod.net"
-  notify "ComfyUI prêt ✅" "Ton pod MiniMax H3 est prêt.${link:+ ${link}}" "default" "white_check_mark,rocket"
+  notify "$(t notify_ready_title)" "$(t notify_ready_body "${link:+ ${link}}")" "default" "white_check_mark,rocket"
 }
 
 ################################################################################
@@ -109,7 +109,7 @@ watch_outputs_and_notify() {
           sleep 2
           size2="$(stat -c%s "$f" 2>/dev/null || echo 0)"
           [[ "$size1" == "$size2" ]] || continue
-          notify "Génération terminée 🎬" "$(basename "$f")" "default" "tada,clapper"
+          notify "$(t notify_gen_title)" "$(basename "$f")" "default" "tada,clapper"
         done <<< "$new_files"
       fi
     fi
@@ -121,8 +121,8 @@ watch_outputs_and_notify() {
       now="$(date +%s)"
       elapsed=$(( now - last_activity ))
       if [[ "$elapsed" -ge "$inactivity_s" ]]; then
-        notify "Pod inactif ⏸️" \
-          "Aucune génération depuis $(( elapsed / 60 )) min — pense à terminate le pod si tu as fini (facturation au temps GPU)." \
+        notify "$(t notify_inactive_title)" \
+          "$(t notify_inactive_body "$(( elapsed / 60 ))")" \
           "low" "hourglass"
         inactivity_notified="true"
       fi

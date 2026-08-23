@@ -19,15 +19,15 @@
 # démarrer.
 
 install_turbo_lora() {
-  log_step "Turbo LoRA MiniMax H3"
+  log_step "$(t lora_turbo_step)"
 
   if [[ "${MINIMAX_H3_TURBO_LORA_AUTO_DOWNLOAD:-true}" != "true" ]]; then
-    log_info "MINIMAX_H3_TURBO_LORA_AUTO_DOWNLOAD=false — téléchargement du Turbo LoRA sauté."
+    log_info "$(t lora_turbo_disabled)"
     return 0
   fi
 
   if [[ -z "${MINIMAX_H3_TURBO_LORA_URL:-}" ]]; then
-    log_warn "MINIMAX_H3_TURBO_LORA_URL non défini dans config.env — téléchargement du Turbo LoRA sauté."
+    log_warn "$(t lora_turbo_no_url)"
     return 0
   fi
 
@@ -47,12 +47,12 @@ install_turbo_lora() {
   # affecter celui d'install.sh/update.sh — seul son code de sortie compte
   # ici, testé par ce `if !`, donc sans risque avec `set -Eeuo pipefail`.
   if ! bash "${PROJECT_ROOT}/install_lora.sh" "${lora_args[@]}" >>"$LOG_FILE" 2>&1; then
-    log_warn "Échec du téléchargement du Turbo LoRA (source inaccessible, erreur réseau, ou autre) — non bloquant, consultez ${LOG_FILE}."
-    log_warn "ComfyUI reste utilisable sans ce LoRA. Réessayez plus tard avec : bash install_lora.sh ${lora_args[*]@Q}"
+    log_warn "$(t lora_turbo_dl_failed1 "$LOG_FILE")"
+    log_warn "$(t lora_turbo_dl_failed2 "${lora_args[*]@Q}")"
     return 0
   fi
 
-  log_ok "Turbo LoRA MiniMax H3 disponible dans ${INSTALL_DIR}/models/loras/ (${MINIMAX_H3_TURBO_LORA_FILENAME:-nom résolu automatiquement})."
+  log_ok "$(t lora_turbo_available "$INSTALL_DIR" "${MINIMAX_H3_TURBO_LORA_FILENAME:-$(t lora_turbo_filename_auto)}")"
 }
 
 # install_turbo_node
@@ -70,15 +70,15 @@ install_turbo_lora() {
 # n'interrompt pas install.sh/update.sh, au même titre que
 # install_turbo_lora() ci-dessus.
 install_turbo_node() {
-  log_step "Custom node MiniMax-H3 Turbo"
+  log_step "$(t node_turbo_step)"
 
   if [[ "${MINIMAX_H3_TURBO_NODE_AUTO_INSTALL:-true}" != "true" ]]; then
-    log_info "MINIMAX_H3_TURBO_NODE_AUTO_INSTALL=false — installation du custom node Turbo sautée."
+    log_info "$(t node_turbo_disabled)"
     return 0
   fi
 
   if [[ -z "${MINIMAX_H3_TURBO_NODE_REPO:-}" ]]; then
-    log_warn "MINIMAX_H3_TURBO_NODE_REPO non défini dans config.env — installation du custom node Turbo sautée."
+    log_warn "$(t node_turbo_no_repo)"
     return 0
   fi
 
@@ -87,20 +87,20 @@ install_turbo_node() {
   local target="${nodes_dir}/${name}"
 
   if [[ -d "$target" ]]; then
-    log_ok "${name} déjà présent (${target}) — aucune action (pas de mise à jour automatique)."
+    log_ok "$(t node_turbo_present "$name" "$target")"
     return 0
   fi
 
   mkdir -p "$nodes_dir"
-  log_info "Installation de ${name}..."
+  log_info "$(t node_turbo_installing "$name")"
   if ! git clone "${MINIMAX_H3_TURBO_NODE_REPO}" "$target" >>"$LOG_FILE" 2>&1; then
-    log_warn "Échec du clonage de ${name} (non bloquant) — installez-le manuellement si besoin :"
-    log_warn "  git clone ${MINIMAX_H3_TURBO_NODE_REPO} ${target}"
+    log_warn "$(t node_turbo_clone_failed1 "$name")"
+    log_warn "$(t node_turbo_clone_failed2 "$MINIMAX_H3_TURBO_NODE_REPO" "$target")"
     return 0
   fi
 
   # Aucun requirements.txt dans ce dépôt (vérifié avant modification, voir
   # Turbo_LoRA_Integration_Report.md) : pas de pip install, contrairement à
   # OPTIONAL_NODE_REPOS (lib/nodes.sh) qui en installe un si présent.
-  log_ok "${name} installé (${target})."
+  log_ok "$(t node_turbo_installed "$name" "$target")"
 }
