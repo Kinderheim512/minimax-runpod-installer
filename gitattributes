@@ -1,0 +1,23 @@
+# Force consistent line endings regardless of OS/editor, so Git never
+# needs to guess and Windows checkouts stop showing CRLF warnings.
+* text=auto eol=lf
+
+# Shell scripts and config must always stay LF (they run on Linux/RunPod
+# containers — CRLF can break execution, even if install.sh already
+# strips \r as a safety net).
+*.sh text eol=lf
+*.env text eol=lf
+
+# Text/data files — keep them LF too for consistency across the repo.
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+.dockerignore text eol=lf
+Dockerfile text eol=lf
+
+# Binary files — never touch line endings, never diff as text.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.zip binary
