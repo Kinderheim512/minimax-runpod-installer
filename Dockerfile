@@ -86,7 +86,8 @@ WORKDIR ${PROJECT_ROOT}
 # workflow, qui évite même de déclencher le build pour les commits qui ne
 # touchent à rien de pertinent pour l'image.
 COPY config.env requirements.txt docker-build-steps-heavy.sh ${PROJECT_ROOT}/
-COPY lib/utils.sh lib/system.sh lib/comfyui.sh lib/python.sh ${PROJECT_ROOT}/lib/
+COPY lib/utils.sh lib/system.sh lib/comfyui.sh lib/python.sh lib/i18n.sh ${PROJECT_ROOT}/lib/
+COPY lib/lang/ ${PROJECT_ROOT}/lib/lang/
 
 # Conversion CRLF -> LF (même geste que install.sh en tout début d'exécution,
 # utile si l'image est construite depuis un clone Windows) + droits d'exec —
