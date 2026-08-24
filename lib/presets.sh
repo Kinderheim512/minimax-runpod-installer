@@ -97,6 +97,68 @@ preset_required_repos() {
   echo "${repos[*]}"
 }
 
+# _dasiwa_variant_marker -> chemin sur stdout
+# Fichier marqueur enregistrant QUELLE variante H3_DASIWA_CHECKPOINT_VARIANT
+# a été réellement téléchargée avec succès la dernière fois, sur
+# ${INSTALL_DIR}/models — donc sur /workspace, le volume PERSISTANT RunPod
+# (survit à un redémarrage automatique du conteneur, contrairement au state
+# file .minimax_installer_state qui vit sous PROJECT_ROOT/opt — voir
+# lib/utils.sh state_file()). C'est ce marqueur, pas juste la variable
+# d'environnement du run en cours, qui permet à _dasiwa_variant_guard()
+# ci-dessous de savoir si CE run s'apprête à changer silencieusement ce qui
+# est déjà sur disque.
+_dasiwa_variant_marker() {
+  echo "${INSTALL_DIR}/models/.dasiwa_variant_installed"
+}
+
+# _dasiwa_variant_guard <presets_csv>
+# Garde d'autorisation : n'a d'effet que si le preset "dasiwa_mmh3v12" (seul
+# consommateur de H3_DASIWA_CHECKPOINT_VARIANT) est actif. Si un marqueur
+# existe déjà (une installation précédente a réussi avec une variante) ET
+# que la variante résolue pour CE run est différente, le téléchargement
+# n'est PAS lancé automatiquement : c'est exactement le scénario vécu — un
+# redémarrage automatique de l'entrypoint (crash/OOM/coupure réseau pendant
+# le gros téléchargement, PAS une action volontaire de l'utilisateur) qui
+# retombe sur "pruned" par défaut et retélécharge ~42 Go en écrasant/
+# doublant un choix "dasiwa_hybrid" déjà en place. On exige soit une
+# confirmation interactive (confirm(), lib/utils.sh — répond automatiquement
+# "non" en contexte non-interactif, ex. docker-entrypoint.sh sans tty : donc
+# refuse par défaut, jamais de blocage en attente d'une réponse qui ne
+# viendra jamais), soit un déblocage explicite et volontaire via
+# H3_DASIWA_ALLOW_VARIANT_CHANGE=true (à positionner sciemment, jamais un
+# comportement par défaut). En cas de refus, retourne 1 : download_preset_models()
+# s'arrête AVANT tout téléchargement (aucun fichier touché), et
+# install.sh (les deux points d'appel) traite déjà ce cas comme un échec
+# non bloquant pour le reste de l'installation (log_warn
+# install_preset_download_incomplete), donc ni exit ni perte du reste de
+# l'install.
+_dasiwa_variant_guard() {
+  local presets_csv="$1"
+  [[ ",${presets_csv}," == *",dasiwa_mmh3v12,"* ]] || return 0
+
+  local marker; marker="$(_dasiwa_variant_marker)"
+  [[ -f "$marker" ]] || return 0
+
+  local installed; installed="$(<"$marker")"
+  installed="${installed//[$'\t\r\n ']/}"
+  [[ -z "$installed" || "$installed" == "$H3_DASIWA_CHECKPOINT_VARIANT" ]] && return 0
+
+  log_error "$(t dasiwa_variant_mismatch_title "$installed" "$H3_DASIWA_CHECKPOINT_VARIANT")"
+  log_error "$(t dasiwa_variant_mismatch_detail)"
+
+  if [[ "${H3_DASIWA_ALLOW_VARIANT_CHANGE:-false}" == "true" ]]; then
+    log_warn "$(t dasiwa_variant_mismatch_override)"
+    return 0
+  fi
+
+  if confirm "$(t dasiwa_variant_mismatch_confirm "$installed" "$H3_DASIWA_CHECKPOINT_VARIANT")"; then
+    return 0
+  fi
+
+  log_error "$(t dasiwa_variant_mismatch_aborted)"
+  return 1
+}
+
 # download_preset_models <presets_csv>
 # Télécharge chaque fichier manquant/invalide des manifestes des presets
 # actifs. Réutilise download_hf_file() (lib/download.sh) telle quelle :
@@ -107,6 +169,8 @@ preset_required_repos() {
 download_preset_models() {
   local presets_csv="$1"
   [[ -z "$presets_csv" ]] && return 0
+
+  _dasiwa_variant_guard "$presets_csv" || return 1
 
   local -a repos=()
   # shellcheck disable=SC2207
@@ -182,6 +246,16 @@ download_preset_models() {
       download_civitai_model "$civitai_url" "${base}/${civitai_path}" || return 1
     done
   done
+
+  # Marqueur écrit UNIQUEMENT après succès complet de tout ce qui précède
+  # (tout `|| return 1` ci-dessus saute cette ligne) : voir
+  # _dasiwa_variant_guard()/_dasiwa_variant_marker() plus haut. N'enregistre
+  # que si dasiwa_mmh3v12 est actif — les autres presets ne touchent pas à
+  # H3_DASIWA_CHECKPOINT_VARIANT.
+  if [[ ",${presets_csv}," == *",dasiwa_mmh3v12,"* ]]; then
+    mkdir -p "$base"
+    echo "$H3_DASIWA_CHECKPOINT_VARIANT" > "$(_dasiwa_variant_marker)"
+  fi
 
   log_ok "$(t presets_models_downloaded "$presets_csv")"
 }

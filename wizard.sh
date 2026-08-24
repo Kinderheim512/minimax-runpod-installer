@@ -290,6 +290,30 @@ else
 fi
 export SAGE_ATTENTION="$WIZ_SAGE"
 export H3_DASIWA_CHECKPOINT_VARIANT="$WIZ_DASIWA_CHECKPOINT_VARIANT"
+
+# Persist this specific choice on /workspace (RunPod's PERSISTENT volume —
+# unlike everything else on this line, which only lives in this shell's
+# exported environment for this one run). Without this, an automatic
+# entrypoint restart (container crash/OOM/spot interruption — not a new
+# pod) re-runs install.sh with a fresh environment and silently falls back
+# to "pruned", re-downloading ~42 GB you didn't ask for. See the matching
+# comment in config.env (H3_USER_CHOICES_FILE) for the read side. Only the
+# variant is written here — never HF_TOKEN/CIVITAI_API_KEY: those are
+# secrets and don't belong in a plaintext file on disk. Set them in
+# RunPod's "Environment Variables" tab so they also survive a restart.
+if [[ "$WIZ_PRESET" == "dasiwa_mmh3v12" ]]; then
+  _h3_persist_root="${INSTALL_DIR:-/workspace/ComfyUI}"
+  _h3_choices_file="$(dirname "$_h3_persist_root")/.minimax_user_choices.env"
+  if mkdir -p "$(dirname "$_h3_choices_file")" 2>/dev/null; then
+    {
+      echo "# Written by wizard.sh — DaSiWa checkpoint variant, persisted so"
+      echo "# an automatic container restart doesn't silently switch it back"
+      echo "# to \"pruned\". Safe to delete; re-run wizard.sh to recreate it."
+      echo "H3_DASIWA_CHECKPOINT_VARIANT=\"${WIZ_DASIWA_CHECKPOINT_VARIANT}\""
+    } > "$_h3_choices_file" 2>/dev/null || echo "  (warning: could not persist the checkpoint choice to ${_h3_choices_file} — an automatic restart may fall back to 'pruned')"
+  fi
+  unset _h3_persist_root _h3_choices_file
+fi
 if [[ "$WIZ_SPECTRUM" == "on" ]]; then
   export INSTALL_SPECTRUM="true"
 else
