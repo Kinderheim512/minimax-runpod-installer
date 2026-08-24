@@ -57,4 +57,14 @@ for step in manager_installed optional_nodes model_folders; do
   mark_step_done "$step"
 done
 
-log_ok "Image Docker pré-installée : étapes bon marché terminées."
+# --- Nettoyage (même raison que docker-build-steps-heavy.sh) ---------------
+# Ce script est sa PROPRE couche Docker (COPY . puis RUN ./docker-build-steps-light.sh
+# dans le Dockerfile) : install_or_update_manager/install_optional_nodes
+# font aussi des pip install (requirements.txt de ComfyUI-Manager et des
+# nœuds custom optionnels) — PIP_NO_CACHE_DIR (Dockerfile) couvre déjà
+# l'essentiel, ceci est un filet de sécurité, dans la même couche.
+log_step "Nettoyage de la couche Docker (caches résiduels)"
+rm -rf /root/.cache/pip /root/.cache/* /tmp/* 2>/dev/null || true
+find "${VENV_DIR}" -type d -name "__pycache__" -prune -exec rm -rf {} + 2>/dev/null || true
+
+log_ok "Image Docker pré-installée : étapes bon marché terminées (nettoyée)."

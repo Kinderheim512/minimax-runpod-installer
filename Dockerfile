@@ -70,6 +70,20 @@ ENV PROJECT_ROOT=/opt/minimax-runpod-installer
 # détection stricte habituelle.
 ENV PREFER_CUDA130=true
 
+# Optimisation taille d'image : empêche pip de conserver une copie de
+# chaque wheel téléchargée dans ~/.cache/pip (torch/torchvision/torchaudio
+# cu130 + tout requirements.txt tiers). Sans ça, cette copie s'ajoute au
+# package réellement installé dans site-packages, DANS LA MÊME couche
+# Docker (le RUN qui suit) — donc gonfle l'image sans aucun bénéfice
+# (un nettoyage dans une couche ultérieure ne réduirait rien : les
+# couches Docker sont cumulatives, seule l'absence de création du cache,
+# ou sa suppression dans LA MÊME couche, compte). Sans effet sur
+# install.sh/update.sh sur pod nu (ENV Docker uniquement, jamais
+# positionnée sur un pod classique) — le cache pip y reste utile (ex:
+# ré-exécutions locales).
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
 WORKDIR ${PROJECT_ROOT}
 
 # --- Étape 1/2 : fichiers dont dépendent les étapes COÛTEUSES uniquement ---

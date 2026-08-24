@@ -106,4 +106,26 @@ for step in system_packages comfyui_cloned python_venv comfyui_requirements; do
   mark_step_done "$step"
 done
 
-log_ok "Image Docker pré-installée : étapes coûteuses terminées."
+# --- Nettoyage (réduit la taille de CETTE couche Docker) --------------------
+# Exécuté ici, dans le même script/RUN que install_system_packages et tous
+# les pip install ci-dessus — donc dans la MÊME couche Docker que la
+# création de ces fichiers temporaires. Un nettoyage fait dans une étape
+# Docker ultérieure (ex: un RUN séparé, ou docker-build-steps-light.sh)
+# n'économiserait RIEN sur la taille réelle de l'image : les couches Docker
+# sont cumulatives, ce qui est écrit dans une couche antérieure doit être
+# téléchargé/extrait même s'il est supprimé plus tard. PIP_NO_CACHE_DIR
+# (Dockerfile) évite déjà l'essentiel côté pip ; ce qui suit couvre le
+# reste (apt, résidus éventuels) — jamais exécuté par install.sh/update.sh
+# sur pod nu, ce script n'étant appelé que par le Dockerfile.
+log_step "Nettoyage de la couche Docker (apt, caches résiduels)"
+if require_cmd apt-get; then
+  sudo_cmd=""
+  [[ "$(id -u)" -ne 0 ]] && require_cmd sudo && sudo_cmd="sudo"
+  $sudo_cmd apt-get clean >>"$LOG_FILE" 2>&1 || true
+  $sudo_cmd rm -rf /var/lib/apt/lists/* >>"$LOG_FILE" 2>&1 || true
+fi
+# Filet de sécurité si un outil a malgré tout écrit hors de PIP_NO_CACHE_DIR
+# (ex: pip < certaines versions, ou cache d'un autre outil que pip).
+rm -rf /root/.cache/pip /root/.cache/* /tmp/* 2>/dev/null || true
+find "${VENV_DIR}" -type d -name "__pycache__" -prune -exec rm -rf {} + 2>/dev/null || true
+log_ok "Image Docker pré-installée : étapes coûteuses terminées (nettoyée)."
