@@ -148,7 +148,22 @@ run_step "system_packages"    install_system_packages    "$FORCE"
 detect_gpu
 detect_system_ram
 if ! command -v git-lfs >/dev/null 2>&1; then
-    apt-get install -y git-lfs
+    # Sur une image déjà pré-installée, l'étape "system_packages" est
+    # marquée comme faite (state file) et son propre `apt-get update` est
+    # donc sauté. Si le cache apt de cette image n'a jamais été rafraîchi,
+    # `apt-get install -y git-lfs` échoue avec "Unable to locate package"
+    # même si le paquet existe bien dans les dépôts. On refait un update
+    # ciblé ici, sans bloquer dessus (même tolérance que install_system_packages
+    # dans lib/system.sh : un dépôt tiers cassé ne doit pas empêcher
+    # d'installer depuis les dépôts officiels).
+    sudo_cmd=""
+    if [[ "$(id -u)" -ne 0 ]]; then
+        command -v sudo >/dev/null 2>&1 && sudo_cmd="sudo"
+    fi
+    if ! $sudo_cmd apt-get update -y; then
+        log_warn "$(t sys_apt_update_warn)"
+    fi
+    $sudo_cmd apt-get install -y git-lfs
     git lfs install
 fi
 run_step "comfyui_cloned"     clone_or_update_comfyui     "$FORCE"
