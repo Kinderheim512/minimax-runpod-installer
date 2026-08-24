@@ -308,10 +308,8 @@ declare -gA MSG=(
   # -- lib/optimization.sh -----------------------------------------------------
   [opt_step]="Calcul des optimisations selon le GPU"
   [opt_highvram_forced]="COMFY_HIGHVRAM=true (forcé) → --highvram (tout gardé sur GPU)."
-  [opt_highvram_false_ge24]="COMFY_HIGHVRAM=false (forcé) → gestion normale + --reserve-vram 2 (pas de --highvram)."
+  [opt_dynamicvram_trusted]="VRAM %s Go >= 24 Go → aucun flag de gestion VRAM ajouté, DynamicVRAM gère l'offloading (voir commentaire ci-dessus)."
   [opt_highvram_false_lt24]="COMFY_HIGHVRAM=false (forcé), VRAM < 24 Go → --lowvram --reserve-vram 1."
-  [opt_highvram_auto_ge48]="COMFY_HIGHVRAM=auto, VRAM %s Go (marge de sécurité %s Go appliquée) >= 48 Go → --highvram."
-  [opt_highvram_auto_ge24]="COMFY_HIGHVRAM=auto, VRAM %s Go (marge de sécurité appliquée) < 48 Go → gestion normale + --reserve-vram 2 (pas de --highvram)."
   [opt_highvram_auto_lt24]="COMFY_HIGHVRAM=auto, VRAM < 24 Go → --lowvram --reserve-vram 1 (offloading actif, comme documenté par l'équipe ComfyUI pour H3 sur RTX 3060)."
   [opt_pinned_forced_true]="COMFY_PINNED_MEMORY=true (forcé) → --disable-pinned-memory."
   [opt_pinned_forced_false]="COMFY_PINNED_MEMORY=false (forcé) → pinning mémoire laissé actif (comportement ComfyUI par défaut)."

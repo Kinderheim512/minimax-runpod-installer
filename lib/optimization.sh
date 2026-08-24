@@ -17,25 +17,37 @@ compute_optimization_flags() {
   env_vars+=("HF_XET_HIGH_PERFORMANCE=1")
 
   # --- gestion mémoire selon la VRAM -------------------------------------
-  # --highvram désactive tout l'offloading CPU<->GPU de ComfyUI (modèles,
-  # text encoder, VAE gardés en VRAM en permanence). Sur un GPU tout juste
-  # à 48 Go (RTX A6000, RTX 6000 Ada...), le pic réel (poids + activations +
-  # overhead allocateur CUDA) dépasse régulièrement les 48 Go nominaux et
-  # provoque un CUDA OOM systématique sur les workflows H3 Reference-to-
-  # Video — --highvram est donc la cause la plus probable des OOM observés
-  # sur cette classe de carte. On applique ici la même marge de sécurité que
-  # pour le palier de poids H3 (H3_TIER_VRAM_SAFETY_MARGIN_GB, cf. lib/
-  # gpu.sh) plutôt que le seuil brut, et on garde un contrôle explicite via
-  # COMFY_HIGHVRAM dans config.env :
-  #   - true  : force --highvram, quelle que soit la VRAM détectée.
-  #   - false : force la gestion normale (pas de --highvram), quelle que
-  #             soit la VRAM détectée.
-  #   - auto  (défaut) : décide selon la VRAM détectée moins la marge de
-  #             sécurité — n'active --highvram que sur les GPU qui ont une
-  #             marge réelle au-dessus de 48 Go (A100/H100/H200...), pas sur
-  #             les cartes tout juste à 48 Go.
+  # ComfyUI utilise désormais DynamicVRAM par défaut (NVIDIA + PyTorch 2.8+
+  # + non-WSL — cf. blog.comfy.org "Dynamic VRAM in ComfyUI: Saving Local
+  # Models from RAMmageddon", et discussion Comfy-Org/ComfyUI #12699). Ce
+  # système surveille la pression mémoire réelle PENDANT l'exécution et
+  # déplace les poids entre GPU/RAM/disque à la demande, au lieu de
+  # l'ancienne estimation faite une fois au chargement — plus d'OOM causés
+  # par un offloading insuffisant, chargement de modèle quasi instantané.
+  # Le venv de ce projet installe toujours PyTorch bien au-dessus de 2.8
+  # (voir PYTORCH_BUILD_TABLE, lib/python.sh) sur des conteneurs Linux
+  # jamais WSL : les conditions sont donc réunies sur toute installation
+  # standard de ce projet.
+  #
+  # Point critique (ancien historique de ce fichier, corrigé ici) :
+  # --highvram fait partie de la liste OFFICIELLE des flags qui DÉSACTIVENT
+  # DynamicVRAM (avec --disable-dynamic-vram, --gpu-only, --novram, --cpu).
+  # Le forcer revient donc à revenir à l'ANCIEN système, moins performant et
+  # plus sujet aux OOM — l'exact opposé de l'effet recherché. --reserve-vram
+  # n'est pas dans cette liste, mais devient largement redondant : la
+  # recommandation communautaire actuelle (cf. guide InstaSD "ComfyUI VRAM
+  # Guide: Run MiniMax H3 on 8-16 GB Cards") est qu'à partir de 24 Go de
+  # VRAM, aucun flag de gestion mémoire n'est nécessaire — DynamicVRAM gère
+  # déjà tout seul, mieux que ces réglages manuels.
+  #   - true  : force --highvram — DÉCONSEILLÉ désormais (désactive
+  #             DynamicVRAM), gardé uniquement pour compatibilité/debug si
+  #             vous devez vraiment tout garder en VRAM sans offloading.
+  #   - false : ne force jamais --highvram (recommandé).
+  #   - auto  (défaut) : aucun flag de gestion VRAM sur les GPU >= 24 Go
+  #             (laisse DynamicVRAM opérer) ; conserve un repli
+  #             --lowvram --reserve-vram 1 en dessous de 24 Go, faute de
+  #             retour d'expérience sur ce segment avec DynamicVRAM.
   local highvram_mode="${COMFY_HIGHVRAM:-auto}"
-  local vram_for_highvram=$(( GPU_VRAM_GB - H3_TIER_VRAM_SAFETY_MARGIN_GB ))
 
   case "$highvram_mode" in
     true)
@@ -43,24 +55,19 @@ compute_optimization_flags() {
       log_info "$(t opt_highvram_forced)"
       ;;
     false)
-      if (( GPU_VRAM_GB >= 24 )); then
-        flags+=("--reserve-vram" "2")
-        log_info "$(t opt_highvram_false_ge24)"
-      else
+      if (( GPU_VRAM_GB < 24 )); then
         flags+=("--lowvram" "--reserve-vram" "1")
         log_info "$(t opt_highvram_false_lt24)"
+      else
+        log_info "$(t opt_dynamicvram_trusted "$GPU_VRAM_GB")"
       fi
       ;;
     auto|*)
-      if (( vram_for_highvram >= 48 )); then
-        flags+=("--highvram")
-        log_info "$(t opt_highvram_auto_ge48 "$GPU_VRAM_GB" "$H3_TIER_VRAM_SAFETY_MARGIN_GB")"
-      elif (( GPU_VRAM_GB >= 24 )); then
-        flags+=("--reserve-vram" "2")
-        log_info "$(t opt_highvram_auto_ge24 "$GPU_VRAM_GB")"
-      else
+      if (( GPU_VRAM_GB < 24 )); then
         flags+=("--lowvram" "--reserve-vram" "1")
         log_info "$(t opt_highvram_auto_lt24)"
+      else
+        log_info "$(t opt_dynamicvram_trusted "$GPU_VRAM_GB")"
       fi
       ;;
   esac
