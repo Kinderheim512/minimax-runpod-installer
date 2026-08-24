@@ -190,11 +190,21 @@ case "$WIZ_PRESET" in
 
     if [[ "$WIZ_DASIWA_CHECKPOINT_VARIANT" == "dasiwa_hybrid" ]]; then
       echo ""
-      echo "  ⚠ This CivitAI checkpoint is gated (login-required content)."
-      echo "    Downloading it needs a CIVITAI_API_KEY environment variable"
-      echo "    (create a key at https://civitai.com/user/account, \"API Keys\"),"
-      echo "    e.g.: CIVITAI_API_KEY=xxxxx bash install.sh ..."
-      echo "    Without it, the download will fail with a 401 error."
+      echo "  ⚠ This checkpoint is served from a gated HuggingFace repo"
+      echo "    (Kinderheim/private, auto-approved) by default — faster than"
+      echo "    CivitAI, but access must be granted manually once:"
+      echo "    1. Visit https://huggingface.co/Kinderheim/private/tree/main"
+      echo "       while logged into your HF account and click \"Agree and"
+      echo "       access repository\" (instant, but a HF_TOKEN alone will"
+      echo "       NOT work if this step is skipped — hf download returns a"
+      echo "       403 otherwise)."
+      echo "    2. Create a read token at https://huggingface.co/settings/tokens"
+      echo "       and pass it as HF_TOKEN=xxxxx, e.g.:"
+      echo "       HF_TOKEN=xxxxx bash install.sh ..."
+      echo "    Falling back to CivitAI instead (H3_DASIWA_HYBRID_HF_REPO=\"\")"
+      echo "    needs a CIVITAI_API_KEY environment variable instead (create"
+      echo "    a key at https://civitai.com/user/account, \"API Keys\"), and"
+      echo "    is noticeably slower (single-connection download)."
     fi
 
     # Turbo LoRA: the workflow's LoRA loader stays on "None" — unused,
