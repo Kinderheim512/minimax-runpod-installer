@@ -107,8 +107,16 @@ ask_workflows() {
 # added tomorrow, this script adapts without modification.
 declare -a H3_PRESET_REPLACES_STANDARD_TIER=()
 _replaces_line="$(grep -E '^H3_PRESET_REPLACES_STANDARD_TIER=' "${PROJECT_ROOT}/config.env" || true)"
-if [[ -n "$_replaces_line" ]]; then
-  eval "$_replaces_line"
+# Parsed without `eval`: config.env is a trusted local file today, but
+# eval-ing an arbitrary line from it means a corrupted/tampered config.env
+# could execute arbitrary shell here. The expected format is a plain bash
+# array literal, e.g. H3_PRESET_REPLACES_STANDARD_TIER=(name1 name2) — we
+# only ever need the bare, unquoted preset names inside the parentheses, so
+# a pattern-match extraction gives the exact same result without ever
+# invoking the shell parser/executor on file content.
+if [[ "$_replaces_line" =~ ^H3_PRESET_REPLACES_STANDARD_TIER=\((.*)\)$ ]]; then
+  # shellcheck disable=SC2206  # word-splitting on space is intentional here
+  H3_PRESET_REPLACES_STANDARD_TIER=(${BASH_REMATCH[1]})
 fi
 
 preset_replaces_tier() {

@@ -35,7 +35,12 @@ detect_gpu() {
   GPU_NAME="$(echo "$line" | awk -F',' '{gsub(/^ +| +$/,"",$1); print $1}')"
   GPU_VRAM_MB="$(echo "$line" | awk -F',' '{gsub(/^ +| +$/,"",$2); print $2}')"
   GPU_DRIVER="$(echo "$line" | awk -F',' '{gsub(/^ +| +$/,"",$3); print $3}')"
-  GPU_VRAM_GB=$(( GPU_VRAM_MB / 1000 ))
+  # nvidia-smi reports memory.total in MiB (binary), not decimal MB — divide
+  # by 1024 (not 1000) so a card the OS/vendor calls "24 GB" (really ~24576
+  # MiB) reports as 24 here too. Dividing by 1000 previously under-reported
+  # VRAM by ~4-7%, which could push a GPU right at a tier threshold
+  # (H3_TIER_MIN_VRAM_*_GB in config.env) into the wrong tier.
+  GPU_VRAM_GB=$(( GPU_VRAM_MB / 1024 ))
   GPU_CUDA_VERSION="$(nvidia-smi | grep -oP 'CUDA Version:\s*\K[0-9.]+' | head -n1 || true)"
 
   log_info "$(t gpu_detected_name "$GPU_NAME")"
@@ -44,6 +49,7 @@ detect_gpu() {
   log_info "$(t gpu_cuda_driver "${GPU_CUDA_VERSION:-$(t gpu_cuda_unknown)}")"
 
   local known="false"
+  local k
   for k in "${GPU_KNOWN_LIST[@]}"; do
     if [[ "$GPU_NAME" == *"$k"* ]]; then known="true"; break; fi
   done

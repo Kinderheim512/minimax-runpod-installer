@@ -238,11 +238,26 @@ step_done() {
 }
 
 mark_step_done() {
+  # Locked (best-effort) read-modify-write: two install.sh runs started at
+  # the same time (e.g. accidentally launched twice) could otherwise race
+  # on this file — both read "not done yet" and both append, or a write
+  # from one interleaves with the other's. Not a scenario this installer
+  # is normally exposed to (one interactive/scripted run at a time), but
+  # cheap to close off. flock isn't guaranteed present on every base image,
+  # so this degrades gracefully to the old unlocked behavior if missing —
+  # same pattern as require_cmd fuser in wait_for_apt_lock() above.
   local step="$1"
   local f; f="$(state_file)"
   mkdir -p "$(dirname "$f")"
   touch "$f"
-  grep -qxF "$step" "$f" 2>/dev/null || echo "$step" >> "$f"
+  if require_cmd flock; then
+    (
+      flock -x 200
+      grep -qxF "$step" "$f" 2>/dev/null || echo "$step" >> "$f"
+    ) 200>"${f}.lock"
+  else
+    grep -qxF "$step" "$f" 2>/dev/null || echo "$step" >> "$f"
+  fi
 }
 
 run_step() {

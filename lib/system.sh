@@ -32,6 +32,12 @@ install_system_packages() {
     if [[ "$(id -u)" -ne 0 ]]; then
       require_cmd sudo && sudo_cmd="sudo"
     fi
+    # Sur un pod RunPod qui vient de démarrer, l'image de base lance parfois
+    # son propre apt-get/unattended-upgrades en arrière-plan : sans attendre
+    # ici, cet apt-get échouerait immédiatement avec "Could not get lock"
+    # (même raison d'être que dans lib/python.sh, cf. wait_for_apt_lock()
+    # dans lib/utils.sh).
+    wait_for_apt_lock
     # `apt-get update` peut renvoyer une erreur à cause d'un dépôt tiers cassé
     # (ex: un dépôt ajouté manuellement sur l'image de base) sans que cela
     # empêche d'installer nos paquets depuis les dépôts Ubuntu officiels. On

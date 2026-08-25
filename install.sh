@@ -51,10 +51,14 @@ source "${PROJECT_ROOT}/config.env"
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/utils.sh"
 enable_error_trap
-if ! command -v unzip >/dev/null 2>&1; then
-    apt-get update -qq
-    apt-get install -y unzip
-fi
+# Note: `unzip` is installed (with sudo detection, apt lock wait, and
+# retry) by install_system_packages() below (lib/system.sh, run as the
+# "system_packages" step) — it's already in that function's package list,
+# and nothing before that step needs unzip. An earlier raw
+# `apt-get install -y unzip` used to live here, but it bypassed
+# wait_for_apt_lock() (lib/utils.sh) and the sudo_cmd detection used
+# everywhere else, reintroducing the exact "Could not get lock" race that
+# wait_for_apt_lock() exists to prevent — removed as redundant.
 # shellcheck disable=SC1091
 source "${PROJECT_ROOT}/lib/system.sh"
 # shellcheck disable=SC1091
