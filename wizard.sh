@@ -360,6 +360,78 @@ echo ""
 read -r -p "  Launch ComfyUI now (tmux session)? [Y/n] " launch_confirm
 if [[ "$launch_confirm" =~ ^[nN] ]]; then
   echo "  Done. To launch later: bash launch.sh --tmux"
+  echo "  (extra ComfyUI flags: set EXTRA_LAUNCH_ARGS in config.env, or re-run wizard.sh)"
   exit 0
 fi
+
+# --- ComfyUI launch flags --------------------------------------------------
+# Three simple choices, not a curated multi-select:
+#   1) automatic  — the installer's GPU-tuned flags (lib/optimization.sh)
+#                   PLUS config.env's own EXTRA_LAUNCH_ARGS default. Same as
+#                   not touching anything.
+#   2) bare       — nothing at all: skips even the GPU-tuned flags, launches
+#                   literally `python main.py --listen ... --port ...` and
+#                   nothing else. Sets MINIMAX_BARE_LAUNCH=true, which
+#                   launch.sh checks BEFORE loading the optimization flags
+#                   file (see launch.sh) — this is the only way to get a
+#                   truly empty launch, since exporting EXTRA_LAUNCH_ARGS=""
+#                   alone would still fall back to config.env's own default
+#                   (its "${EXTRA_LAUNCH_ARGS:-...}" treats empty the same
+#                   as unset).
+#   3) custom     — type any flag(s) yourself (cheat sheet below), passed
+#                   through as-is via EXTRA_LAUNCH_ARGS. The GPU-tuned flags
+#                   from option 1 still apply underneath — this only adds
+#                   on top of them, it does not replace them.
+echo ""
+echo "  ComfyUI launch flags :"
+echo "   1) Automatic — the installer's GPU-tuned settings only  [default]"
+echo "   2) Bare — nothing at all, not even the GPU-tuned flags"
+echo "   3) Custom — type any flag(s) yourself, on top of the GPU-tuned settings (list below)"
+read -r -p "  Choice [1-3, Enter = 1] : " launch_flags_choice
+WIZ_LAUNCH_FLAGS=""
+WIZ_BARE_LAUNCH="false"
+case "$launch_flags_choice" in
+  2)
+    WIZ_BARE_LAUNCH="true"
+    ;;
+  3)
+    echo ""
+    echo "  VRAM management (advanced) — the installer already picks ONE of these"
+    echo "  automatically based on your detected GPU (see lib/optimization.sh). Only"
+    echo "  type one of these if you want to override that choice for this run:"
+    echo "    --highvram    Keep everything in VRAM, no offloading. Fastest if it fits."
+    echo "    --lowvram     Offload aggressively to save VRAM on a tight GPU."
+    echo "    --novram      Minimum-VRAM mode — slowest, most conservative."
+    echo "    --cpu         Force CPU only, no GPU acceleration (debugging)."
+    echo "    --gpu-only    Never offload anything to RAM/disk."
+    echo "    --reserve-vram N   Reserve N GB of VRAM headroom (used with --lowvram)."
+    echo "  ⚠ ComfyUI refuses to start if you combine two of these AND the installer's"
+    echo "  own pick is still active — if that happens, set COMFY_HIGHVRAM=true or"
+    echo "  =false in config.env instead of typing the flag here, so the installer"
+    echo "  uses your choice instead of adding its own. (Or pick option 2 above —"
+    echo "  Bare — to drop the installer's pick entirely and start clean.)"
+    echo ""
+    echo "  Other useful flags :"
+    echo "    --preview-method auto   Live preview thumbnails during generation."
+    echo "    --enable-cors-header    Allow cross-origin API requests (some front-ends need it)."
+    echo "    --verbose DEBUG         Much more detailed console/log output."
+    echo "    --disable-metadata      Don't embed the workflow JSON into saved outputs."
+    echo "    --multi-user            Separate settings/queue per browser."
+    echo "    --disable-auto-launch   Skip trying to open a local browser on start."
+    echo "  (config.env's own default, used whenever this is left empty here or the"
+    echo "  wizard isn't used at all, is: --preview-method auto --enable-cors-header)"
+    echo ""
+    read -r -p "  Flag(s) to launch with (Enter = none) : " WIZ_LAUNCH_FLAGS
+    ;;
+esac
+if [[ "$WIZ_BARE_LAUNCH" == "true" ]]; then
+  echo "  -> launching bare: no GPU-tuned flags, no extra flags"
+elif [[ -n "$WIZ_LAUNCH_FLAGS" ]]; then
+  echo "  -> launching with: ${WIZ_LAUNCH_FLAGS}"
+else
+  echo "  -> launching with the installer's automatic settings only"
+fi
+export EXTRA_LAUNCH_ARGS="$WIZ_LAUNCH_FLAGS"
+export MINIMAX_BARE_LAUNCH="$WIZ_BARE_LAUNCH"
+
 exec bash "${PROJECT_ROOT}/launch.sh" --tmux

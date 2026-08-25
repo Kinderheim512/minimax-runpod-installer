@@ -397,6 +397,7 @@ declare -gA MSG=(
   [launch_torch_broken_manual_hint]="Sinon : relancez bash install.sh (ou installez PyTorch manuellement via install_pytorch dans lib/python.sh)."
   [launch_no_opt_file]="Aucun fichier d'optimisation trouvé — lancement avec les réglages ComfyUI par défaut."
   [launch_no_opt_file_hint]="(Lancez bash install.sh ou bash update.sh pour générer des optimisations adaptées au GPU.)"
+  [launch_bare_mode]="Lancement nu demandé (MINIMAX_BARE_LAUNCH=true) — flags GPU ignorés, lancement sans argument supplémentaire."
   [launch_step]="Lancement de ComfyUI"
   [launch_dir_line]="Répertoire   : %s"
   [launch_listen_line]="Écoute       : %s:%s"

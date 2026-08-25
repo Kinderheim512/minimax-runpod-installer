@@ -15,6 +15,18 @@
 #                              session tmux existante), --tmux ne crée/attache
 #                              rien : ComfyUI est lancé directement dans le
 #                              pane courant (voir launch_in_tmux()).
+#
+# Variables d'environnement reconnues :
+#   MINIMAX_BARE_LAUNCH=true  -> ignore le fichier d'optimisations GPU
+#                                 (.minimax_launch_flags) et force
+#                                 EXTRA_LAUNCH_ARGS à vide : lancement nu,
+#                                 `python main.py --listen ... --port ...`
+#                                 et rien d'autre. Positionné par le choix
+#                                 "Bare" de wizard.sh ; peut aussi être
+#                                 exporté à la main avant d'appeler ce script.
+#   EXTRA_LAUNCH_ARGS=...     -> flags supplémentaires ajoutés tels quels
+#                                 (par défaut : valeur de config.env, sauf
+#                                 en mode bare ci-dessus).
 
 set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -221,14 +233,26 @@ fi
 
 MINIMAX_ENV_VARS=()
 MINIMAX_LAUNCH_FLAGS=()
-flags_file="${INSTALL_DIR}/user/.minimax_launch_flags"
-if [[ -f "$flags_file" ]]; then
-  # shellcheck disable=SC1090,SC1091  # chemin dynamique, généré à l'exécution
-  # par compute_optimization_flags (lib/optimization.sh) : rien à suivre au lint.
-  source "$flags_file"
+# MINIMAX_BARE_LAUNCH=true (set by wizard.sh's "Bare" launch choice) skips
+# loading the GPU-tuned optimization file below entirely, AND forces
+# EXTRA_LAUNCH_ARGS empty regardless of config.env's own default — its
+# "${EXTRA_LAUNCH_ARGS:-...default}" line (config.env) can't tell "empty on
+# purpose" from "never set", so an empty export alone wouldn't be enough to
+# get a truly bare launch. Net result: `python main.py --listen ... --port
+# ...` and nothing else.
+if [[ "${MINIMAX_BARE_LAUNCH:-false}" == "true" ]]; then
+  log_warn "$(t launch_bare_mode)"
+  EXTRA_LAUNCH_ARGS=""
 else
-  log_warn "$(t launch_no_opt_file)"
-  log_warn "$(t launch_no_opt_file_hint)"
+  flags_file="${INSTALL_DIR}/user/.minimax_launch_flags"
+  if [[ -f "$flags_file" ]]; then
+    # shellcheck disable=SC1090,SC1091  # chemin dynamique, généré à l'exécution
+    # par compute_optimization_flags (lib/optimization.sh) : rien à suivre au lint.
+    source "$flags_file"
+  else
+    log_warn "$(t launch_no_opt_file)"
+    log_warn "$(t launch_no_opt_file_hint)"
+  fi
 fi
 
 for kv in "${MINIMAX_ENV_VARS[@]+"${MINIMAX_ENV_VARS[@]}"}"; do
