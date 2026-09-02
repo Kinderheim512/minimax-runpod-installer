@@ -66,6 +66,45 @@ ask_choice() {
   fi
 }
 
+ask_multi_choice() {
+  # ask_multi_choice <title> <result_var> <default_csv> <option1> [option2...]
+  # Comma-separated multi-select. Each "optionN" is "value|description".
+  local title="$1" __resultvar="$2" default="$3"; shift 3
+  local -a opts=("$@")
+  echo ""
+  echo "  ${title}"
+  echo "    (comma-separated numbers, e.g. 1,3 ; Enter = default '${default}')"
+  local i=1 val desc
+  for o in "${opts[@]}"; do
+    val="${o%%|*}"; desc="${o#*|}"
+    echo "   $i) ${desc}"
+    i=$((i+1))
+  done
+  local input
+  read -r -p "  Choice [1-$((i-1)), Enter = default] : " input
+  if [[ -z "$input" ]]; then
+    printf -v "$__resultvar" '%s' "$default"
+    return 0
+  fi
+  local -a sel=() tokens
+  IFS=',' read -ra tokens <<< "$input"
+  local t
+  for t in "${tokens[@]}"; do
+    t="${t// /}"
+    if [[ "$t" =~ ^[0-9]+$ ]] && (( t >= 1 && t <= ${#opts[@]} )); then
+      sel+=("${opts[$((t-1))]%%|*}")
+    else
+      echo "  Ignored token: '${t}'"
+    fi
+  done
+  if [[ ${#sel[@]} -eq 0 ]]; then
+    printf -v "$__resultvar" '%s' "$default"
+    return 0
+  fi
+  local IFS=','
+  printf -v "$__resultvar" '%s' "${sel[*]}"
+}
+
 ask_workflows() {
   echo ""
   echo "  Workflows to install (comma-separated list, e.g. 1,2) :"
@@ -178,45 +217,96 @@ WIZ_SAGE_ONOFF="off"
 WIZ_SAGE="false"
 WIZ_SPECTRUM="off"
 
-WIZ_DASIWA_CHECKPOINT_VARIANT="pruned"
+WIZ_DASIWA_MODE="classic"
+WIZ_DASIWA_SPEED_PATH="slow"
+WIZ_DASIWA_CHECKPOINT_VARIANTS="pruned"
+WIZ_DASIWA_DIRECTOR_HYBRID_VARIANT="hybrid_8turbo"
+
+# _dasiwa_wizard_auth_warning — rappel d'authentification pour un checkpoint
+# hybride (source primaire HF gated Kinderheim/private, repli CivitAI).
+_dasiwa_wizard_auth_warning() {
+  echo ""
+  echo "  ⚠ This hybrid checkpoint is served from a gated HuggingFace repo"
+  echo "    (Kinderheim/private) by default — faster than CivitAI, but the"
+  echo "    account must be granted access once:"
+  echo "    1. Visit https://huggingface.co/Kinderheim/private/tree/main while"
+  echo "       logged in, and click \"Agree and access repository\"."
+  echo "    2. Create a read token at https://huggingface.co/settings/tokens"
+  echo "       and pass it as HF_TOKEN=xxxxx (the installer logs in for you)."
+  echo "    Fallback CivitAI (H3_DASIWA_HYBRID_HF_REPO=\"\") needs a"
+  echo "    CIVITAI_API_KEY environment variable instead (https://civitai.com/"
+  echo "    user/account, \"API Keys\"). Without either token, the installer"
+  echo "    prints a guided manual-download message and continues — never blocks."
+}
+
+# _dasiwa_wizard_pdd_warning — le sidecar PDD (fbjr, corrigé 29/08) requiert
+# son nœud MiniMaxH3PDDLoRA, fourni par un dossier à déposer manuellement.
+_dasiwa_wizard_pdd_warning() {
+  echo ""
+  echo "  ⚠ PDD (Parallel Decoding Distillation, official 8-step acceleration)"
+  echo "    needs the MiniMaxH3PDDLoRA node. It ships as a standalone folder:"
+  echo "    download comfyui_minimax_h3_pdd/ from"
+  echo "    https://huggingface.co/fbjr/MiniMax-H3-Acc-LoRAs-sidecar and drop it"
+  echo "    into ComfyUI/custom_nodes/. The 8-step LoRA file (pruned) is served"
+  echo "    from the same repo (models/loras/). Recipe: euler, CFG 1.0, shift"
+  echo "    12/3, steps on the node — see the report for the full recipe."
+}
 
 case "$WIZ_PRESET" in
   dasiwa_mmh3v12)
-    # Checkpoint variant: choice between the two official Comfy-Org pruned
-    # INT8 ConvRot checkpoints (FL2VA + REF2VA, unchanged historical
-    # default — 2 files) and the single community "DaSiWa Hybrid"
-    # checkpoint (darksidewalker, CivitAI). The hybrid file is NOT
-    # REF2VA-only: it handles both the FL2VA and REF2VA roles equally well,
-    # so only 1 file is downloaded and it is symlinked under both names the
-    # workflow expects. Either way the workflow itself needs no edit (see
-    # PRESET_DASIWA_MMH3V12_SYMLINKS, config.env). Env var passed through to
-    # install.sh below (H3_DASIWA_CHECKPOINT_VARIANT), same pattern as
-    # SAGE_ATTENTION.
-    ask_choice "DaSiWa preset — diffusion checkpoint(s) :" WIZ_DASIWA_CHECKPOINT_VARIANT "pruned" \
-      "pruned|Normal pruned — 2 official Comfy-Org INT8 ConvRot checkpoints, FL2VA + REF2VA (recommended, well-tested)" \
-      "dasiwa_hybrid|Pruned, modified by DaSiWa — 1 community checkpoint covering both FL2VA and REF2VA (darksidewalker, CivitAI, experimental)"
+    # --- Mode (Option A classic / Option B director) ----------------------
+    ask_choice "DaSiWa preset — mode :" WIZ_DASIWA_MODE "classic" \
+      "classic|Classic MythicAlchemy — checkpoint loader, stable (recommended)" \
+      "director|Director mode — hybrid checkpoint + Director nodes (C-MMH3-18, experimental)"
 
-    if [[ "$WIZ_DASIWA_CHECKPOINT_VARIANT" == "dasiwa_hybrid" ]]; then
-      echo ""
-      echo "  ⚠ This checkpoint is served from a gated HuggingFace repo"
-      echo "    (Kinderheim/private, auto-approved) by default — faster than"
-      echo "    CivitAI, but access must be granted manually once:"
-      echo "    1. Visit https://huggingface.co/Kinderheim/private/tree/main"
-      echo "       while logged into your HF account and click \"Agree and"
-      echo "       access repository\" (instant, but a HF_TOKEN alone will"
-      echo "       NOT work if this step is skipped — hf download returns a"
-      echo "       403 otherwise)."
-      echo "    2. Create a read token at https://huggingface.co/settings/tokens"
-      echo "       and pass it as HF_TOKEN=xxxxx, e.g.:"
-      echo "       HF_TOKEN=xxxxx bash install.sh ..."
-      echo "    Falling back to CivitAI instead (H3_DASIWA_HYBRID_HF_REPO=\"\")"
-      echo "    needs a CIVITAI_API_KEY environment variable instead (create"
-      echo "    a key at https://civitai.com/user/account, \"API Keys\"), and"
-      echo "    is noticeably slower (single-connection download)."
+    if [[ "$WIZ_DASIWA_MODE" == "director" ]]; then
+      # Option B : checkpoint hybride (un seul à la fois), workflow C-MMH3-18
+      # épinglé, VAE int8 Kijai + pack LBH installés automatiquement.
+      ask_choice "Director — hybrid checkpoint variant :" WIZ_DASIWA_DIRECTOR_HYBRID_VARIANT "hybrid_8turbo" \
+        "hybrid_8turbo|Hybrid 8Turbo v1 — 8 steps (recommended)" \
+        "hybrid_v1|Hybrid v1 — no distillation" \
+        "hybrid_4turbo|Hybrid 4Turbo v1 — 4 steps"
+      WIZ_DASIWA_SPEED_PATH="hybrid"
+      WIZ_DASIWA_CHECKPOINT_VARIANTS="dasiwa_hybrid"
+      _dasiwa_wizard_auth_warning
+    else
+      # Option A : chemin vitesse (4 chemins EXCLUSIFS) puis checkpoint(s).
+      ask_choice "DaSiWa preset — speed path (4 exclusive paths) :" WIZ_DASIWA_SPEED_PATH "slow" \
+        "slow|Slow — official pruned + ~25 steps (recommended)" \
+        "turbo_v4|Turbo v4 — official pruned + Turbo LoRA (6-8 steps)" \
+        "pdd|PDD sidecar — official pruned + PDD (4-8 steps)" \
+        "hybrid|Hybrid checkpoint — DaSiWa v1 (single file, both roles)"
+
+      case "$WIZ_DASIWA_SPEED_PATH" in
+        hybrid)
+          WIZ_DASIWA_CHECKPOINT_VARIANTS="dasiwa_hybrid"
+          _dasiwa_wizard_auth_warning
+          ;;
+        turbo_v4)
+          # Turbo v4 a été validé contre le pruned int8 convrot uniquement.
+          WIZ_DASIWA_CHECKPOINT_VARIANTS="pruned"
+          WIZ_TURBO="on"
+          ;;
+        pdd)
+          # PDD (sidecar fbjr) : officiel pruned + node MiniMaxH3PDDLoRA
+          # (installation manuelle documentée — voir rapport d'analyse).
+          WIZ_DASIWA_CHECKPOINT_VARIANTS="pruned"
+          _dasiwa_wizard_pdd_warning
+          ;;
+        slow|*)
+          ask_multi_choice "Checkpoint(s) to install (multi-select) :" WIZ_DASIWA_CHECKPOINT_VARIANTS "pruned" \
+            "pruned|Official pruned INT8 ConvRot — FL2VA + REF2VA (~19.5 GB each)" \
+            "pruned_scaled|Official pruned FP8 scaled — FL2VA + REF2VA (~19.5 GB each)" \
+            "pruned_bf16|Official pruned BF16 — FL2VA + REF2VA (~37.5 GB each)" \
+            "dense_int8|Official dense INT8 ConvRot — FL2VA + REF2VA (~31.7 GB each)" \
+            "dasiwa_hybrid|DaSiWa Hybrid v1 — single file, both roles (~19.5 GB)"
+          if [[ ",${WIZ_DASIWA_CHECKPOINT_VARIANTS}," == *",dasiwa_hybrid,"* ]]; then
+            _dasiwa_wizard_auth_warning
+          fi
+          ;;
+      esac
     fi
 
-    # Turbo LoRA: the workflow's LoRA loader stays on "None" — unused,
-    # no question.
     # Spectrum: no Spectrum node in this workflow — no question.
     # SageAttention: attention is now handled natively by ComfyUI via
     # "ComfyKitchen Attention" (Settings node of the workflow); the
@@ -267,7 +357,13 @@ echo ""
 echo "  Summary :"
 echo "   - Preset       : ${WIZ_PRESET:-none}"
 if [[ "$WIZ_PRESET" == "dasiwa_mmh3v12" ]]; then
-  echo "   - Checkpoint(s): ${WIZ_DASIWA_CHECKPOINT_VARIANT}"
+  echo "   - Mode         : ${WIZ_DASIWA_MODE}"
+  echo "   - Speed path   : ${WIZ_DASIWA_SPEED_PATH}"
+  if [[ "$WIZ_DASIWA_MODE" == "director" ]]; then
+    echo "   - Hybrid var.  : ${WIZ_DASIWA_DIRECTOR_HYBRID_VARIANT}"
+  else
+    echo "   - Checkpoint(s): ${WIZ_DASIWA_CHECKPOINT_VARIANTS}"
+  fi
 fi
 if [[ -n "$WIZ_TIER" ]]; then
   echo "   - Tier         : ${WIZ_TIER}"
@@ -297,28 +393,38 @@ else
   export MINIMAX_H3_TURBO_NODE_AUTO_INSTALL="false"
 fi
 export SAGE_ATTENTION="$WIZ_SAGE"
-export H3_DASIWA_CHECKPOINT_VARIANT="$WIZ_DASIWA_CHECKPOINT_VARIANT"
+export H3_DASIWA_MODE="$WIZ_DASIWA_MODE"
+export H3_DASIWA_SPEED_PATH="$WIZ_DASIWA_SPEED_PATH"
+export H3_DASIWA_CHECKPOINT_VARIANTS="$WIZ_DASIWA_CHECKPOINT_VARIANTS"
+export H3_DASIWA_DIRECTOR_HYBRID_VARIANT="$WIZ_DASIWA_DIRECTOR_HYBRID_VARIANT"
+# Rétro-compatibilité : l'ancienne variable scalaire reste synchronisée (les
+# lecteurs existants et la garde de variante historique continuent de
+# fonctionner ; config.env la surcharge via H3_DASIWA_CHECKPOINT_VARIANTS).
+export H3_DASIWA_CHECKPOINT_VARIANT="$([[ ",${WIZ_DASIWA_CHECKPOINT_VARIANTS}," == *",dasiwa_hybrid,"* ]] && echo dasiwa_hybrid || echo pruned)"
 
-# Persist this specific choice on /workspace (RunPod's PERSISTENT volume —
-# unlike everything else on this line, which only lives in this shell's
-# exported environment for this one run). Without this, an automatic
-# entrypoint restart (container crash/OOM/spot interruption — not a new
-# pod) re-runs install.sh with a fresh environment and silently falls back
-# to "pruned", re-downloading ~42 GB you didn't ask for. See the matching
-# comment in config.env (H3_USER_CHOICES_FILE) for the read side. Only the
-# variant is written here — never HF_TOKEN/CIVITAI_API_KEY: those are
-# secrets and don't belong in a plaintext file on disk. Set them in
-# RunPod's "Environment Variables" tab so they also survive a restart.
+# Persist these choices on /workspace (RunPod's PERSISTENT volume — unlike
+# everything else on this line, which only lives in this shell's exported
+# environment for this one run). Without this, an automatic entrypoint
+# restart (container crash/OOM/spot interruption — not a new pod) re-runs
+# install.sh with a fresh environment and silently falls back to defaults,
+# re-downloading ~42 GB you didn't ask for. See the matching comment in
+# config.env (H3_USER_CHOICES_FILE) for the read side. Only the non-secret
+# choices are written here — never HF_TOKEN/CIVITAI_API_KEY: those are
+# secrets and don't belong in a plaintext file on disk. Set them in RunPod's
+# "Environment Variables" tab so they also survive a restart.
 if [[ "$WIZ_PRESET" == "dasiwa_mmh3v12" ]]; then
   _h3_persist_root="${INSTALL_DIR:-/workspace/ComfyUI}"
   _h3_choices_file="$(dirname "$_h3_persist_root")/.minimax_user_choices.env"
   if mkdir -p "$(dirname "$_h3_choices_file")" 2>/dev/null; then
     {
-      echo "# Written by wizard.sh — DaSiWa checkpoint variant, persisted so"
-      echo "# an automatic container restart doesn't silently switch it back"
-      echo "# to \"pruned\". Safe to delete; re-run wizard.sh to recreate it."
-      echo "H3_DASIWA_CHECKPOINT_VARIANT=\"${WIZ_DASIWA_CHECKPOINT_VARIANT}\""
-    } > "$_h3_choices_file" 2>/dev/null || echo "  (warning: could not persist the checkpoint choice to ${_h3_choices_file} — an automatic restart may fall back to 'pruned')"
+      echo "# Written by wizard.sh — DaSiWa selection, persisted so an"
+      echo "# automatic container restart doesn't silently switch it back to"
+      echo "# defaults. Safe to delete; re-run wizard.sh to recreate it."
+      echo "H3_DASIWA_MODE=\"${WIZ_DASIWA_MODE}\""
+      echo "H3_DASIWA_SPEED_PATH=\"${WIZ_DASIWA_SPEED_PATH}\""
+      echo "H3_DASIWA_CHECKPOINT_VARIANTS=\"${WIZ_DASIWA_CHECKPOINT_VARIANTS}\""
+      echo "H3_DASIWA_DIRECTOR_HYBRID_VARIANT=\"${WIZ_DASIWA_DIRECTOR_HYBRID_VARIANT}\""
+    } > "$_h3_choices_file" 2>/dev/null || echo "  (warning: could not persist the DaSiWa choices to ${_h3_choices_file} — an automatic restart may fall back to defaults)"
   fi
   unset _h3_persist_root _h3_choices_file
 fi
