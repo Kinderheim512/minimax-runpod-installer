@@ -100,34 +100,80 @@ verify_installation() {
   # FL2VA n'est exigé que si t2v/i2v est sélectionné, REF2VA que si r2v
   # l'est. Un modèle non requis par les workflows actifs n'est ni vérifié
   # ni signalé manquant.
+  # --- Modèles H3 : vérification par symlink final attendu ----------------
+  # Pour un preset qui déclare des symlinks (PRESET_<NOM>_SYMLINKS, ex.
+  # dasiwa_mmh3v12), le « fichier attendu par le workflow » est le CÔTÉ LIEN
+  # de chaque entrée (2e champ) — c'est ce que les nœuds du workflow chargent
+  # réellement, dérivé de H3_DASIWA_MODE / du manifeste de checkpoint
+  # sélectionné, PAS d'un préfixe de nommage figé (minimax_h3_fl2va_/
+  # ref2va_). On vérifie donc la présence de CES liens (en suivant les
+  # symlinks, `-e`), ce qui reste correct même si une future version DaSiWa
+  # change encore la convention de nommage (ex. le nom hybride
+  # dasiwa_minimax_h3_ref2va_v1_... du mode director). Pour une installation
+  # standard (aucun preset avec symlinks de diffusion), on retombe sur le
+  # scan par préfixe historique.
   local base="${INSTALL_DIR}/models"
   local workflows; workflows="$(resolve_h3_workflows 2>/dev/null || echo "${H3_WORKFLOWS:-t2v,i2v,r2v}")"
 
-  local _fl2va_files=() _ref2va_files=()
-  if [[ -d "$base" ]]; then
-    mapfile -t _fl2va_files < <(find -L "$base" -type f -iname "minimax_h3_fl2va_*.safetensors" 2>/dev/null)
-    mapfile -t _ref2va_files < <(find -L "$base" -type f -iname "minimax_h3_ref2va_*.safetensors" 2>/dev/null)
+  local _preset_diff_links=()
+  local _presets_for_verify; _presets_for_verify="${H3_ACTIVE_PRESETS:-$(resolve_h3_presets 2>/dev/null || true)}"
+  if [[ -n "$_presets_for_verify" ]]; then
+    local -a _pv_names=()
+    IFS=',' read -ra _pv_names <<< "$_presets_for_verify"
+    local _pv_name _pv_ref _pv_entry _pv_target_rel _pv_link_rel
+    for _pv_name in "${_pv_names[@]}"; do
+      [[ -z "$_pv_name" ]] && continue
+      _pv_ref="$(_preset_symlinks_ref "$_pv_name")"
+      declare -p "$_pv_ref" &>/dev/null || continue
+      local -n _pv_links="$_pv_ref"
+      for _pv_entry in "${_pv_links[@]}"; do
+        IFS='|' read -r _pv_target_rel _pv_link_rel <<< "$_pv_entry"
+        [[ "$_pv_link_rel" == diffusion_models/* ]] || continue
+        _preset_diff_links+=("$_pv_link_rel")
+      done
+    done
   fi
 
-  if _workflow_needs "$workflows" t2v i2v; then
-    if (( ${#_fl2va_files[@]} > 0 )); then
-      _v_ok "$(t verify_fl2va_ok)"
-      for f in "${_fl2va_files[@]}"; do
-        log_info "   - ${f#"$base"/} ($(du -Lh "$f" 2>/dev/null | cut -f1))"
-      done
-    else
-      _v_fail "$(t verify_fl2va_fail)"
+  if (( ${#_preset_diff_links[@]} > 0 )); then
+    # Preset avec symlinks de diffusion : vérifier chaque lien attendu.
+    local _pv_link_abs
+    for _pv_link_rel in "${_preset_diff_links[@]}"; do
+      _pv_link_abs="${base}/${_pv_link_rel}"
+      if [[ -e "$_pv_link_abs" ]]; then
+        _v_ok "$(t verify_preset_diffusion_link_ok "$_pv_link_rel")"
+        log_info "   - ${_pv_link_rel} ($(du -Lh "$_pv_link_abs" 2>/dev/null | cut -f1))"
+      else
+        _v_fail "$(t verify_preset_diffusion_link_fail "$_pv_link_rel")"
+      fi
+    done
+  else
+    # Installation standard : scan par préfixe (comportement historique).
+    local _fl2va_files=() _ref2va_files=()
+    if [[ -d "$base" ]]; then
+      mapfile -t _fl2va_files < <(find -L "$base" -type f -iname "minimax_h3_fl2va_*.safetensors" 2>/dev/null)
+      mapfile -t _ref2va_files < <(find -L "$base" -type f -iname "minimax_h3_ref2va_*.safetensors" 2>/dev/null)
     fi
-  fi
 
-  if _workflow_needs "$workflows" r2v; then
-    if (( ${#_ref2va_files[@]} > 0 )); then
-      _v_ok "$(t verify_ref2va_ok)"
-      for f in "${_ref2va_files[@]}"; do
-        log_info "   - ${f#"$base"/} ($(du -Lh "$f" 2>/dev/null | cut -f1))"
-      done
-    else
-      _v_fail "$(t verify_ref2va_fail)"
+    if _workflow_needs "$workflows" t2v i2v; then
+      if (( ${#_fl2va_files[@]} > 0 )); then
+        _v_ok "$(t verify_fl2va_ok)"
+        for f in "${_fl2va_files[@]}"; do
+          log_info "   - ${f#"$base"/} ($(du -Lh "$f" 2>/dev/null | cut -f1))"
+        done
+      else
+        _v_fail "$(t verify_fl2va_fail)"
+      fi
+    fi
+
+    if _workflow_needs "$workflows" r2v; then
+      if (( ${#_ref2va_files[@]} > 0 )); then
+        _v_ok "$(t verify_ref2va_ok)"
+        for f in "${_ref2va_files[@]}"; do
+          log_info "   - ${f#"$base"/} ($(du -Lh "$f" 2>/dev/null | cut -f1))"
+        done
+      else
+        _v_fail "$(t verify_ref2va_fail)"
+      fi
     fi
   fi
 
