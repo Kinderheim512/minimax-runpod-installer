@@ -98,8 +98,9 @@ preset_required_repos() {
 }
 
 # _dasiwa_variant_marker -> chemin sur stdout
-# Fichier marqueur enregistrant QUELLE variante H3_DASIWA_CHECKPOINT_VARIANT
-# a été réellement téléchargée avec succès la dernière fois, sur
+# Fichier marqueur enregistrant QUELLE sélection DaSiWa (mode + chemin
+# vitesse + variantes de checkpoint + variante hybride director) a été
+# réellement téléchargée avec succès la dernière fois, sur
 # ${INSTALL_DIR}/models — donc sur /workspace, le volume PERSISTANT RunPod
 # (survit à un redémarrage automatique du conteneur, contrairement au state
 # file .minimax_installer_state qui vit sous PROJECT_ROOT/opt — voir
@@ -111,25 +112,51 @@ _dasiwa_variant_marker() {
   echo "${INSTALL_DIR}/models/.dasiwa_variant_installed"
 }
 
+# _dasiwa_selection_signature -> signature compacte de la sélection active
+# sur stdout (mode|speed|variants|director_variant). Servi à la fois au
+# marqueur ci-dessus et à la garde : un changement de MODE ou de CHEMIN
+# VITESSE (pas seulement de variante de checkpoint) est ainsi détecté.
+_dasiwa_selection_signature() {
+  echo "${H3_DASIWA_MODE}|${H3_DASIWA_SPEED_PATH}|${H3_DASIWA_CHECKPOINT_VARIANTS}|${H3_DASIWA_DIRECTOR_HYBRID_VARIANT}"
+}
+
+# _dasiwa_speed_guard <presets_csv>
+# Log l'état résolu du chemin vitesse DaSiWa (4 chemins exclusifs) pour
+# visibilité. L'exclusivité elle-même est imposée en amont dans config.env
+# (garde anti-empilement silencieuse : un hybride demandé force
+# "hybrid" et désactive Turbo/PDD) — ici on ne fait que rendre l'état final
+# lisible dans le log, jamais de modification.
+_dasiwa_speed_guard() {
+  local presets_csv="$1"
+  [[ ",${presets_csv}," == *",dasiwa_mmh3v12,"* ]] || return 0
+
+  case "$H3_DASIWA_SPEED_PATH" in
+    slow)     log_info "$(t dasiwa_speed_slow)" ;;
+    turbo_v4) log_info "$(t dasiwa_speed_turbo_v4)" ;;
+    pdd)      log_info "$(t dasiwa_speed_pdd)" ;;
+    hybrid)   log_info "$(t dasiwa_speed_hybrid "$(_dasiwa_hybrid_active)")" ;;
+  esac
+  return 0
+}
+
 # _dasiwa_variant_guard <presets_csv>
 # Garde d'autorisation : n'a d'effet que si le preset "dasiwa_mmh3v12" (seul
-# consommateur de H3_DASIWA_CHECKPOINT_VARIANT) est actif. Si un marqueur
-# existe déjà (une installation précédente a réussi avec une variante) ET
-# que la variante résolue pour CE run est différente, le téléchargement
-# n'est PAS lancé automatiquement : c'est exactement le scénario vécu — un
-# redémarrage automatique de l'entrypoint (crash/OOM/coupure réseau pendant
-# le gros téléchargement, PAS une action volontaire de l'utilisateur) qui
-# retombe sur "pruned" par défaut et retélécharge ~42 Go en écrasant/
-# doublant un choix "dasiwa_hybrid" déjà en place. On exige soit une
-# confirmation interactive (confirm(), lib/utils.sh — répond automatiquement
-# "non" en contexte non-interactif, ex. docker-entrypoint.sh sans tty : donc
-# refuse par défaut, jamais de blocage en attente d'une réponse qui ne
-# viendra jamais), soit un déblocage explicite et volontaire via
-# H3_DASIWA_ALLOW_VARIANT_CHANGE=true (à positionner sciemment, jamais un
-# comportement par défaut). En cas de refus, retourne 1 : download_preset_models()
-# s'arrête AVANT tout téléchargement (aucun fichier touché), et
-# install.sh (les deux points d'appel) traite déjà ce cas comme un échec
-# non bloquant pour le reste de l'installation (log_warn
+# consommateur de la sélection DaSiWa) est actif. Si un marqueur existe déjà
+# (une installation précédente a réussi avec une sélection) ET que la
+# sélection résolue pour CE run est différente, le téléchargement n'est PAS
+# lancé automatiquement : c'est exactement le scénario vécu — un redémarrage
+# automatique de l'entrypoint (crash/OOM/coupure réseau pendant le gros
+# téléchargement, PAS une action volontaire de l'utilisateur) qui retombe sur
+# la sélection par défaut et retélécharge ~42 Go en écrasant/doublant un
+# choix déjà en place. On exige soit une confirmation interactive (confirm(),
+# lib/utils.sh — répond automatiquement "non" en contexte non-interactif, ex.
+# docker-entrypoint.sh sans tty : donc refuse par défaut, jamais de blocage en
+# attente d'une réponse qui ne viendra jamais), soit un déblocage explicite et
+# volontaire via H3_DASIWA_ALLOW_VARIANT_CHANGE=true (à positionner sciemment,
+# jamais un comportement par défaut). En cas de refus, retourne 1 :
+# download_preset_models() s'arrête AVANT tout téléchargement (aucun fichier
+# touché), et install.sh (les deux points d'appel) traite déjà ce cas comme un
+# échec non bloquant pour le reste de l'installation (log_warn
 # install_preset_download_incomplete), donc ni exit ni perte du reste de
 # l'install.
 _dasiwa_variant_guard() {
@@ -141,9 +168,10 @@ _dasiwa_variant_guard() {
 
   local installed; installed="$(<"$marker")"
   installed="${installed//[$'\t\r\n ']/}"
-  [[ -z "$installed" || "$installed" == "$H3_DASIWA_CHECKPOINT_VARIANT" ]] && return 0
+  local current; current="$(_dasiwa_selection_signature)"
+  [[ -z "$installed" || "$installed" == "$current" ]] && return 0
 
-  log_error "$(t dasiwa_variant_mismatch_title "$installed" "$H3_DASIWA_CHECKPOINT_VARIANT")"
+  log_error "$(t dasiwa_variant_mismatch_title "$installed" "$current")"
   log_error "$(t dasiwa_variant_mismatch_detail)"
 
   if [[ "${H3_DASIWA_ALLOW_VARIANT_CHANGE:-false}" == "true" ]]; then
@@ -151,7 +179,7 @@ _dasiwa_variant_guard() {
     return 0
   fi
 
-  if confirm "$(t dasiwa_variant_mismatch_confirm "$installed" "$H3_DASIWA_CHECKPOINT_VARIANT")"; then
+  if confirm "$(t dasiwa_variant_mismatch_confirm "$installed" "$current")"; then
     return 0
   fi
 
@@ -170,6 +198,7 @@ download_preset_models() {
   local presets_csv="$1"
   [[ -z "$presets_csv" ]] && return 0
 
+  _dasiwa_speed_guard "$presets_csv"
   _dasiwa_variant_guard "$presets_csv" || return 1
 
   local -a repos=()
@@ -251,10 +280,11 @@ download_preset_models() {
   # (tout `|| return 1` ci-dessus saute cette ligne) : voir
   # _dasiwa_variant_guard()/_dasiwa_variant_marker() plus haut. N'enregistre
   # que si dasiwa_mmh3v12 est actif — les autres presets ne touchent pas à
-  # H3_DASIWA_CHECKPOINT_VARIANT.
+  # la sélection DaSiWa. Signature = mode|speed|variants|director_variant
+  # (voir _dasiwa_selection_signature).
   if [[ ",${presets_csv}," == *",dasiwa_mmh3v12,"* ]]; then
     mkdir -p "$base"
-    echo "$H3_DASIWA_CHECKPOINT_VARIANT" > "$(_dasiwa_variant_marker)"
+    echo "$(_dasiwa_selection_signature)" > "$(_dasiwa_variant_marker)"
   fi
 
   log_ok "$(t presets_models_downloaded "$presets_csv")"
@@ -507,9 +537,26 @@ install_preset_workflows() {
   IFS=',' read -ra names <<< "$presets_csv"
 
   local name github_src owner_repo branch subfolder civitai_url rel target
-  local preset_dir f synced
+  local preset_dir f synced pin_rel pin_abs
   for name in "${names[@]}"; do
     [[ -z "$name" ]] && continue
+
+    # 0) Épinglage de version (H3_PRESET_WORKFLOW_PINS) : copie UN fichier
+    #    figé tel quel — priorité maximale, le sync GitHub "toutes versions"
+    #    est ignoré pour ce preset. Survit à une future version amont (ex.
+    #    C-MMH3-19) sans écrasement silencieux au prochain update.sh. Sert au
+    #    mode director de dasiwa_mmh3v12 (workflow C-MMH3-18 figé).
+    pin_rel="${H3_PRESET_WORKFLOW_PINS[$name]:-}"
+    if [[ -n "$pin_rel" ]]; then
+      pin_abs="${PROJECT_ROOT}/${pin_rel}"
+      if [[ -f "$pin_abs" ]]; then
+        log_step "$(t presets_workflows_pin_step "$name")"
+        cp -f "$pin_abs" "${dest}/$(basename "$pin_rel")"
+        log_ok "$(t presets_workflows_pinned "$name" "$(basename "$pin_rel")")"
+        continue
+      fi
+      log_warn "$(t presets_workflows_pin_missing "$name" "$pin_rel")"
+    fi
 
     # 1) Dépôt GitHub tiers — toutes les versions disponibles.
     github_src="${H3_PRESET_WORKFLOW_GITHUB_SOURCES[$name]:-}"
