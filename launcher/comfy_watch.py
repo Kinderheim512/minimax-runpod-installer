@@ -212,10 +212,9 @@ def _literal_int(value: Any) -> Optional[int]:
 def _snapped_frames(seconds: float) -> int:
     """Seconds -> frame count on the H3 ``17k+5`` grid at 24 fps.
 
-    The same snapping the t2v/i2v templates' ``ComfyMathExpression`` applies
-    (and that :mod:`launcher.tools.builtin.forge_comfy_generate` applies when
-    a workflow takes frames): used to report the frame count of a generation
-    whose graph computes it at runtime.
+    The same snapping the t2v/i2v templates' ``ComfyMathExpression`` applies:
+    used to report the frame count of a generation whose graph computes it at
+    runtime.
     """
     n = max(5, int(round(seconds * 24)))
     return 17 * math.ceil((n - 5) / 17) + 5
