@@ -25,6 +25,7 @@ tunes everything for the GPU it detects.
 
 - [Features](#-features)
 - [Quick start](#-quick-start)
+- [Desktop launcher](#-desktop-launcher)
 - [The wizard, in detail](#-the-wizard-in-detail)
 - [Model tiers](#-model-tiers-h3_tier)
 - [Workflows](#-workflows)
@@ -42,6 +43,99 @@ tunes everything for the GPU it detects.
 - [Project structure](#-project-structure)
 - [Documentation](#-documentation)
 - [Roadmap](#-roadmap)
+
+---
+
+## 🖥️ Desktop launcher
+
+`launcher/` is a self-contained desktop front-end for the installer: it rents
+the RunPod pod, opens the SSH tunnel, starts ComfyUI (or the LoRA-training
+desktop) and puts the UI in your browser. It runs on **Windows, macOS and
+Linux**, and it needs nothing but a RunPod API key — the ComfyUI template it
+deploys is public (`rfv75gjaip`), so there is no private template ID to look
+up.
+
+It ships in English (US) and French; switch language in *Settings*.
+
+### Install
+
+| OS | Download | Run |
+| --- | --- | --- |
+| **Windows 10/11** | `MiniMaxH3Launcher-windows-x64.exe` from the [releases page](https://github.com/Kinderheim512/minimax-runpod-installer/releases) | double-click |
+| **macOS (Apple silicon)** | `MiniMaxH3Launcher-macos-arm64` | `chmod +x … && ./…` |
+| **macOS (Intel)** | `MiniMaxH3Launcher-macos-x64` | `chmod +x … && ./…` |
+| **Linux x64** | `MiniMaxH3Launcher-linux-x64` | `chmod +x … && ./…` |
+
+Prerequisites, all platforms:
+
+* a **RunPod account** with an API key
+  ([console → Settings → API Keys](https://www.runpod.io/console/user/settings));
+* an **SSH key registered on RunPod** — the launcher tunnels ComfyUI over SSH,
+  never over the pod's public URL. Windows 10+ ships the OpenSSH client; macOS
+  and Linux already have it. `doctor` tells you if it is missing.
+
+### Run it
+
+1. Launch the app. On a first run it opens the credentials dialog.
+2. Paste your **RunPod API key** and press *Save*. (Everything else is
+   optional: the private template IDs, an HF token, a Civitai key and the
+   training-desktop password.)
+3. Pick the **ComfyUI video** mode in the footer and press **Start**. The
+   first boot pulls the image and downloads the preset's weights, so give it
+   the time it asks for; the journal narrates every step.
+4. ComfyUI opens in your browser once it answers.
+
+From the CLI, the same thing:
+
+```bash
+python -m launcher credentials set    # store the RunPod API key
+python -m launcher start --stack comfy
+python -m launcher status
+python -m launcher doctor
+```
+
+### Unsigned binaries
+
+The released binaries are **not code-signed** (code-signing certificates cost
+money and this is a free tool). The workarounds are one-time:
+
+* **macOS** — Gatekeeper quarantines anything downloaded through a browser:
+
+  ```bash
+  xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-arm64
+  ```
+
+* **Windows** — SmartScreen shows "Windows protected your PC". Click
+  *More info* → *Run anyway*.
+
+Building from source avoids both, and is two commands:
+
+```bash
+python -m pip install pyinstaller pillow
+python scripts/build_exe.py
+```
+
+### Credentials
+
+The RunPod API key and the optional extra keys are stored in the operating
+system's own credential store — **DPAPI** on Windows, the **login Keychain**
+on macOS, the **Secret Service** (`secret-tool`) on Linux — never in a plain
+file and never in the repository. On a Linux box with no Secret Service the
+launcher falls back to a `0600` file in `~/.local/share/minimax-launcher/`,
+and says so in its log.
+
+### What it does *not* do
+
+The launcher deploys and drives the pod; it never trains and never generates
+on your machine. The LoRA-training stack only opens the training desktop
+(Fizgig) over the tunnel — the work itself happens on the rented GPU.
+
+### License
+
+The pod-side installer (this repository's `install.sh`, `lib/`, `Dockerfile`,
+`workflows/`, `presets/`) is **Apache-2.0** (see `LICENSE`). The `launcher/`
+package is vendored from OpenFox Forge under the **MIT** license; see
+`NOTICE` for the attribution and the resynchronisation procedure.
 
 ---
 

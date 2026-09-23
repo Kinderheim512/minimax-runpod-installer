@@ -1,0 +1,61 @@
+{
+  "contract_version": 1,
+  "image_version": "dev",
+  "cuda_min": "13.0",
+  "base_image": "nvidia/cuda:13.0.3-runtime-ubuntu24.04",
+  "python_version": "3.12",
+  "comfyui_release": "resolved-at-build-time",
+  "torch_build": "stamped-at-build-time",
+  "install_dir": "/opt/ComfyUI",
+  "project_root": "/opt/minimax-runpod-installer",
+  "venv_dir": "/opt/ComfyUI/venv",
+  "manager_dir": "/opt/ComfyUI/custom_nodes/comfyui-manager",
+  "manager_flag": "--enable-manager",
+  "scripts": [
+    "install_lora.sh",
+    "sync_push.sh",
+    "uninstall.sh"
+  ],
+  "endpoints": [
+    "/system_stats",
+    "/object_info",
+    "/prompt",
+    "/view",
+    "/api/queue",
+    "/api/history"
+  ],
+  "state_steps": [
+    "system_packages",
+    "comfyui_cloned",
+    "python_venv",
+    "comfyui_requirements",
+    "manager_installed",
+    "optional_nodes",
+    "model_folders"
+  ],
+  "env_keys": [
+    "H3_TIER",
+    "H3_WORKFLOWS",
+    "H3_USER_PRESETS_JSON",
+    "H3_CUSTOM_MODEL_CATEGORIES",
+    "H3_CUSTOM_LORAS",
+    "H3_CUSTOM_NODES",
+    "H3_CUSTOM_WORKFLOWS",
+    "H3_DIFFUSION_URL",
+    "H3_VIDEO_VAE_URL",
+    "H3_AUDIO_VAE_URL",
+    "H3_TEXT_ENCODER_URL",
+    "H3_TAE_URL",
+    "H3_UPSCALER_URL",
+    "H3_FRAME_INTERP_URL",
+    "PERSONAL_STORAGE_HF_REPO",
+    "COMFYUI_PORT",
+    "COMFYUI_COMMIT",
+    "NTFY_TOPIC"
+  ],
+  "notes": [
+    "cu130-only: a host reporting less than 13.0 fails explicitly; there is no fallback build.",
+    "SageAttention, Turbo and Spectrum are Library-managed and are NOT baked into this image.",
+    "env_keys is exhaustive and contains no wildcard; the launcher/CI compare concrete keys."
+  ]
+}

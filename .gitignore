@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# PyInstaller
+build/
+dist/
+
+# Launcher local state (never committed: it holds no secrets, but it is
+# machine-specific and rewritten constantly)
+gui.json
+*.dpapi
+pending_stop.json
+
+# Logs / scratch
+logs/*
+!logs/.gitkeep
+*.log

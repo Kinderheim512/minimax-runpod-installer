@@ -1,0 +1,135 @@
+name: Release
+
+# Builds the launcher for Windows, macOS (arm64 + x64) and Linux on every
+# `v*` tag, and publishes the artefacts on a GitHub release. The binaries are
+# UNSIGNED: see the README ("Unsigned binaries") for the Gatekeeper /
+# SmartScreen workaround.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  icons:
+    name: Icons (png / ico / icns)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Pillow
+        run: python -m pip install --upgrade pip pillow
+      - name: Regenerate the icon set
+        run: |
+          test -f launcher/icon.png
+          test -f launcher/icon.ico
+          test -f launcher/icon.icns
+          python - <<'PY'
+          from PIL import Image
+          ico = Image.open("launcher/icon.ico")
+          sizes = sorted(ico.info.get("sizes", []))
+          print("ico sizes:", sizes)
+          assert len(sizes) >= 7, sizes
+          icns = Image.open("launcher/icon.icns")
+          print("icns sizes:", sorted(icns.info.get("sizes", [])))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: icons
+          path: launcher/icon.*
+
+  build:
+    name: Build (${{ matrix.label }})
+    needs: icons
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: windows-x64
+            artifact: MiniMaxH3Launcher-windows-x64.exe
+          - os: macos-14
+            label: macos-arm64
+            artifact: MiniMaxH3Launcher-macos-arm64
+          - os: macos-13
+            label: macos-x64
+            artifact: MiniMaxH3Launcher-macos-x64
+          - os: ubuntu-22.04
+            label: linux-x64
+            artifact: MiniMaxH3Launcher-linux-x64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: icons
+          path: launcher
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install the build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller pillow
+      - name: Install the GUI dependencies (optional extras)
+        run: python -m pip install ".[tray]" || echo "optional extras unavailable"
+      - name: Build
+        run: python scripts/build_exe.py
+      - name: Smoke-test the binary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib, subprocess, sys
+          exe = next(p for p in pathlib.Path("dist").iterdir() if p.is_file())
+          print("built:", exe)
+          assert exe.stat().st_size > 1_000_000, exe.stat().st_size
+          PY
+      - name: Rename the artefact
+        shell: bash
+        run: |
+          set -e
+          mkdir -p out
+          for f in dist/*; do
+            [ -f "$f" ] || continue
+            case "$f" in
+              *.exe) cp "$f" "out/${{ matrix.artifact }}" ;;
+              *) cp "$f" "out/${{ matrix.artifact }}" ;;
+            esac
+          done
+          ls -la out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: out/*
+
+  release:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Flatten the artefacts
+        run: |
+          mkdir -p release
+          find artifacts -type f -exec cp {} release/ \;
+          ls -la release
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          body: |
+            Unsigned binaries. On macOS, clear the quarantine flag once:
+
+                xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-*
+
+            On Windows, SmartScreen may warn about an unsigned publisher:
+            "More info" then "Run anyway".
