@@ -230,3 +230,69 @@ def test_comfy_outputs_by_name_rejects_an_unknown_file(monkeypatch, tmp_path) ->
     assert main(["comfy", "outputs", "nope.mp4", "--dir", str(tmp_path)]) == 1
     assert ops.downloads == []
 
+# ---------------------------------------------------------------------------
+# Exit codes: `stop` and `doctor` must not report success on a bad outcome
+# ---------------------------------------------------------------------------
+
+
+def _diagnostic(status: str):
+    from launcher.doctor import Diagnostic
+
+    return Diagnostic("probe", status, "detail")
+
+
+@pytest.mark.parametrize(
+    "outcome, expected",
+    [
+        ("stopped", 0),
+        ("terminated", 0),
+        ("cleared", 0),
+        ("already_stopped", 0),
+        # The API could not be queried, or the pod offers no stop action: it
+        # may still be running and billing, so the command must fail.
+        ("unavailable", 1),
+        ("skipped", 1),
+    ],
+)
+def test_stop_exit_code_follows_the_pod_outcome(
+    monkeypatch, outcome: str, expected: int
+) -> None:
+    monkeypatch.setattr(
+        main_module.orchestrator, "stop", lambda **kwargs: {"comfy": outcome}
+    )
+    assert main(["stop"]) == expected
+
+
+def test_stop_without_a_pod_phase_still_succeeds(monkeypatch) -> None:
+    """No registry, no pod: the local phase alone is a successful stop."""
+    monkeypatch.setattr(main_module.orchestrator, "stop", lambda **kwargs: None)
+    assert main(["stop"]) == 0
+
+
+@pytest.mark.parametrize(
+    "status, expected",
+    [
+        ("OK", 0),
+        ("WARN", 0),
+        ("SKIP", 0),
+        # An ERROR diagnostic must not exit 0: `launcher doctor && start`
+        # would otherwise proceed on a broken install.
+        ("ERROR", 1),
+    ],
+)
+def test_doctor_exit_code_follows_the_diagnostics(
+    monkeypatch, status: str, expected: int
+) -> None:
+    monkeypatch.setattr(
+        main_module, "run_diagnostics", lambda *a, **k: [_diagnostic(status)]
+    )
+    assert main(["doctor"]) == expected
+
+
+def test_doctor_reports_an_error_among_healthy_checks(monkeypatch) -> None:
+    monkeypatch.setattr(
+        main_module,
+        "run_diagnostics",
+        lambda *a, **k: [_diagnostic("OK"), _diagnostic("ERROR"), _diagnostic("WARN")],
+    )
+    assert main(["doctor"]) == 1

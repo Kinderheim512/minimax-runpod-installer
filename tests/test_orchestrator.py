@@ -8,7 +8,13 @@ import pytest
 from dataclasses import replace
 
 from launcher import orchestrator
-from launcher.config import Config, RunPodConfig, Secrets, load_config
+from launcher.config import (
+    DEFAULT_COMFY_TEMPLATE_ID,
+    Config,
+    RunPodConfig,
+    Secrets,
+    load_config,
+)
 from launcher.health import HealthError
 from launcher.pod_registry import PodRecord, PodRegistry
 from launcher.runtime_state import ProcessEntry, RuntimeState
@@ -880,14 +886,13 @@ def _prov_config(**runpod_overrides):
     )
 
 
-def _start(cfg, runpod, registry, lock, tmp_path, tunnels=None, openfox=None):
+def _start(cfg, runpod, registry, lock, tmp_path, tunnels=None):
     from launcher.runtime_state import RuntimeState
 
     return orchestrator.start(
         cfg,
         runpod=runpod,
         tunnels=tunnels or FakeTunnels(),
-        openfox=openfox or FakeOpenFox(),
         open_browser=lambda u: None,
         state=RuntimeState(tmp_path / "runtime.json"),
         registry=registry,
@@ -1231,3 +1236,58 @@ def dataclasses_replace(cfg, **overrides):
     return dataclasses.replace(cfg, **overrides)
 
 
+# ---------------------------------------------------------------------------
+# Click and go: the template a fresh install deploys
+# ---------------------------------------------------------------------------
+
+
+def _provisioning_config(monkeypatch, *, template_id=None):
+    """A comfy config with an API key and no private template id."""
+    monkeypatch.delenv("RUNPOD_POD_ID", raising=False)
+    monkeypatch.delenv("RUNPOD_COMFY_TEMPLATE_ID", raising=False)
+    env = {"RUNPOD_API_KEY": "rp_test_key"}
+    if template_id is not None:
+        env["RUNPOD_COMFY_TEMPLATE_ID"] = template_id
+    cfg = load_config(env=env)
+    assert cfg.stack == "comfy"
+    return dataclasses_replace(
+        cfg, runpod=RunPodConfig(gpu_id="NVIDIA A6000", gpu_count=1)
+    )
+
+
+def test_a_fresh_install_deploys_the_public_template(tmp_path, monkeypatch) -> None:
+    """Nothing configured -> ``create_pod`` gets the PUBLIC template id.
+
+    This is the whole "click and go" promise: a first run needs only a RunPod
+    API key, so the template id has to come from the launcher's own default
+    rather than from a private id the user would have to create and paste.
+    """
+    cfg = _provisioning_config(monkeypatch)
+    assert cfg.secrets.comfy_template_id == DEFAULT_COMFY_TEMPLATE_ID
+
+    runpod = FakeProvisionerRunPod(
+        pod=ProvPod("pod_new", "RUNNING"),
+        created_pod=ProvPod("pod_new", "PROVISIONING"),
+    )
+    _start(cfg, runpod, _registry(tmp_path), FakeLock(), tmp_path)
+
+    assert len(runpod.create_calls) == 1, runpod.create_calls
+    call = runpod.create_calls[0]
+    assert call["template_id"] == DEFAULT_COMFY_TEMPLATE_ID
+    # The public id is the one the launcher ships; a typo here would deploy
+    # nothing at all, so pin the literal too.
+    assert call["template_id"] == "oa2vozqbum"
+
+
+def test_a_configured_private_template_still_wins(tmp_path, monkeypatch) -> None:
+    """An explicit private template id overrides the public default."""
+    cfg = _provisioning_config(monkeypatch, template_id="tmpl_private")
+    assert cfg.secrets.comfy_template_id == "tmpl_private"
+
+    runpod = FakeProvisionerRunPod(
+        pod=ProvPod("pod_new", "RUNNING"),
+        created_pod=ProvPod("pod_new", "PROVISIONING"),
+    )
+    _start(cfg, runpod, _registry(tmp_path), FakeLock(), tmp_path)
+
+    assert runpod.create_calls[0]["template_id"] == "tmpl_private"

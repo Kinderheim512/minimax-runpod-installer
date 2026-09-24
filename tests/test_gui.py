@@ -5293,3 +5293,67 @@ def test_open_tunnel_refusals_are_not_wrapped_as_technical_detail() -> None:
         gui.open_tunnel_message("pod_unknown", state="", label="ComfyUI", port=8188),
     ):
         assert gui.translate_action_error(message) == message
+
+
+# ---------------------------------------------------------------------------
+# First-run wizard: the other half of "click and go"
+# ---------------------------------------------------------------------------
+
+
+def test_first_run_needs_credentials_when_nothing_is_configured(
+    monkeypatch, tmp_path
+) -> None:
+    """No key in the environment and none stored -> the wizard should offer."""
+    monkeypatch.delenv("RUNPOD_API_KEY", raising=False)
+    monkeypatch.setenv("MINIMAX_LAUNCHER_CREDENTIALS_DIR", str(tmp_path / "creds"))
+    assert gui.first_run_needs_credentials(None) is True
+
+
+def test_first_run_needs_credentials_is_false_with_an_environment_key(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("RUNPOD_API_KEY", "rp_env_key")
+    assert gui.first_run_needs_credentials(None) is False
+
+
+def test_first_run_needs_credentials_is_false_with_a_configured_config(
+    monkeypatch, tmp_path
+) -> None:
+    """A config that already carries a key never triggers the wizard."""
+    monkeypatch.delenv("RUNPOD_API_KEY", raising=False)
+    monkeypatch.setenv("MINIMAX_LAUNCHER_CREDENTIALS_DIR", str(tmp_path / "creds"))
+    config = load_config(env={"RUNPOD_API_KEY": "rp_configured_key"})
+    assert gui.first_run_needs_credentials(config) is False
+
+
+def test_the_wizard_opens_the_credentials_dialog_once(app, monkeypatch) -> None:
+    """A fresh install is offered the dialog — exactly once per session."""
+    opened = []
+    monkeypatch.setattr(gui, "first_run_needs_credentials", lambda config: True)
+    monkeypatch.setattr(app, "_credentials_set", lambda parent=None: opened.append(1))
+
+    app._maybe_first_run_wizard()
+    app._maybe_first_run_wizard()
+
+    assert opened == [1], "the dialog must open once, not on every refresh"
+
+
+def test_the_wizard_stays_quiet_when_a_key_is_configured(app, monkeypatch) -> None:
+    opened = []
+    monkeypatch.setattr(gui, "first_run_needs_credentials", lambda config: False)
+    monkeypatch.setattr(app, "_credentials_set", lambda parent=None: opened.append(1))
+
+    app._maybe_first_run_wizard()
+
+    assert opened == []
+
+
+def test_the_wizard_survives_a_failing_dialog(app, monkeypatch) -> None:
+    """A dialog that cannot open must not break the launch."""
+    monkeypatch.setattr(gui, "first_run_needs_credentials", lambda config: True)
+
+    def boom(parent=None):
+        raise RuntimeError("no display")
+
+    monkeypatch.setattr(app, "_credentials_set", boom)
+    app._maybe_first_run_wizard()  # must not raise
