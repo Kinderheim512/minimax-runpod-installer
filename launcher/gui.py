@@ -4826,7 +4826,7 @@ class ForgeApp:
             variant="quiet",
         ).pack(side="left", padx=(0, 8))
         self._make_button(
-            biblio_header, "📥 Importer", self._annuaire_import_json,
+            biblio_header, "📥 Import", self._annuaire_import_json,
             variant="quiet",
         ).pack(side="left", padx=(0, 8))
         # The userscript's counterpart: the entry it builds is on the
@@ -8037,7 +8037,7 @@ class ForgeApp:
         error = open_url_in_browser(url)
         if error is not None:
             raise RuntimeError(f"Could not open the browser: {error}")
-        return f"Ouverture de {url}"
+        return f"Opened {url}"
 
     # -- train stack --------------------------------------------------------
 
@@ -8124,7 +8124,7 @@ class ForgeApp:
         url, _files = self._train_urls()
         try:
             webbrowser.open(url)
-            self._append_log("ok", f"Ouverture de Fizgig : {url}")
+            self._append_log("ok", f"Opening Fizgig: {url}")
             self._append_log(
                 "info",
                 "SSH tunnel access only. If the page does not answer, "
@@ -10826,7 +10826,7 @@ class ForgeApp:
                 "MiniMax H3 Launcher",
                 pystray.Menu(
                     pystray.MenuItem(
-                        "Afficher",
+                        "Show",
                         lambda *_args: self._queue.put(("tray_show",)),
                         default=True,
                     ),

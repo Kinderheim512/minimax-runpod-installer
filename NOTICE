@@ -34,11 +34,30 @@ which is licensed under the MIT License:
     DEALINGS IN THE SOFTWARE.
 
 The vendored modules carry a `Vendored from openfox-forge@<sha>` header naming
-the upstream revision they came from. The resynchronisation procedure is to
-diff those modules against that revision upstream: the only intended
-differences are the provenance header itself, the removal of the text-agent
-surface (the `agent` and `llamacpp` stacks, the MCP tool layer and the
-OpenFox/Codex integration) and the completion of the English translation.
+the upstream revision they came from. The resynchronisation procedure is
+runnable:
+
+    python scripts/check_vendored_sync.py [path-to-openfox-forge]
+
+It diffs every `launcher/*.py` against upstream and classifies each changed
+line, so the intended differences are visible instead of asserted:
+
+* the **provenance header**;
+* the **product rename** this repository forces — `openfox-forge` →
+  `minimax-launcher`, the `OPENFOX_FORGE_*` / `FORGE_*` environment variables
+  → `MINIMAX_LAUNCHER_*` / `LAUNCHER_*`, the product name, the bundled asset
+  names. It is required by the rule that no agent-surface name survives in
+  `launcher/`, and it is why the logger namespaces differ;
+* the **removal of the text-agent surface** — the `agent` and `llamacpp`
+  stacks, the MCP tool layer, `openfox.py` / `agent_cli.py` / `searxng.py` /
+  `deepseek.py`, the LLM profiles and the llama.cpp registry;
+* the **derived work** done here and not upstream: the cross-platform
+  backends (Keychain, Secret Service, `lsof`/`ss`, `osascript`/`notify-send`),
+  the public-template default, the first-run wizard and the single-artefact
+  release build.
+
+Modules that carry none of the last two differ by the header and the rename
+alone.
 
 The image, the pod-side scripts (`install.sh`, `lib/`, `Dockerfile`,
 `workflows/`, `presets/`) remain this repository's own work under Apache-2.0.
