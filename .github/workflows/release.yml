@@ -63,13 +63,15 @@ jobs:
           # the release. The Intel binary is cross-built from the universal2
           # interpreter `actions/setup-python` installs.
           #
-          # It installs `themes` but NOT `tray`: pystray pulls Pillow, and
-          # Pillow ships per-architecture macOS wheels that PyInstaller refuses
-          # to combine ("...PIL/_webp.cpython-311-darwin.so is not a fat
-          # binary!"). The x64 build therefore has no tray icon and no PNG
-          # brand icon — it falls back to the text/glyph chrome, which is what
-          # `launcher.gui._HAS_PIL` already handles. The name follows
-          # `lipo -archs`, never a guess.
+          # The x64 build installs NO optional extras. Pillow ships
+          # per-architecture macOS wheels and PyInstaller refuses to thin or
+          # combine them ("...PIL/_imagingft.cpython-311-darwin.so is
+          # incompatible with target arch x86_64 (has arch: arm64)!"), and
+          # Pillow arrives twice over — through `tray` (pystray) AND through
+          # `themes` (ttkbootstrap depends on it). So the Intel build has the
+          # built-in palette, the text/glyph chrome and no tray icon; the
+          # dashboard, the stacks and the journal are identical. The name
+          # follows `lipo -archs`, never a guess.
           - os: macos-14
             label: macos-arm64
             artifact: MiniMaxH3Launcher-macos-arm64
@@ -79,7 +81,7 @@ jobs:
             label: macos-x64
             artifact: MiniMaxH3Launcher-macos-x64
             target_arch: x86_64
-            extras: ".[themes]"
+            extras: ""
           - os: ubuntu-22.04
             label: linux-x64
             artifact: MiniMaxH3Launcher-linux-x64
@@ -99,6 +101,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pyinstaller pillow
       - name: Install the GUI dependencies (optional extras)
+        if: matrix.extras != ''
         run: python -m pip install "${{ matrix.extras }}" || echo "optional extras unavailable"
       - name: Show the interpreter architecture (macOS)
         if: runner.os == 'macOS'
@@ -213,10 +216,11 @@ jobs:
 
             ${{ steps.describe.outputs.TABLE }}
 
-            The Intel macOS build ships without the tray icon and the PNG
-            brand icon (Pillow ships per-architecture macOS wheels, so the two
-            architectures cannot share one binary). Everything else is
-            identical.
+            The Intel macOS build has no optional extras (Pillow ships
+            per-architecture macOS wheels and PyInstaller cannot thin them, and
+            both `tray` and `themes` pull Pillow in): it uses the built-in
+            palette, the text/glyph chrome and has no tray icon. The dashboard,
+            the stacks and the journal are identical.
 
             ### Unsigned binaries
 

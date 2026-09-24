@@ -83,10 +83,11 @@ It ships in English (US) and French; switch language in *Settings*.
 
 Grab them from the [releases page](https://github.com/Kinderheim512/minimax-runpod-installer/releases).
 
-> The Intel macOS build ships without the tray icon and the PNG brand icon:
-> Pillow ships per-architecture macOS wheels, so the two architectures cannot
-> be combined into one binary and the x64 build leaves Pillow out. Everything
-> else — the dashboard, the stacks, the journal — is identical.
+> The Intel macOS build has no optional extras: Pillow ships
+> per-architecture macOS wheels, PyInstaller cannot thin them, and both
+> optional extras pull Pillow in. It uses the built-in palette and the
+> text/glyph chrome, and has no tray icon. Everything else — the dashboard,
+> the stacks, the journal — is identical.
 
 **Prerequisites, all platforms**
 
