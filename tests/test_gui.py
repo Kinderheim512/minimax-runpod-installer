@@ -2319,14 +2319,31 @@ def test_footer_minimize_checkbox_removed(app) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_notify_shows_banner_and_autohides(app) -> None:
-    app._notify("Preset « X » sauvegardé.", "ok", after_ms=500)
+def test_notify_shows_the_banner(app) -> None:
+    # A 60 s timer: the auto-hide cannot fire inside the assertion window, so
+    # this only asserts what it says it does. (The old version used 500 ms and
+    # raced its own timer on a loaded machine.)
+    app._notify("Preset saved.", "ok", after_ms=60_000)
     app.root.update()
-    assert app._notify_label.cget("text") == "Preset « X » sauvegardé."
+    assert app._notify_label.cget("text") == "Preset saved."
     assert app._notify_label.winfo_manager() == "pack"
-    time.sleep(0.6)
+    app._hide_notify()
     app.root.update()
     assert app._notify_label.winfo_manager() == ""
+
+
+def test_notify_autohides_when_the_timer_fires(app) -> None:
+    app._notify("Preset saved.", "ok", after_ms=1)
+    # Wait for the timer rather than assuming one update() is enough: a busy
+    # event loop can still be draining the previous test's callbacks.
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        app.root.update()
+        if app._notify_label.winfo_manager() == "":
+            break
+        time.sleep(0.02)
+    assert app._notify_label.winfo_manager() == ""
+    assert app._notify_after is None
 
 
 def test_notify_colors_follow_kind(app) -> None:

@@ -6491,11 +6491,14 @@ class ForgeApp:
             except tk.TclError:
                 pass
             self._notify_after = None
-        if (
-            self._notify_label is not None
-            and self._widget_exists(self._notify_label)
-            and self._notify_label.winfo_viewable()
+        if self._notify_label is not None and self._widget_exists(
+            self._notify_label
         ):
+            # No ``winfo_viewable()`` here: an unmapped window (not drawn yet,
+            # or minimised to the tray) reports 0 while the label is still
+            # packed, and the banner then never hides. ``_widget_exists`` is
+            # the guard that matters — it is what makes the Tk call safe — and
+            # ``pack_forget`` on an unpacked widget is a no-op anyway.
             self._notify_label.pack_forget()
 
     # -- progress -----------------------------------------------------------
