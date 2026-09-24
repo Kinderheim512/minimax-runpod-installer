@@ -41,7 +41,7 @@ dialog) and it wins.
 
 No. Code-signing certificates cost money and this is a free tool, so each OS
 asks once: on macOS clear the quarantine flag
-(`xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-universal2`), on Windows
+(`xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-arm64`), on Windows
 click *More info* → *Run anyway* on the SmartScreen prompt. Building from
 source avoids both (`python scripts/build_exe.py`).
 

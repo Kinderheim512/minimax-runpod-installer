@@ -56,15 +56,16 @@ jobs:
           - os: windows-latest
             label: windows-x64
             artifact: MiniMaxH3Launcher-windows-x64.exe
-          # One macOS job, not two: macos-13 (the Intel image) is being retired
-          # and sits queued for tens of minutes, which stalls the release. The
-          # universal2 build covers both architectures when the interpreter is
-          # universal2 (what actions/setup-python installs) and degrades to the
-          # runner's own architecture otherwise — the artefact name follows
-          # what `lipo -archs` actually reports.
+          # One macOS job, not two. macos-13 (the Intel image) is being retired
+          # and sits queued for tens of minutes, which stalls the release; and a
+          # real universal2 build is not reachable either, because Pillow ships
+          # per-architecture macOS wheels and PyInstaller refuses to fatten them
+          # ("...PIL/_webp.cpython-311-darwin.so is not a fat binary!"). So the
+          # macOS artefact is Apple silicon, and the README says how an Intel
+          # user builds their own. The name follows `lipo -archs`, never a guess.
           - os: macos-14
-            label: macos-universal2
-            artifact: MiniMaxH3Launcher-macos-universal2
+            label: macos
+            artifact: MiniMaxH3Launcher-macos-arm64
           - os: ubuntu-22.04
             label: linux-x64
             artifact: MiniMaxH3Launcher-linux-x64
@@ -140,12 +141,36 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          # The icon set is an input of the build, not something a user
+          # downloads: only the launcher binaries are published.
+          pattern: MiniMaxH3Launcher-*
           path: artifacts
       - name: Flatten the artefacts
         run: |
           mkdir -p release
           find artifacts -type f -exec cp {} release/ \;
           ls -la release
+      - name: Describe the artefacts
+        id: describe
+        run: |
+          {
+            echo 'TABLE<<EOF'
+            echo '| File | Platform |'
+            echo '| --- | --- |'
+            for f in $(ls release); do
+              case "$f" in
+                *windows*) plat='Windows 10/11 (x64)' ;;
+                *macos-universal2*) plat='macOS (Apple silicon + Intel)' ;;
+                *macos-arm64*) plat='macOS (Apple silicon)' ;;
+                *macos-x64*) plat='macOS (Intel)' ;;
+                *linux*) plat='Linux (x64)' ;;
+                *) plat='—' ;;
+              esac
+              echo "| \`$f\` | $plat |"
+            done
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
@@ -160,11 +185,11 @@ jobs:
             **Deploy the template on RunPod:**
             https://console.runpod.io/hub/template/oa2vozqbum?ref=76jvawoy
 
-            | OS | File |
-            | --- | --- |
-            | Windows 10/11 | `MiniMaxH3Launcher-windows-x64.exe` |
-            | macOS | `MiniMaxH3Launcher-macos-universal2` (Apple silicon + Intel) |
-            | Linux x64 | `MiniMaxH3Launcher-linux-x64` |
+            ${{ steps.describe.outputs.TABLE }}
+
+            An Intel Mac is not covered by a prebuilt binary (Pillow ships
+            per-architecture macOS wheels, so a universal build is not
+            possible): build it locally with `python scripts/build_exe.py`.
 
             ### Unsigned binaries
 
