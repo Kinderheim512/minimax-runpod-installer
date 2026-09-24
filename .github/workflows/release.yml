@@ -96,13 +96,13 @@ jobs:
         run: |
           set -e
           mkdir -p out
-          for f in dist/*; do
-            [ -f "$f" ] || continue
-            case "$f" in
-              *.exe) cp "$f" "out/${{ matrix.artifact }}" ;;
-              *) cp "$f" "out/${{ matrix.artifact }}" ;;
-            esac
-          done
+          # A --onefile build produces exactly one file; more than one means
+          # the build leaked something and the artefact would be ambiguous.
+          count=$(find dist -maxdepth 1 -type f | wc -l)
+          [ "$count" -eq 1 ] || { echo "expected 1 artefact, found $count"; ls -la dist; exit 1; }
+          artefact=$(find dist -maxdepth 1 -type f)
+          cp "$artefact" "out/${{ matrix.artifact }}"
+          chmod +x "out/${{ matrix.artifact }}"
           ls -la out
       - uses: actions/upload-artifact@v4
         with:

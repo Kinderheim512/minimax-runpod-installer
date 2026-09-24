@@ -39,5 +39,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['launcher/icon.ico'],
+    icon=['C:/Users/lllam/Downloads/minimax-runpod-installer/launcher/icon.ico'],
 )

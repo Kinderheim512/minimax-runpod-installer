@@ -1,56 +1,90 @@
-"""Build the standalone MiniMaxH3Launcher.exe (PyInstaller, onefile, windowed).
+"""Build the standalone MiniMax H3 Launcher binary (PyInstaller, one file).
 
 Usage:
     python -m pip install ".[gui-build]"     # or: python -m pip install pyinstaller
-    python scripts/build_exe.py              # -> dist/MiniMaxH3Launcher.exe
+    python scripts/build_exe.py              # -> dist/MiniMaxH3Launcher[.exe]
 
-The tray icon is bundled when ``pystray`` (extra [tray]) is installed in the
-build environment; otherwise the exe builds fine without tray support.
+Cross-platform on purpose — the release workflow builds on Windows, macOS
+(arm64 + x64) and Linux — which means two platform details matter:
+
+* ``--add-data`` takes ``SOURCE:DEST`` everywhere EXCEPT Windows, where it is
+  ``SOURCE;DEST``. Hard-coding ``;`` makes every POSIX build die with
+  "Wrong syntax, should be --add-data=SOURCE:DEST".
+* ``--icon`` only means something to the Windows and macOS bootloaders, and
+  each wants its own format (``.ico`` / ``.icns``). Linux has no such slot, so
+  the flag is simply not passed there.
+
+The tray icon is bundled when ``pystray`` (extra ``[tray]``) is installed in
+the build environment; otherwise the build works fine without tray support.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import os
+import pathlib
 import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+#: Bundled as-is: the runtime resolves them through ``sys._MEIPASS``.
+DATA_FILES = (
+    ("launcher/icon.png", "launcher"),
+    ("launcher/icon.ico", "launcher"),
+    ("launcher/assets", "launcher/assets"),
+)
+
+
+def icon_for_this_platform() -> pathlib.Path | None:
+    """The icon the bootloader wants here, or None when it wants none."""
+    if os.name == "nt":
+        return ROOT / "launcher" / "icon.ico"
+    if sys.platform == "darwin":
+        return ROOT / "launcher" / "icon.icns"
+    return None
 
 
 def main() -> int:
     if importlib.util.find_spec("PyInstaller") is None:
         print(
             "PyInstaller is not installed in this environment.\n"
-            "Install it first:  python -m pip install \".[gui-build]\"",
+            'Install it first:  python -m pip install ".[gui-build]"',
             file=sys.stderr,
         )
         return 1
 
     from PyInstaller.__main__ import run
 
+    separator = os.pathsep
     args = [
         "--onefile",
         "--noconsole",
         "--clean",
         "--name",
         "MiniMaxH3Launcher",
-        "--icon",
-        "launcher/icon.ico",
-        "--add-data",
-        "launcher/icon.png;launcher",
-        "--add-data",
-        "launcher/icon.ico;launcher",
-        # Bundled icons: resolved through sys._MEIPASS at runtime (see
-        # launcher.gui._asset_icon_path). Without this the frozen build
-        # silently falls back to the text/glyph rendering.
-        "--add-data",
-        "launcher/assets;launcher/assets",
-        # The locale tables are imported by name at runtime (see
-        # launcher.i18n._load_table), which PyInstaller cannot see: without
-        # these the frozen build would silently fall back to English.
-        "--hidden-import",
-        "launcher.locales",
-        "--hidden-import",
-        "launcher.locales.fr",
-        "launcher_gui_entry.py",
     ]
+
+    icon = icon_for_this_platform()
+    if icon is not None:
+        if not icon.is_file():
+            print(f"missing icon: {icon}", file=sys.stderr)
+            return 1
+        args += ["--icon", str(icon)]
+
+    for source, destination in DATA_FILES:
+        path = ROOT / source
+        if not path.exists():
+            print(f"missing data file: {path}", file=sys.stderr)
+            return 1
+        # PyInstaller wants SOURCE<sep>DEST, and <sep> is os.pathsep.
+        args += ["--add-data", f"{source}{separator}{destination}"]
+
+    # The locale tables are imported by name at runtime (see
+    # launcher.i18n._load_table), which PyInstaller cannot see: without these
+    # the frozen build would silently fall back to English.
+    args += ["--hidden-import", "launcher.locales"]
+    args += ["--hidden-import", "launcher.locales.fr"]
+
     if importlib.util.find_spec("pystray") is not None:
         # pystray selects its backend with a dynamic import.
         for backend in ("_win32", "_appindicator", "_xorg"):
@@ -61,6 +95,8 @@ def main() -> int:
         # themes. Without the package the GUI falls back to the hand-rolled
         # palettes and builds fine.
         args += ["--collect-data", "ttkbootstrap"]
+
+    args.append("launcher_gui_entry.py")
     run(args)
     return 0
 
