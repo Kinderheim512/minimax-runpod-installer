@@ -97,9 +97,18 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install the build dependencies
+        shell: bash
         run: |
+          set -e
           python -m pip install --upgrade pip
-          python -m pip install pyinstaller pillow
+          python -m pip install pyinstaller
+          # Pillow is only needed by the icon/tray code paths, and it ships
+          # per-architecture macOS wheels that PyInstaller cannot thin — so the
+          # Intel macOS cross-build leaves it out (and with it the tray icon
+          # and the PNG brand icon, which the GUI already degrades from).
+          if [ "${{ matrix.target_arch }}" != "x86_64" ]; then
+            python -m pip install pillow
+          fi
       - name: Install the GUI dependencies (optional extras)
         if: matrix.extras != ''
         run: python -m pip install "${{ matrix.extras }}" || echo "optional extras unavailable"
