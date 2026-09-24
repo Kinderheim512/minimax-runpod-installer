@@ -2,7 +2,41 @@
 
 Ce guide explique comment déployer **ComfyUI + MiniMax H3** sur un RunPod
 neuf, étape par étape. Pour la version courte, voir le
-[README.md](../README.md#-quick-start) (en anglais).
+[README.md](../README.md) (en anglais).
+
+Il y a deux chemins, et ils arrivent au même endroit :
+
+| | Pour qui | Où |
+| --- | --- | --- |
+| **Lanceur de bureau** | vous voulez cliquer et que ça tourne | [README.md](../README.md#-desktop-launcher) |
+| **Installateur pod-side** | vous pilotez le pod depuis son terminal | ce guide |
+
+---
+
+# Lanceur de bureau (recommandé)
+
+Une application de bureau qui loue le pod, ouvre le tunnel SSH, démarre
+ComfyUI (ou le bureau d'entraînement LoRA) et ouvre l'interface dans votre
+navigateur. Windows, macOS et Linux. Au premier lancement, il ne vous faut
+qu'une clé API RunPod : le template déployé est public.
+
+1. Téléchargez le binaire de votre système depuis la
+   [page des releases](https://github.com/Kinderheim512/minimax-runpod-installer/releases)
+   (`MiniMaxH3Launcher-windows-x64.exe`, `-macos-arm64`, `-macos-x64`,
+   `-linux-x64`).
+2. Lancez-le : la fenêtre des identifiants s'ouvre d'elle-même.
+3. Collez votre **clé API RunPod** et enregistrez.
+4. Choisissez **ComfyUI video** dans la barre du bas, puis **Start**.
+
+L'interface est disponible en anglais (US) et en français — le choix se fait
+dans *Settings*.
+
+> Les binaires ne sont **pas signés** : macOS affiche une alerte Gatekeeper
+> (`xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-arm64`), Windows un
+> avertissement SmartScreen (« Informations complémentaires » → « Exécuter
+> quand même »).
+
+**👉 [Déployer le template MiniMax H3 sur RunPod](https://console.runpod.io/hub/template/oa2vozqbum?ref=76jvawoy)**
 
 ---
 
@@ -214,3 +248,9 @@ courants :
 
 Si ce projet vous est utile, n'hésitez pas à lui attribuer une ⭐ sur
 GitHub.
+
+Passer par le lien de template ci-dessous soutient le projet, sans surcoût
+pour vous :
+
+- 👉 [Template MiniMax H3 sur RunPod](https://console.runpod.io/hub/template/oa2vozqbum?ref=76jvawoy)
+- 👉 [runpod.io](https://runpod.io?ref=76jvawoy)

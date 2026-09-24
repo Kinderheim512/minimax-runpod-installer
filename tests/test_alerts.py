@@ -3,8 +3,25 @@
 from launcher import alerts
 
 
-def test_play_pod_ready_non_windows_is_noop(monkeypatch) -> None:
+def test_play_pod_ready_is_silent_when_no_helper_exists(monkeypatch) -> None:
+    """A platform with no sound helper is a no-op, never an error.
+
+    The alert is no longer Windows-only (``afplay`` on macOS, ``paplay`` /
+    ``aplay`` on Linux), so the old "non-Windows is always False" assertion
+    stopped describing the behaviour. What must hold on every platform is that
+    a missing helper degrades to silence.
+    """
     monkeypatch.setattr(alerts.os, "name", "posix")
+    monkeypatch.setattr(alerts, "_which", lambda _name: False)
+    monkeypatch.setattr(alerts.os.path, "exists", lambda _path: False)
     assert alerts.play_pod_ready() is False
+
+
+def test_play_pod_ready_never_raises(monkeypatch) -> None:
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("no audio device")
+
+    monkeypatch.setattr(alerts, "_spawn", boom)
+    assert alerts.play_pod_ready() in (True, False)
 
 

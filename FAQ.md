@@ -6,6 +6,53 @@ For step-by-step help with a specific error, see
 
 ---
 
+## The launcher
+
+### Do I have to use a terminal?
+
+No. The [desktop launcher](README.md#-desktop-launcher) does everything the
+scripts do, from a window: it rents the pod, opens the tunnel, starts ComfyUI
+and opens it in your browser. The scripts are still here for people who prefer
+to drive the pod themselves — see
+[docs/INSTALL_EN.md](docs/INSTALL_EN.md).
+
+### Where do I get a RunPod API key?
+
+[RunPod console → Settings → API Keys](https://www.runpod.io/console/user/settings).
+Paste it into the launcher's credentials dialog (it opens by itself on a first
+run) or store it from a terminal:
+
+```bash
+python -m launcher credentials set
+```
+
+The key goes into your operating system's credential store — DPAPI on
+Windows, the login Keychain on macOS, the Secret Service on Linux — never a
+plain file.
+
+### Which RunPod template does the launcher deploy?
+
+The public one: **[https://console.runpod.io/hub/template/oa2vozqbum?ref=76jvawoy](https://console.runpod.io/hub/template/oa2vozqbum?ref=76jvawoy)**. That means a first run needs nothing but
+your API key — no private template ID to create or copy. If you have your own
+template, set `RUNPOD_COMFY_TEMPLATE_ID` (or store it in the credentials
+dialog) and it wins.
+
+### Are the launcher binaries signed?
+
+No. Code-signing certificates cost money and this is a free tool, so each OS
+asks once: on macOS clear the quarantine flag
+(`xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-arm64`), on Windows
+click *More info* → *Run anyway* on the SmartScreen prompt. Building from
+source avoids both (`python scripts/build_exe.py`).
+
+### Does the launcher send my data anywhere?
+
+Only to RunPod and to the sources you configure (Hugging Face, Civitai). It
+has no telemetry. Your API key and tokens stay in the OS credential store, and
+every log line is passed through a redaction filter before it is displayed.
+
+---
+
 ## What VRAM do I need?
 
 **8 GB minimum** (`MIN_VRAM_GB` in `config.env`), using the `light` weight

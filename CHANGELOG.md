@@ -6,9 +6,71 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [2.0.0]
+
+The release that ships the desktop launcher.
+
+### ✨ Desktop launcher (`launcher/`)
+
+A tkinter app + CLI that rents the RunPod pod, opens the SSH tunnel, starts
+ComfyUI (or the LoRA-training desktop) and opens the UI in your browser. It
+runs on **Windows, macOS and Linux**, and a first run needs only a RunPod API
+key: the template it deploys is public.
+
+- 🖥 **Click and go** — a first run is "paste your API key, press Start". A
+  first-run wizard opens the credentials dialog when nothing is configured.
+- 🔐 **No public port** — ComfyUI is reached through an SSH tunnel; an explicit
+  *direct* mode exists for the pod's public URL.
+- 📚 **Library** — install LoRAs, workflows and custom nodes from a URL or a
+  local file; the launcher uploads the local ones over the tunnel and the
+  pod-side installer persists them across pod recreations.
+- 🔔 **Collect finished generations** — the queue is watched through the
+  tunnel and outputs are pulled down automatically.
+- 🧪 **LoRA training stack** — rents a GPU, streams the Fizgig desktop over
+  KasmVNC, collects the trained LoRAs.
+- ⏱ **Timer** — stop the pod after N minutes, optionally shut the machine down.
+- 🩺 **Diagnostics** — `doctor`, plus a Repair action for the recoverable cases.
+- 🌍 **English (US) by default**, French available (`LAUNCHER_LANG`).
+
+Platform support:
+
+- Credentials live in the OS store — DPAPI (Windows), login Keychain (macOS),
+  Secret Service (Linux) — with a `0600` file fallback. The backend and its
+  directory are overridable (`MINIMAX_LAUNCHER_CREDENTIAL_BACKEND`,
+  `MINIMAX_LAUNCHER_CREDENTIALS_DIR`).
+- Port ownership: `netstat`+`tasklist` (Windows), `lsof`/`ss`+`ps` (macOS,
+  Linux).
+- Alerts: `winsound`+PowerShell, `afplay`+`osascript`, `paplay`/`aplay`+
+  `notify-send`.
+- The icon set (`icon.png`, `icon.ico`, `icon.icns`) is generated from one
+  master by `scripts/make_launcher_icon.py`.
+
+### 🔧 Changed
+
+- The comfy stack defaults to the public RunPod template
+  `oa2vozqbum` (https://console.runpod.io/hub/template/oa2vozqbum), so no
+  private template ID is needed to get started.
+- `doctor` reports whether the OpenSSH client is on PATH.
+- The README is launcher-first; the pod-side installer reference moved to
+  [docs/INSTALL_EN.md](docs/INSTALL_EN.md).
+
+### 🧪 Build, tests and CI
+
+- `pyproject.toml` (entry points `minimax-launcher` / `minimax-launcher-gui`),
+  `MiniMaxH3Launcher.spec` and `scripts/build_exe.py`.
+- `tests/` — 1000 tests, including the audit suite (logging redaction,
+  RunPod transient failures, runtime-state corruption, the ComfyUI ops and
+  workflow conversion, the queue-drain pod stop).
+- CI: `bash -n`, ShellCheck, workflow-JSON validation, and pytest on
+  ubuntu-latest / windows-latest / macos-14. `.github/workflows/release.yml`
+  builds and publishes the Windows, macOS (arm64 + x64) and Linux binaries on
+  a `v*` tag.
+- `LICENSE` (Apache-2.0) and `NOTICE` (MIT attribution for the vendored
+  launcher) are now in the repository.
+
 ## [Unreleased]
 
-Changes since `v1.1.0`, not yet tagged.
+Changes since `v2.0.0`, not yet tagged.
 
 ### 🐛 Fix: post-install verification (`bash install.sh` summary) always reported FL2VA/REF2VA "missing" with `H3_DASIWA_CHECKPOINT_VARIANT=dasiwa_hybrid`, even after a successful download
 

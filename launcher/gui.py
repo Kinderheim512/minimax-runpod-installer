@@ -3217,6 +3217,16 @@ def build_health_table_rows(
     return rows
 
 
+def _launcher_version() -> str:
+    """The launcher's version, from the package (``unknown`` if unreadable)."""
+    try:
+        from . import __version__
+
+        return __version__
+    except Exception:  # noqa: BLE001 - a version string is never fatal
+        return "unknown"
+
+
 class ForgeApp:
     """The MiniMax H3 Launcher tkinter application."""
 
@@ -6247,7 +6257,8 @@ class ForgeApp:
 
             messagebox.showinfo(
                 "About MiniMax H3 Launcher",
-                "MiniMax H3 Launcher\nLocal control centre for your AI stack.\n\n"
+                f"MiniMax H3 Launcher {_launcher_version()}\n"
+                "Local control centre for your AI stack.\n\n"
                 "Shortcut: Ctrl + , opens the settings.",
                 parent=self.root,
             )

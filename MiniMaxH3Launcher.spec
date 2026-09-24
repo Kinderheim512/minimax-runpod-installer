@@ -1,37 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for the MiniMax H3 Launcher (one file, windowed).
-
-The bundled data is what the frozen build cannot find by itself:
-
-* ``launcher/icon.png`` / ``icon.ico`` — the window and taskbar icon;
-* ``launcher/assets`` — the icon set the GUI resolves at runtime;
-* the locale tables, imported by name (``launcher.i18n._load_table``), which
-  PyInstaller cannot see statically.
-
-``ttkbootstrap`` is collected when it is installed: the GUI falls back to the
-hand-rolled palette without it, so the build works either way.
-"""
 from PyInstaller.utils.hooks import collect_data_files
 
-datas = [
-    ('launcher/icon.png', 'launcher'),
-    ('launcher/icon.ico', 'launcher'),
-    ('launcher/assets', 'launcher/assets'),
-]
+datas = [('launcher/icon.png', 'launcher'), ('launcher/icon.ico', 'launcher'), ('launcher/assets', 'launcher/assets')]
 datas += collect_data_files('ttkbootstrap')
+
 
 a = Analysis(
     ['launcher_gui_entry.py'],
     pathex=[],
     binaries=[],
     datas=datas,
-    hiddenimports=[
-        'launcher.locales',
-        'launcher.locales.fr',
-        'pystray._win32',
-        'pystray._appindicator',
-        'pystray._xorg',
-    ],
+    hiddenimports=['launcher.locales', 'launcher.locales.fr', 'pystray._win32', 'pystray._appindicator', 'pystray._xorg'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -17,6 +17,7 @@ jobs:
   icons:
     name: Icons (png / ico / icns)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -47,6 +48,7 @@ jobs:
     name: Build (${{ matrix.label }})
     needs: icons
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -77,7 +79,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pyinstaller pillow
       - name: Install the GUI dependencies (optional extras)
-        run: python -m pip install ".[tray]" || echo "optional extras unavailable"
+        run: python -m pip install ".[tray,themes]" || echo "optional extras unavailable"
       - name: Build
         run: python scripts/build_exe.py
       - name: Smoke-test the binary
@@ -111,6 +113,7 @@ jobs:
     name: Publish the release
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -127,9 +130,26 @@ jobs:
           files: release/*
           generate_release_notes: true
           body: |
-            Unsigned binaries. On macOS, clear the quarantine flag once:
+            ## Desktop launcher
+
+            Rents the RunPod pod, opens the SSH tunnel and puts ComfyUI (or the
+            LoRA-training desktop) in your browser. Windows, macOS and Linux.
+
+            **Deploy the template on RunPod:**
+            https://console.runpod.io/hub/template/oa2vozqbum?ref=76jvawoy
+
+            ### Unsigned binaries
+
+            On macOS, Gatekeeper quarantines anything downloaded through a
+            browser — clear the flag once:
 
                 xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-*
 
             On Windows, SmartScreen may warn about an unsigned publisher:
             "More info" then "Run anyway".
+
+            ### First run
+
+            1. Launch the app — it opens the credentials dialog.
+            2. Paste your RunPod API key and press Save.
+            3. Pick **ComfyUI video** in the footer and press **Start**.

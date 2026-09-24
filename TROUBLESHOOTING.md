@@ -16,6 +16,58 @@ without changing anything.
 
 ---
 
+## The desktop launcher
+
+### "The SSH tunnel never came alive"
+
+The launcher forwards ComfyUI over SSH, so it needs an SSH endpoint the pod
+actually answers on. In order:
+
+1. **Is the pod RUNNING?** A freshly created pod reports RUNNING and a public
+   22/tcp mapping *before* its sshd is up — the container is still pulling its
+   image. The launcher retries for up to 20 minutes and narrates every attempt
+   in the journal; the first boot of the ComfyUI image is the slow one.
+2. **Is the image one that starts sshd?** A community ComfyUI image with no
+   SSH daemon exposes a TCP 22 that never answers. Use the launcher's default
+   template, or the RunPod web terminal.
+3. **Is the SSH key registered on RunPod?** The launcher authenticates with
+   the key on your account. `python -m launcher doctor` reports the endpoint
+   and the key it is using.
+
+### "OpenSSH client not found" / `ssh` is not on PATH
+
+The tunnel is built on the `ssh` binary. Windows 10+ ships it as an optional
+feature (*Settings → Apps → Optional features → OpenSSH Client*); macOS and
+Linux have it already. `python -m launcher doctor` reports it explicitly.
+
+### The app will not open (macOS) or SmartScreen blocks it (Windows)
+
+Both are the unsigned-binary prompt, not a broken download:
+
+```bash
+# macOS
+xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-arm64
+```
+
+On Windows, click *More info* → *Run anyway* on the SmartScreen dialog.
+
+### The pod stops as soon as the queue empties
+
+That is the **Stop the pod once the queue is empty** option: the launcher
+watches the ComfyUI queue through the tunnel and stops the pod only after the
+queue has stayed empty for a settle window (60 s by default, configurable
+with `COMFY_TERMINATE_SETTLE_SECONDS`). A generation submitted during that
+window cancels the stop. Turn the option off in the launcher if you would
+rather stop the pod yourself.
+
+### Where did my API key go after an update?
+
+It did not move: it lives in the OS credential store, not in the launcher's
+files. On Linux without a Secret Service the launcher uses a `0600` file under
+`~/.local/share/minimax-launcher/` and says so in its log.
+
+---
+
 ## CUDA out of memory
 
 Reduce, in order of impact:

@@ -588,6 +588,7 @@ def _fake_unsupported_check() -> None:
     )
 
 
+@pytest.mark.skipif(os.name != "nt", reason="real DPAPI is Windows-only")
 def test_real_dpapi_refused_when_platform_check_fails(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(credentials, "_require_windows", _fake_unsupported_check)
     store = CredentialStore(path=tmp_path / "c.dpapi")

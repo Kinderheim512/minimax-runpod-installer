@@ -64,7 +64,9 @@ DEFAULT_COMFY_ACCESS = "tunnel"
 #: private template is configured, so a first run needs only a RunPod API key
 #: — the whole point of the "click and go" path. An explicit
 #: ``RUNPOD_COMFY_TEMPLATE_ID`` (or a stored private template) always wins.
-DEFAULT_COMFY_TEMPLATE_ID = "rfv75gjaip"
+#:
+#: https://console.runpod.io/hub/template/oa2vozqbum
+DEFAULT_COMFY_TEMPLATE_ID = "oa2vozqbum"
 #: Settle window (seconds) before "stop the pod once the queue is empty"
 #: fires. See ``ComfyConfig.terminate_settle_seconds``.
 DEFAULT_COMFY_TERMINATE_SETTLE_SECONDS = 60.0

@@ -50,8 +50,18 @@ from .pod_registry import default_home
 
 logger = launcher_logging.get_logger("minimax-launcher.comfy_watch")
 
-#: Where collected generations land when the operator has not chosen a folder.
-DEFAULT_OUTPUT_DIR = Path.home() / "Downloads"
+#: Folder name used when the operator has not chosen a collection folder.
+DEFAULT_OUTPUT_SUBDIR = "Downloads"
+
+
+def default_output_dir() -> Path:
+    """Where collected generations land by default (``~/Downloads``).
+
+    Resolved on every call rather than at import: the home directory can move
+    under us (a relocated ``HOME``, a test harness), and a module-level
+    constant froze whatever it was at import time.
+    """
+    return Path.home() / DEFAULT_OUTPUT_SUBDIR
 DEFAULT_POLL_SECONDS = 5.0
 DEFAULT_RETRY_SECONDS = 30.0
 DEFAULT_NTFY_SERVER = "https://ntfy.sh"
@@ -666,11 +676,11 @@ def resolve_output_dir(value: Optional[str]) -> Path:
     """The collection folder: the configured one, else ``~/Downloads``."""
     text = (value or "").strip()
     if not text:
-        return DEFAULT_OUTPUT_DIR
+        return default_output_dir()
     try:
         return Path(text).expanduser()
     except (OSError, ValueError):
-        return DEFAULT_OUTPUT_DIR
+        return default_output_dir()
 
 
 @dataclass
