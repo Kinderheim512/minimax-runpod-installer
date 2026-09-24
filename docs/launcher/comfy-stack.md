@@ -1,31 +1,30 @@
 # ComfyUI / MiniMax H3 stack (stack `comfy`)
 
-The launcher serves three independent workload stacks, selected with
-`FORGE_STACK` (or `--stack` / the GUI mode selector):
+The launcher serves two independent workload stacks, selected with
+`LAUNCHER_STACK` (or `--stack` / the GUI mode selector):
 
 | Stack | What runs on the pod | Local result |
 |---|---|---|
-| `agent` (default) | vLLM serving Qwen3.8-27B (see the README) | OpenFox pointed at the tunneled model |
-| `comfy` | ComfyUI + the MiniMax H3 toolchain (the `comfy/` installer) | the ComfyUI web UI (tunnel or direct) + LoRA/workflow management |
-| `llamacpp` | `llama-server` (llama.cpp) serving a GGUF quant (+ mmproj vision) | OpenFox pointed at the tunneled model — see [`llamacpp-stack.md`](llamacpp-stack.md) |
+| `comfy` (default) | ComfyUI + the MiniMax H3 toolchain (this repository's installer) | the ComfyUI web UI (tunnel or direct) + LoRA/workflow management |
+| `train` | the Fizgig training desktop (KasmVNC) | the desktop and the file manager, over one SSH tunnel — see [`train-stack.md`](train-stack.md) |
 
-The `comfy` stack runs the [MiniMax H3 RunPod installer](./README.md) merged
-into this repository under `comfy/` (Apache-2.0, see `NOTICE`): ComfyUI,
-PyTorch, the MiniMax H3 model weights (preset-driven), Turbo LoRA, workflows,
-and optional SageAttention/Spectrum — all driven by pod environment variables
-injected by the launcher at pod creation.
+The `comfy` stack runs this repository's own pod-side installer (Apache-2.0,
+see `NOTICE`): ComfyUI, PyTorch, the MiniMax H3 model weights
+(preset-driven), Turbo LoRA, workflows, and optional SageAttention/Spectrum —
+all driven by pod environment variables injected by the launcher at pod
+creation.
 
 ## Usage
 
 ```powershell
 # CLI
-openfox-forge start --stack comfy --preset dasiwa_mmh3v12
-openfox-forge status            # stack-aware (FORGE_STACK or the registry)
-openfox-forge stop              # stops the registered pod of the selected stack
-openfox-forge doctor            # includes ComfyUI checks when the stack is comfy
+minimax-launcher start --stack comfy --preset dasiwa_mmh3v12
+minimax-launcher status            # stack-aware (LAUNCHER_STACK or the registry)
+minimax-launcher stop              # stops the registered pod of the selected stack
+minimax-launcher doctor            # includes ComfyUI checks when the stack is comfy
 
 # GUI
-openfox-forge gui               # mode selector: Agent-texte / Vidéo-Comfy / GGUF llama.cpp
+minimax-launcher gui               # mode selector: ComfyUI video / LoRA training
 ```
 
 The stacks use **independent pods** (per-stack pod registry —
@@ -36,8 +35,8 @@ The stacks use **independent pods** (per-stack pod registry —
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `FORGE_STACK` | `agent` | Workload stack (`agent` \| `comfy`) |
-| `RUNPOD_COMFY_TEMPLATE_ID` | (credential store) | private RunPod template for the comfy stack |
+| `LAUNCHER_STACK` | `comfy` | Workload stack (`comfy` \| `train`) |
+| `RUNPOD_COMFY_TEMPLATE_ID` | the public template `oa2vozqbum` | private RunPod template for the comfy stack |
 | `COMFY_PRESET` | `dasiwa_mmh3v12` | comma-separated `H3_PRESETS` (what gets installed) |
 | `COMFY_TIER` | `auto` | `auto` \| `light` \| `pruned` \| `pruned_scaled` \| `balanced` \| `max` |
 | `COMFY_WORKFLOWS` | `all` | `all` or a comma subset of `t2v`, `i2v`, `r2v` |
@@ -51,7 +50,7 @@ The stacks use **independent pods** (per-stack pod registry —
 
 `RUNPOD_POD_ENV` (JSON) always overrides the above for the pod env. The
 credential store also holds the ComfyUI template ID (the fifth field of
-`openfox-forge credentials set` / the GUI secrets dialog).
+`minimax-launcher credentials set` / the GUI secrets dialog).
 
 ## Access modes
 
@@ -93,36 +92,21 @@ stop → update-env → start (idempotent — an in-sync pod is never reconfigur
 * `NTFY_TOPIC` (ntfy.sh) notifications are injected into the pod env when
   set; the pod-side installer publishes to that topic.
 
-## MCP tools (agent-facing)
-
-* `forge_comfy_status` — pod status, ComfyUI health (`/system_stats`), VRAM,
-  queue depth, preset.
-* `forge_comfy_generate` — trigger a MiniMax H3 generation through the
-  ComfyUI API (`/prompt` + `/api/queue`) on the registered comfy pod.
-  Workflows pin a model file per tier; if the pod serves a different
-  quantization of the same model, the loader names are adapted to the
-  server's actual files (reported in the tool output).
-
-Both reuse the shared primitives (`RunPodClient`, `PodRegistry`,
-`ComfyOps`); nothing is duplicated from the CLI/GUI paths.
-
 ## The image
 
-See `docker/comfy/README.md`: the image is built from `comfy/` (single
-source of truth), published only as **versioned tags**
-(`kinderheim512/openfox-forge-comfy:<version>` on Docker Hub + GHCR), and
-**never** as `:latest` (the community float
-`kinderheim512/minimax-h3-comfyui:latest` stays the reference for existing
-RunPod templates).
+The public RunPod template the launcher deploys
+(`oa2vozqbum`, https://console.runpod.io/hub/template/oa2vozqbum) runs the
+image built from this repository's `Dockerfile`.
+`image-contract.json` records what that image guarantees — paths,
+endpoints, the pod-side scripts it ships, the CUDA floor and the
+environment keys it consumes — and `tests/test_comfy_image_contract.py`
+enforces it against the launcher's own constants, so a drift fails in CI
+instead of surfacing as a silent pod-side misbehaviour.
 
 ## Validation
 
-The dasiwa door-to-door end-to-end run on the frozen community image
-(`sha256:542ee909…`) is documented in `docs/c2a-validation.md`, including
-the RunPod template history (`r7ieeeyfds` → `b10i658px4` → `p0dbln2sk4`)
-and the two infrastructure facts it surfaced (digest-pinned v2 templates
-cannot create pods; RunPod `http` port mappings are not internet-reachable).
-
-The C2b complement — preset → pod-env mapping, the live stop → env update →
-start sync cycle, the explicit `direct` option, and the ComfyUI lines in
-`doctor`/`status` — is documented in `docs/c2b-validation.md`.
+`tests/test_comfy_installer_regressions.py` pins the pod-side behaviours
+that were learned the hard way (the boot time spent in `install.sh`, the
+per-connection download limit, the checkpoint variant symlinks), and
+`tests/test_comfy_ops.py` / `test_comfy_workflow.py` cover the
+launcher-side operations and the UI-workflow → API-prompt conversion.

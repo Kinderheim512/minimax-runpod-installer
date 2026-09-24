@@ -78,13 +78,15 @@ It ships in English (US) and French; switch language in *Settings*.
 | --- | --- | --- |
 | **Windows 10/11** | `MiniMaxH3Launcher-windows-x64.exe` | double-click |
 | **macOS (Apple silicon)** | `MiniMaxH3Launcher-macos-arm64` | `chmod +x … && ./…` |
+| **macOS (Intel)** | `MiniMaxH3Launcher-macos-x64` | `chmod +x … && ./…` |
 | **Linux x64** | `MiniMaxH3Launcher-linux-x64` | `chmod +x … && ./…` |
 
 Grab them from the [releases page](https://github.com/Kinderheim512/minimax-runpod-installer/releases).
 
-> **Intel Mac?** There is no prebuilt binary: Pillow ships per-architecture
-> macOS wheels, so a universal build is not possible. Build it locally — see
-> [Building from source](#building-from-source).
+> The Intel macOS build ships without the tray icon and the PNG brand icon:
+> Pillow ships per-architecture macOS wheels, so the two architectures cannot
+> be combined into one binary and the x64 build leaves Pillow out. Everything
+> else — the dashboard, the stacks, the journal — is identical.
 
 **Prerequisites, all platforms**
 
@@ -138,13 +140,13 @@ this is a free tool), so each OS asks once:
 
 ### Building from source
 
-Building avoids both prompts, and is the only way to get an Intel macOS build:
+Building avoids both prompts:
 
 ```bash
 python -m pip install pyinstaller pillow
 python scripts/build_exe.py                       # -> dist/MiniMaxH3Launcher
-python scripts/build_exe.py --target-arch x86_64  # macOS, Intel (needs an
-                                                  # x86_64 or universal2 Python)
+python scripts/build_exe.py --target-arch x86_64  # macOS: Intel (needs a
+                                                  # universal2 interpreter)
 ```
 
 ### What the launcher does *not* do

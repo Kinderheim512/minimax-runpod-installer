@@ -41,7 +41,8 @@ dialog) and it wins.
 
 No. Code-signing certificates cost money and this is a free tool, so each OS
 asks once: on macOS clear the quarantine flag
-(`xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-arm64`), on Windows
+(`xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-arm64`, or
+`…-macos-x64` on an Intel Mac), on Windows
 click *More info* → *Run anyway* on the SmartScreen prompt. Building from
 source avoids both (`python scripts/build_exe.py`).
 
@@ -125,8 +126,8 @@ bash install_lora.sh --remove some_lora.safetensors
 
 Installed into `ComfyUI/models/loras/`. Hugging Face, CivitAI, and any
 direct `.safetensors` URL are supported; no authentication is required for
-public files (set `CIVITAI_API_KEY` for restricted CivitAI content). See
-[RECOMMENDED_LORAS.md](RECOMMENDED_LORAS.md) for a tested example.
+public files (set `CIVITAI_API_KEY` for restricted CivitAI content). The
+MiniMax H3 Turbo LoRA (4-step sampling) is a well-tested starting point.
 
 ---
 

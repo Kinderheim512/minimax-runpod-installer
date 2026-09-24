@@ -17,7 +17,7 @@ longer need to live in the RunPod template/pod secrets.
   settings. Pod identity is transient and is held in the separate, non-secret
   pod registry (`<home>\pod.json`, see `docs/pod-provisioning.md`) — never in
   the DPAPI bundle.
-- **Location**: `%APPDATA%\OpenFoxForge\credentials.dpapi` — deterministic,
+- **Location**: `%APPDATA%\MiniMaxH3Launcher\credentials.dpapi` — deterministic,
   per-user, **outside the project folder** (never part of the repository, so
   regular commit/push of the project can never leak a key). Reinstalling or
   re-cloning the launcher does not delete the store; a different Windows user
@@ -47,17 +47,17 @@ longer need to live in the RunPod template/pod secrets.
 ## CLI
 
 ```powershell
-openfox-forge credentials set      # prompts (hidden input): key + template ID (required),
+minimax-launcher credentials set      # prompts (hidden input): key + template ID (required),
                                    # then HF token + Civitai key (optional, empty keeps existing)
-openfox-forge credentials status   # prints CONFIGURED / NOT CONFIGURED / CORRUPT + SET/ABSENT
+minimax-launcher credentials status   # prints CONFIGURED / NOT CONFIGURED / CORRUPT + SET/ABSENT
                                    # per extra key — never values
-openfox-forge credentials clear    # removes the store file (zero-overwrite + delete); idempotent
-openfox-forge credentials          # bare form = status
+minimax-launcher credentials clear    # removes the store file (zero-overwrite + delete); idempotent
+minimax-launcher credentials          # bare form = status
 ```
 
 The GUI's "Identifiants" dialog offers the same four fields (masked entries;
 empty keeps the stored value). After a one-time `credentials set`,
-`openfox-forge start` (and `status` / `doctor`) work with no RunPod variables
+`minimax-launcher start` (and `status` / `doctor`) work with no RunPod variables
 set at all.
 
 ## Precedence
@@ -83,10 +83,11 @@ Per secret: **environment variable → stored value → pod-side value → absen
   keys — it never deletes pod-side keys (removing a key from the RunPod
   template is the user's own operation). Identical values cause no pod
   mutation at all.
-- **OpenFox (local)**: every `start` overlays the resolved keys onto the
-  OpenFox child process environment (today: `HF_TOKEN` / `CIVITAI_API_KEY`
-  have no OpenFox consumer yet — the pass-through is forward-compatible with
-  future model/workflow features). If OpenFox was already running and is
+- **The pod env**: every `start` overlays the resolved keys onto the pod
+  environment at creation, and re-syncs them (stop → update env → start) when
+  one drifts. `HF_TOKEN` is what the pod-side installer authenticates with;
+  `CIVITAI_API_KEY` is what it uses to download a Civitai model or LoRA. If a
+  managed key is already correct the pod is not touched at all.
   reused, new values take effect on the next stop/start.
 
 Existing setups that keep secrets in the environment or in the RunPod
@@ -95,11 +96,11 @@ migration break.
 
 ## Diagnostics
 
-- `openfox-forge status` prints a value-free `RunPod creds
+- `minimax-launcher status` prints a value-free `RunPod creds
   CONFIGURED|NOT CONFIGURED|CORRUPT` line.
-- `openfox-forge doctor` adds a `runpod_credentials` check
+- `minimax-launcher doctor` adds a `runpod_credentials` check
   (`OK` / `WARN` / `ERROR` / `SKIP`) with actionable guidance, e.g.
-  "RunPod credentials are not stored (run 'openfox-forge credentials set')".
+  "RunPod credentials are not stored (run 'minimax-launcher credentials set')".
 - `load_config` degrades silently when the store is missing or the platform
   lacks DPAPI, and logs a single safe warning (no secret content) when a
   stored bundle is unreadable — environment values still apply.
@@ -107,7 +108,7 @@ migration break.
 ## Security invariants
 
 - The plaintext bundle never touches disk, logs, exceptions, status output,
-  MCP responses, or audit records.
+  status output, or audit records.
 - No secrets in `.env.example`, git, or any committed file; tests use
   generated fake credentials and an injected fake cipher (plus a real-DPAPI
   round trip with fake values on Windows).
@@ -119,5 +120,5 @@ migration break.
   bookkeeping lives in the non-secret pod registry
   (`docs/pod-provisioning.md`), which holds only the pod ID, name, timestamps,
   and GPU request.
-- No new MCP tool; credentials are not exposed to the tool layer.
-- No SearXNG, model/context-budget, or MCP-architecture changes.
+- Credentials are never exposed to any other component: only the pod env
+  and the RunPod client ever see a value.

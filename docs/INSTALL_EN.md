@@ -2,7 +2,7 @@
 
 This guide walks through deploying **ComfyUI + MiniMax H3** on a fresh
 RunPod, step by step. For the short version, see the main
-[README.md](../README.md#-quick-start).
+[README.md](../README.md).
 
 ---
 
@@ -37,7 +37,7 @@ GPU, decide up front:
   detected VRAM automatically (see [Step 3](#step-3--optional-choose-a-tier-or-workflow-subset)
   below).
 
-See [README.md § Model tiers](../README.md#-model-tiers-h3_tier) for exact
+See [Model tiers](#-model-tiers-h3_tier) for exact
 file sizes.
 
 ---
@@ -85,7 +85,7 @@ bash bootstrap.sh --workflows=t2v,i2v
 ```
 
 `bootstrap.sh` forwards its arguments to `install.sh` on first run. See
-[README.md § CLI reference](../README.md#-cli-reference) for the full flag
+[CLI reference](#-cli-reference) for the full flag
 list.
 
 ---
@@ -138,7 +138,7 @@ https://YOUR-POD-ID-8188.proxy.runpod.net
 
 The installer installs the official workflow files that match your
 `--workflows` selection (all three tasks by default) — see
-[README.md § Workflows](../README.md#-workflows) for the full list of 5
+[Workflows](#-workflows) for the full list of 5
 files and what each contains. No manual import needed; they appear
 directly in ComfyUI.
 
@@ -157,8 +157,7 @@ bash install_lora.sh --list
 ```
 
 Installed into `ComfyUI/models/loras/`. See
-[README.md § Installing and managing LoRAs](../README.md#-installing-and-managing-loras)
-and [RECOMMENDED_LORAS.md](../RECOMMENDED_LORAS.md).
+[Installing and managing LoRAs](#-installing-and-managing-loras).
 
 ---
 
@@ -323,8 +322,8 @@ repeat/scripted deployments)? See `bash bootstrap.sh` in the
 
 No manual configuration is required for a first run either way. For
 anything beyond the defaults, see [CLI reference](#-cli-reference) below, or
-the full walkthrough in [docs/INSTALL_EN.md](docs/INSTALL_EN.md) /
-[docs/INSTALL_FR.md](docs/INSTALL_FR.md).
+the full walkthrough in [INSTALL_EN.md](INSTALL_EN.md) /
+[INSTALL_FR.md](INSTALL_FR.md).
 
 ---
 
@@ -452,7 +451,7 @@ bash install.sh --tier=max
 > actually install, if it isn't `pruned_scaled` you'll need to reselect the
 > correct file once in each workflow's loader node the first time you open
 > it. See
-> [TROUBLESHOOTING.md](TROUBLESHOOTING.md#a-workflow-says-a-model-is-missing-even-though-checksh-says-its-installed).
+> [TROUBLESHOOTING.md](../TROUBLESHOOTING.md#a-workflow-says-a-model-is-missing-even-though-checksh-says-its-installed).
 >
 > **Turbo LoRA note:** the bundled Turbo LoRA
 > (`drbaph/MiniMax-H3-Turbo-Lora-ComfyUI`) was converted and validated
@@ -906,8 +905,8 @@ notice it's missing after the fact.
 See
 [Backing up your LoRAs/presets/outputs](#-backing-up-your-loraspresetsoutputs-without-depending-on-runpod)
 above for how `PERSONAL_STORAGE_HF_REPO` is set up, and
-[RECOMMENDED_LORAS.md](RECOMMENDED_LORAS.md) for a tested example (MiniMax
-H3 Turbo, 4-step sampling).
+the MiniMax H3 Turbo LoRA (4-step sampling) is a well-tested starting
+point.
 
 Run these from inside the project directory — if unsure where that is:
 
@@ -954,7 +953,7 @@ a tmux client (common on RunPod's web terminal) — use
 `tmux switch-client -t minimax` instead of trying to attach again.
 
 Full details, including how to protect `install.sh` itself and how to
-manage the session manually, are in [TMUX.md](TMUX.md).
+manage the session manually, are in [TMUX.md](../TMUX.md).
 
 ---
 

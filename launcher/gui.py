@@ -85,6 +85,7 @@ from .i18n import (
     LANGUAGE_ENV,
     LANGUAGE_LABELS,
     SUPPORTED_LANGUAGES,
+    environment_language,
     get_language,
     normalize_language,
     set_language,
@@ -1741,10 +1742,10 @@ def load_settings(home: Optional[Path] = None) -> GuiSettings:
     language = data.get("language")
     if isinstance(language, str) and language.strip():
         settings.language = normalize_language(language)
-        # LAUNCHER_LANG wins for the launch: it is an explicit, one-shot
+        # MINIMAX_LANG wins for the launch: it is an explicit, one-shot
         # choice, and a persisted setting silently overriding it would make
         # the environment variable useless.
-        if not os.environ.get(LANGUAGE_ENV):
+        if environment_language() is None:
             set_language(settings.language)
     return settings
 
@@ -3931,7 +3932,7 @@ class ForgeApp:
         )
         self._dash_frame.pack(side="left", fill="x")
         self._themed(self._dash_frame, "panelbg")
-        # 3-column table (Composant / État / Info) with a colored badge per
+        # 3-column table (Component / State / Info) with a colored badge per
         # row: green=ok, orange=starting/warn, red=error, grey=unknown. The
         # badge itself is the tree column (#0), which is the only Treeview
         # column that can hold an image.
@@ -4869,7 +4870,7 @@ class ForgeApp:
             "<KeyRelease>", lambda _e: self._schedule_annuaire_rebuild(250)
         )
 
-        # Form (create/edit) — hidden until « ➕ Nouveau » / « ✏️ Éditer ».
+        # Form (create/edit) — hidden until « ➕ New » / « ✏️ Edit ».
         self._annuaire_form = self._lframe(
             self._annuaire_frame, text="New entry", bg=pal["bg"],
             fg=pal["fg"], font=("Segoe UI", 10, "bold"),

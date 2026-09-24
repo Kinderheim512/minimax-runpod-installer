@@ -7,7 +7,7 @@ provisioning safe.
 
 ## How a pod is resolved (priority order)
 
-Every launcher entry point (`start`, `stop`, `status`, `doctor`, and the MCP
+Every launcher entry point (`start`, `stop`, `status`, `doctor`, and the GUI
 tools) resolves the pod in the same fixed order:
 
 1. **`RUNPOD_POD_ID`** (environment) — used exactly as given. If that pod does
@@ -30,7 +30,7 @@ The registry lets a single `start` create the pod and every later invocation
 When resolution reaches step 3, the launcher:
 
 1. Chooses a pod name: `RUNPOD_POD_NAME` if set, otherwise
-   `openfox-forge-<YYYYMMDD-HHMMSS>`.
+   `minimax-launcher-<YYYYMMDD-HHMMSS>`.
 2. Acquires the **single-machine provisioning lock** (see below) with intent
    `provision` and the chosen name.
 3. Re-checks the registry **while holding the lock** — if a competing launcher
@@ -63,7 +63,8 @@ The launcher keeps a narrow, explicit ownership boundary:
 | rollback on failed `start` | no | only a pod created *in this invocation* |
 
 A pod created in this invocation is stopped once if a later startup stage
-fails (e.g. no SSH endpoint, tunnel failure, vLLM not healthy). If the pod's
+fails (e.g. no SSH endpoint, tunnel failure, the stack's service not
+healthy). If the pod's
 state cannot be verified (the API is unreachable), it is left untouched — the
 original error is always preserved and a verification failure is never
 allowed to mask it or to mutate a pod blindly.
@@ -82,7 +83,7 @@ not a credential and holds no secrets.)
 ## Crash safety
 
 The ordering "create → record → wait" guarantees that a crash leaves the pod
-tracked, so `openfox-forge start` (or `status`/`doctor`) can recover it.
+tracked, so `minimax-launcher start` (or `status`/`doctor`) can recover it.
 Concretely:
 
 | Crash point | State left behind | Recovery |
@@ -90,7 +91,7 @@ Concretely:
 | During create (API call fails) | no pod, no record | retry `start` |
 | After create, before record write | pod exists, tracked in-memory only | rollback stops it (record write is also attempted first) |
 | During readiness wait | pod + record | next `start` reuses the recorded pod |
-| During tunnel/vLLM/OpenFox | pod + record | rollback stops a pod created this run; `stop` stops the recorded pod |
+| During the tunnel / the stack's service | pod + record | rollback stops a pod created this run; `stop` stops the recorded pod |
 
 ## Orphan recovery
 
@@ -101,7 +102,7 @@ deleted but the pod is still running):
   not terminate an environment pod), or
 - Stop or terminate it from the RunPod console / API, or
 - Use the RunPod list-pods endpoint to find its ID by the
-  `openfox-forge-…` name.
+  `minimax-launcher-…` name.
 
 ## Clearing the registry by hand
 
@@ -109,8 +110,8 @@ There is no CLI subcommand for clearing the pod registry; `registry.clear()`
 is an internal call the launcher makes automatically (when a registered pod is
 found to be gone or `TERMINATED`, or after `stop --terminate`). To force a
 fresh provision manually, delete the registry file itself — its exact path is
-`%APPDATA%\OpenFoxForge\pod.json` (or `$OPENFOX_FORGE_HOME\pod.json` when that
-variable is set) — and then run `openfox-forge start`. Alternatively, set
+`%APPDATA%\MiniMaxH3Launcher\pod.json` (or `$MINIMAX_LAUNCHER_HOME\pod.json` when that
+variable is set) — and then run `minimax-launcher start`. Alternatively, set
 `RUNPOD_POD_ID` to adopt an existing pod instead of provisioning. Both are the
 actions named in the "registered pod is unreachable" error message.
 
@@ -120,7 +121,7 @@ actions named in the "registered pod is unreachable" error message.
   started again later from the registry.
 - `terminate` deletes the pod and its disk (destructive). The launcher only
   terminates a pod it created on this machine, and only via the explicit
-  `openfox-forge stop --terminate` command.
+  `minimax-launcher stop --terminate` command.
 
 ## API behaviour the launcher relies on
 

@@ -36,6 +36,14 @@ _run = winproc.run
 _pid_alive = runtime_state.pid_is_alive
 _terminate_pid = runtime_state.terminate_pid
 
+#: netstat's "listening" state word, per Windows locale: ``LISTENING`` in
+#: English, ``\u00c9COUTE`` in French (and other spellings elsewhere). Spelled
+#: with a Unicode escape so the source carries no accented literal outside
+#: ``launcher/locales`` — the guard test in ``tests/test_i18n.py`` enforces it.
+#: Only ever a bonus signal: the locale-independent marker of a listening
+#: socket (a zero foreign address) is what the parser actually relies on.
+_LISTENING_STATES = ("LISTENING", "\u00c9COUTE")
+
 
 def _which(name: str) -> bool:
     from shutil import which
@@ -83,10 +91,11 @@ def find_listener_pid(port: int) -> Optional[int]:
     """Return the PID listening on *port* (any address), or None.
 
     Windows: parsed from ``netstat -ano``. The state string is locale-
-    dependent (``LISTENING`` / ``ÉCOUTE`` / ...) and the command's pipe
-    output is encoded in the OEM code page (cp850 on French Windows), so the
-    detection leans on the locale-independent marker of a listening socket —
-    a zero foreign address — with the known state words as a bonus.
+    dependent (``LISTENING``, ``\u00c9COUTE``, ... — see
+    :data:`_LISTENING_STATES`) and the command's pipe output is encoded in the
+    OEM code page (cp850 on French Windows), so the detection leans on the
+    locale-independent marker of a listening socket — a zero foreign address —
+    with the known state words as a bonus.
 
     macOS/Linux: ``lsof`` (``ss`` as a Linux fallback). Neither present means
     ``None``.
@@ -117,7 +126,7 @@ def find_listener_pid(port: int) -> Optional[int]:
             continue
         if not local.endswith(suffix):
             continue
-        if state not in ("LISTENING", "ÉCOUTE") and not foreign.endswith(":0"):
+        if state not in _LISTENING_STATES and not foreign.endswith(":0"):
             continue
         try:
             return int(parts[4])

@@ -22,9 +22,10 @@ The last rule is what makes a missing translation harmless: the UI shows the
 English sentence, never ``launcher.tab.dashboard``.
 
 The language is chosen by, in order: :func:`set_language`, the
-``LAUNCHER_LANG`` environment variable, the persisted GUI setting, then
-``en_US``. An unrecognised value falls back to ``en_US`` instead of failing —
-a typo must never stop the launcher from starting.
+``MINIMAX_LANG`` environment variable (``LAUNCHER_LANG`` is accepted as an
+alias), the persisted GUI setting, then ``en_US``. An unrecognised value falls
+back to ``en_US`` instead of failing — a typo must never stop the launcher
+from starting.
 """
 # Vendored from openfox-forge@58e7935 — see NOTICE for the licensing
 # and the resynchronisation procedure.
@@ -47,7 +48,12 @@ SUPPORTED_LANGUAGES: tuple[str, ...] = ("en_US", "fr")
 LANGUAGE_LABELS: Mapping[str, str] = locales.LANGUAGE_LABELS
 
 #: Environment variable that picks the language.
-LANGUAGE_ENV = "LAUNCHER_LANG"
+LANGUAGE_ENV = "MINIMAX_LANG"
+
+#: Older/accepted spellings of the same setting, checked after
+#: :data:`LANGUAGE_ENV`. ``LAUNCHER_LANG`` shipped first; keeping it means a
+#: shell profile or a container that exports it keeps working.
+LANGUAGE_ENV_ALIASES: tuple[str, ...] = ("LAUNCHER_LANG",)
 
 #: Accepts the loose spellings a user may type.
 _ALIASES: Mapping[str, str] = {
@@ -105,11 +111,23 @@ def _load_table(language: str) -> Mapping[str, str]:
     return table
 
 
+def environment_language() -> Optional[str]:
+    """The language named by the environment, or None when none is set.
+
+    :data:`LANGUAGE_ENV` wins, then :data:`LANGUAGE_ENV_ALIASES`, in order.
+    """
+    for name in (LANGUAGE_ENV, *LANGUAGE_ENV_ALIASES):
+        value = os.environ.get(name)
+        if value and value.strip():
+            return value
+    return None
+
+
 def get_language() -> str:
     """The active language code (``en_US`` unless something says otherwise)."""
     global _active
     if _active is None:
-        _active = normalize_language(os.environ.get(LANGUAGE_ENV))
+        _active = normalize_language(environment_language())
     return _active
 
 

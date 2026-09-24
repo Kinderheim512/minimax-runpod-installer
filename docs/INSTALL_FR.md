@@ -22,7 +22,8 @@ qu'une clé API RunPod : le template déployé est public.
 
 1. Téléchargez le binaire de votre système depuis la
    [page des releases](https://github.com/Kinderheim512/minimax-runpod-installer/releases)
-   (`MiniMaxH3Launcher-windows-x64.exe`, `-macos-arm64`, `-linux-x64`).
+   (`MiniMaxH3Launcher-windows-x64.exe`, `-macos-arm64` ou `-macos-x64`,
+   `-linux-x64`).
 2. Lancez-le : la fenêtre des identifiants s'ouvre d'elle-même.
 3. Collez votre **clé API RunPod** et enregistrez.
 4. Choisissez **ComfyUI video** dans la barre du bas, puis **Start**.
@@ -199,8 +200,7 @@ bash install_lora.sh --list
 ```
 
 Installé dans `ComfyUI/models/loras/`. Voir
-[README.md § Installing and managing LoRAs](../README.md#-installing-and-managing-loras)
-et [RECOMMENDED_LORAS.md](../RECOMMENDED_LORAS.md) (en anglais).
+[README.md](../README.md) et [docs/INSTALL_EN.md](INSTALL_EN.md) (en anglais).
 
 ---
 

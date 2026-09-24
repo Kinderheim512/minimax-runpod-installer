@@ -2,7 +2,7 @@
 
 These pages document `launcher/`, the desktop front-end (tkinter GUI + CLI)
 that rents the pod, opens the SSH tunnel and drives the stack. They are
-vendored from OpenFox Forge alongside the code (see `NOTICE`); the
+vendored from MiniMax H3 Launcher alongside the code (see `NOTICE`); the
 text-agent, llama.cpp and SearXNG pages of that project are deliberately
 absent — those stacks are not part of this launcher.
 

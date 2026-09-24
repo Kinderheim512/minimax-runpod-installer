@@ -1,13 +1,11 @@
 # LoRA training stack (stack `train`)
 
-The launcher serves four independent workload stacks, selected with `FORGE_STACK`
+The launcher serves four independent workload stacks, selected with `LAUNCHER_STACK`
 (or `--stack` / the GUI mode selector):
 
 | Stack | What runs on the pod | Local result |
 |---|---|---|
-| `agent` (default) | vLLM serving Qwen3.8-27B | OpenFox pointed at the tunneled model |
-| `comfy` | ComfyUI + the MiniMax H3 toolchain | the ComfyUI web UI (tunnel or direct) |
-| `llamacpp` | `llama-server` serving a GGUF quant | OpenFox pointed at the tunneled model |
+| `comfy` (default) | ComfyUI + the MiniMax H3 toolchain | the ComfyUI web UI (tunnel or direct) |
 | **`train`** | **Fizgig — a LoRA training desktop** | **the Fizgig UI, and trained LoRAs collected locally** |
 
 ## What it is
@@ -45,7 +43,7 @@ unlike ComfyUI, this endpoint is a full desktop running as root.
 
 The stack runs **upstream's own image**, `ghcr.io/shootthesound/fizgig`.
 
-It used to run a fork: `ghcr.io/kinderheim512/openfox-forge-train`, which baked Fizgig at
+It used to run a fork: an earlier fork, `ghcr.io/kinderheim512/minimax-launcher-train`, which baked Fizgig at
 an audited commit with its git remote removed and the entrypoint's update block replaced by
 a restore-and-verify. That fork was **retired**, for one reason: upstream publishes every
 couple of days, a fork can only ever lag the cadence it would have to keep up with, and
@@ -106,7 +104,7 @@ release is reported with the action attached — restart it.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `FORGE_STACK` | `agent` | Workload stack (`agent` \| `comfy` \| `llamacpp` \| `train`) |
+| `LAUNCHER_STACK` | `comfy` | Workload stack (`comfy` \| `train`) |
 | `RUNPOD_TRAIN_TEMPLATE_ID` | (credential store) | private RunPod template for this stack |
 | `TRAIN_LOCAL_PORT` | 6080 | local port forwarded to the desktop |
 | `TRAIN_FILES_LOCAL_PORT` | 8081 | local port forwarded to the file manager — **not 8080**, which the llama.cpp stack already forwards locally (a second `ssh -L 8080:…` aborts the whole train forward) |
@@ -136,7 +134,7 @@ both.
    `ghcr.io/shootthesound/fizgig:latest`, ports
    `22/tcp,6080/http,8080/http`, volume ≥ 100 GB at `/workspace`, **SSH access enabled**,
    and `FIZGIG_REF` set explicitly.
-2. **The template ID stored** with `openfox-forge credentials set` (field *RunPod Train
+2. **The template ID stored** with `minimax-launcher credentials set` (field *RunPod Train
    template ID*) or exported as `RUNPOD_TRAIN_TEMPLATE_ID`.
 3. **SSH enabled on that template.** The image deliberately leaves port 22 closed unless
    `PUBLIC_KEY` is set (upstream's security default). Without it nothing listens, the
@@ -193,34 +191,34 @@ disagree.
 
 ```bash
 # CLI
-openfox-forge start --stack train
-openfox-forge status          # stack-aware
-openfox-forge stop            # stops the registered train pod
-openfox-forge doctor          # includes the train checks
+minimax-launcher start --stack train
+minimax-launcher status          # stack-aware
+minimax-launcher stop            # stops the registered train pod
+minimax-launcher doctor          # includes the train checks
 
 # GUI
-openfox-forge gui             # mode selector: … / « Entraînement LoRA »
+minimax-launcher gui             # mode selector: … / « Entraînement LoRA »
 ```
 
 In the GUI, the **Entraînement LoRA** tab shows the configured image and endpoints, opens
 the desktop or the file manager, verifies the template, and collects trained LoRAs into a
 local folder you choose.
 
-### From an agent session
+### From the command line
 
-The stack is also reachable from an OpenFox session, so a text agent can bring the training
-pod up while it works on something else:
+The same three operations the GUI offers, for a scripted or remote run:
 
-* `forge_stack_start` with `stack="train"` launches the stack (detached — it returns at
-  once, poll `forge_status`), using the ports, image and GPU persisted in `gui.json`;
-* `forge_train_status` reports the disk, the **Fizgig version the pod actually runs**, the
-  datasets and the trained LoRAs, and collects the LoRAs into the configured local folder;
-* `forge_stack_stop` with `stack="train"` stops that pod **only** — a running text-agent
-  session and its own tunnel are left alone.
+* `minimax-launcher start --stack train` launches the stack, using the ports, image and
+  GPU persisted in `gui.json`;
+* `minimax-launcher train status` reports the disk, the **Fizgig version the pod actually
+  runs**, the datasets and the trained LoRAs, and collects the LoRAs into the configured
+  local folder;
+* `minimax-launcher stop --stack train` stops that pod **only** — the other stack's pod,
+  tunnel and processes are left alone.
 
 **What it deliberately does not do: start a training run.** There is no headless training
 entry point here — the launcher writes no trainer, and everything about training itself is
-Fizgig's job. The agent brings the pod and the desktop up and reports on it; the run is
+Fizgig's job. The launcher brings the pod and the desktop up and reports on it; the run is
 driven in the Fizgig UI at `http://127.0.0.1:TRAIN_LOCAL_PORT`.
 
 ## Getting a dataset in, and a LoRA out
@@ -241,7 +239,7 @@ The GUI's **Entraînement LoRA** tab exposes all four families: `krea2`, `klein`
 and `tools`. MiniMax H3 is ~45 GB and Klein is gated (`HF_TOKEN`), so only check what the
 target LoRA actually uses — the on-pod path above is finer-grained and needs no restart.
 
-### Reaching the pod from an agent
+### Reaching the pod
 
 The two services are never published: they answer **only** through the launcher's SSH
 tunnel, and they are authenticated.
@@ -252,7 +250,7 @@ tunnel, and they are authenticated.
 | filebrowser | `http://127.0.0.1:TRAIN_FILES_LOCAL_PORT` (8081) | user **`admin`** + the **same** `VNC_PASSWORD` |
 
 `VNC_PASSWORD` is the launcher's *desktop password* (DPAPI store,
-`openfox-forge credentials status`); the entrypoint reuses it for both services. A 401 or
+`minimax-launcher credentials status`); the entrypoint reuses it for both services. A 401 or
 `ERR_INVALID_AUTH_CREDENTIALS` means the credentials were missing — not a broken pod.
 
 For a file transfer, `scp` goes to the pod's **public SSH endpoint** (the tunnel forwards
@@ -278,7 +276,7 @@ print(f'{e.username}@{e.host} -p {e.port} -i {cfg.ssh.key_path}')"
 (the trailing `/.` copies the folder's *contents*), or drag a folder into the file manager.
 Put one folder per LoRA under `/workspace/datasets/`, images and `.txt` captions together.
 Clips and voice recordings go in the same folder — Fizgig trains photos, clips and audio in
-one run. Verify with `TrainOps.list_datasets()` (or `forge_train_status` `action=datasets`).
+one run. Verify with `TrainOps.list_datasets()` (or `minimax-launcher train datasets`).
 
 **Out:** the **Récupérer les LoRA** button (or `TrainOps.collect_loras`) copies everything
 in `/workspace/output_loras` into your chosen local folder with `scp`, skipping files
@@ -299,10 +297,9 @@ pod. A network volume survives termination but is region-locked.
 
 ## Diagnostics
 
-`doctor`, `forge_infra_diagnose` and the GUI health table all understand this stack. The
-recovery action is `restart_train` (MCP tool `forge_infra_recover`, action
-`restart_train`): it starts a stopped pod, resolves the SSH endpoint, and re-establishes
-the **two-port** tunnel, verifying that both ports answer.
+`doctor`, the diagnose report and the GUI health table all understand this stack. The
+recovery action is `restart_train`: it starts a stopped pod, resolves the SSH endpoint,
+and re-establishes the **two-port** tunnel, verifying that both ports answer.
 
 The tunnel-name-keyed hint matters here: when a train tunnel never comes alive, the error
 names the SSH-access requirement rather than leaving you with a generic timeout — that is
@@ -332,7 +329,7 @@ Everything below the line is **static** and runs in CI. The rest needs a real po
 
 **Needs a pod (the end-to-end validation):**
 
-1. `openfox-forge start --stack train` reaches the desktop and opens it.
+1. `minimax-launcher start --stack train` reaches the desktop and opens it.
 2. `git -C /workspace/Fizgig describe --tags --always` (or
    `TrainOps.pod_fizgig_version()`) reports a version, and the GUI's *Version Fizgig*
    button agrees with it.

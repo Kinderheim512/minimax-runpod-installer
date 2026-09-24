@@ -56,19 +56,35 @@ jobs:
           - os: windows-latest
             label: windows-x64
             artifact: MiniMaxH3Launcher-windows-x64.exe
-          # One macOS job, not two. macos-13 (the Intel image) is being retired
-          # and sits queued for tens of minutes, which stalls the release; and a
-          # real universal2 build is not reachable either, because Pillow ships
-          # per-architecture macOS wheels and PyInstaller refuses to fatten them
-          # ("...PIL/_webp.cpython-311-darwin.so is not a fat binary!"). So the
-          # macOS artefact is Apple silicon, and the README says how an Intel
-          # user builds their own. The name follows `lipo -archs`, never a guess.
+            target_arch: ""
+            extras: ".[tray,themes]"
+          # Two macOS jobs on the SAME arm64 image — macos-13 (the Intel image)
+          # is being retired and sits queued for tens of minutes, which stalls
+          # the release. The Intel binary is cross-built from the universal2
+          # interpreter `actions/setup-python` installs.
+          #
+          # It installs `themes` but NOT `tray`: pystray pulls Pillow, and
+          # Pillow ships per-architecture macOS wheels that PyInstaller refuses
+          # to combine ("...PIL/_webp.cpython-311-darwin.so is not a fat
+          # binary!"). The x64 build therefore has no tray icon and no PNG
+          # brand icon — it falls back to the text/glyph chrome, which is what
+          # `launcher.gui._HAS_PIL` already handles. The name follows
+          # `lipo -archs`, never a guess.
           - os: macos-14
-            label: macos
+            label: macos-arm64
             artifact: MiniMaxH3Launcher-macos-arm64
+            target_arch: arm64
+            extras: ".[tray,themes]"
+          - os: macos-14
+            label: macos-x64
+            artifact: MiniMaxH3Launcher-macos-x64
+            target_arch: x86_64
+            extras: ".[themes]"
           - os: ubuntu-22.04
             label: linux-x64
             artifact: MiniMaxH3Launcher-linux-x64
+            target_arch: ""
+            extras: ".[tray,themes]"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -83,15 +99,20 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pyinstaller pillow
       - name: Install the GUI dependencies (optional extras)
-        run: python -m pip install ".[tray,themes]" || echo "optional extras unavailable"
+        run: python -m pip install "${{ matrix.extras }}" || echo "optional extras unavailable"
+      - name: Show the interpreter architecture (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo "python: $(python -c 'import sys; print(sys.executable)')"
+          lipo -archs "$(python -c 'import sys; print(sys.executable)')" || true
+          python -c "import sysconfig; print(sysconfig.get_platform())"
+
       - name: Build
         shell: bash
         run: |
           set -e
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            # universal2 needs a universal2 interpreter; when it is not
-            # available the native build is still a valid artefact.
-            python scripts/build_exe.py --target-arch universal2               || python scripts/build_exe.py
+          if [ -n "${{ matrix.target_arch }}" ]; then
+            python scripts/build_exe.py --target-arch "${{ matrix.target_arch }}"
           else
             python scripts/build_exe.py
           fi
@@ -192,9 +213,10 @@ jobs:
 
             ${{ steps.describe.outputs.TABLE }}
 
-            An Intel Mac is not covered by a prebuilt binary (Pillow ships
-            per-architecture macOS wheels, so a universal build is not
-            possible): build it locally with `python scripts/build_exe.py`.
+            The Intel macOS build ships without the tray icon and the PNG
+            brand icon (Pillow ships per-architecture macOS wheels, so the two
+            architectures cannot share one binary). Everything else is
+            identical.
 
             ### Unsigned binaries
 
