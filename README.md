@@ -77,8 +77,7 @@ It ships in English (US) and French; switch language in *Settings*.
 | OS | Download | Run |
 | --- | --- | --- |
 | **Windows 10/11** | `MiniMaxH3Launcher-windows-x64.exe` | double-click |
-| **macOS (Apple silicon)** | `MiniMaxH3Launcher-macos-arm64` | `chmod +x … && ./…` |
-| **macOS (Intel)** | `MiniMaxH3Launcher-macos-x64` | `chmod +x … && ./…` |
+| **macOS (Apple silicon + Intel)** | `MiniMaxH3Launcher-macos-universal2` | `chmod +x … && ./…` |
 | **Linux x64** | `MiniMaxH3Launcher-linux-x64` | `chmod +x … && ./…` |
 
 Grab them from the [releases page](https://github.com/Kinderheim512/minimax-runpod-installer/releases).
@@ -127,7 +126,7 @@ this is a free tool), so each OS asks once:
 - **macOS** — Gatekeeper quarantines anything downloaded through a browser:
 
   ```bash
-  xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-arm64
+  xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-universal2
   ```
 
 - **Windows** — SmartScreen shows "Windows protected your PC": *More info* →

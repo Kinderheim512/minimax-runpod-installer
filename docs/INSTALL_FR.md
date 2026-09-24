@@ -22,8 +22,7 @@ qu'une clé API RunPod : le template déployé est public.
 
 1. Téléchargez le binaire de votre système depuis la
    [page des releases](https://github.com/Kinderheim512/minimax-runpod-installer/releases)
-   (`MiniMaxH3Launcher-windows-x64.exe`, `-macos-arm64`, `-macos-x64`,
-   `-linux-x64`).
+   (`MiniMaxH3Launcher-windows-x64.exe`, `-macos-universal2`, `-linux-x64`).
 2. Lancez-le : la fenêtre des identifiants s'ouvre d'elle-même.
 3. Collez votre **clé API RunPod** et enregistrez.
 4. Choisissez **ComfyUI video** dans la barre du bas, puis **Start**.
@@ -32,7 +31,7 @@ L'interface est disponible en anglais (US) et en français — le choix se fait
 dans *Settings*.
 
 > Les binaires ne sont **pas signés** : macOS affiche une alerte Gatekeeper
-> (`xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-arm64`), Windows un
+> (`xattr -dr com.apple.quarantine MiniMaxH3Launcher-macos-universal2`), Windows un
 > avertissement SmartScreen (« Informations complémentaires » → « Exécuter
 > quand même »).
 

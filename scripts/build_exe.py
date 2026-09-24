@@ -3,6 +3,7 @@
 Usage:
     python -m pip install ".[gui-build]"     # or: python -m pip install pyinstaller
     python scripts/build_exe.py              # -> dist/MiniMaxH3Launcher[.exe]
+    python scripts/build_exe.py --target-arch universal2   # macOS only
 
 Cross-platform on purpose — the release workflow builds on Windows, macOS
 (arm64 + x64) and Linux — which means two platform details matter:
@@ -20,6 +21,7 @@ the build environment; otherwise the build works fine without tray support.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import os
 import pathlib
@@ -44,7 +46,22 @@ def icon_for_this_platform() -> pathlib.Path | None:
     return None
 
 
-def main() -> int:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--target-arch",
+        default=None,
+        choices=("arm64", "x86_64", "universal2"),
+        help=(
+            "macOS only: the architecture(s) to build for. universal2 needs a "
+            "universal2 interpreter (what actions/setup-python installs)."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    options = parse_args(argv)
     if importlib.util.find_spec("PyInstaller") is None:
         print(
             "PyInstaller is not installed in this environment.\n"
@@ -63,6 +80,15 @@ def main() -> int:
         "--name",
         "MiniMaxH3Launcher",
     ]
+
+    if options.target_arch is not None:
+        if sys.platform != "darwin":
+            print(
+                "--target-arch only applies to macOS builds",
+                file=sys.stderr,
+            )
+            return 1
+        args += ["--target-architecture", options.target_arch]
 
     icon = icon_for_this_platform()
     if icon is not None:
