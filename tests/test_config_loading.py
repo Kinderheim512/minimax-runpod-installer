@@ -318,3 +318,24 @@ def test_non_integer_provision_timeout_raises_config_error() -> None:
 def test_launcher_home_not_loaded_when_unset() -> None:
     config = load_config(env={})
     assert config.launcher_home is None
+
+# ---------------------------------------------------------------------------
+# The public template is the default the launcher ships
+# ---------------------------------------------------------------------------
+
+
+def test_the_comfy_template_defaults_to_the_public_one() -> None:
+    """Nothing configured -> the PUBLIC template id, so a first run works.
+
+    A private template id still wins (that is asserted end to end in
+    ``test_orchestrator.py``); this pins the default itself, which is what the
+    "click and go" promise rests on.
+    """
+    config = load_config(env={})
+    assert config.secrets.comfy_template_id == DEFAULT_COMFY_TEMPLATE_ID
+    assert DEFAULT_COMFY_TEMPLATE_ID == "oa2vozqbum"
+
+
+def test_an_explicit_comfy_template_wins_over_the_default() -> None:
+    config = load_config(env={"RUNPOD_COMFY_TEMPLATE_ID": "tmpl_private"})
+    assert config.secrets.comfy_template_id == "tmpl_private"
