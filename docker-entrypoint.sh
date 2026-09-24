@@ -57,6 +57,7 @@ fi
 set -Eeuo pipefail
 cd "$PROJECT_ROOT"
 
+# shellcheck disable=SC2034  # lib/utils.sh (sourced below) defines the log_* helpers around $LOG_FILE
 LOG_FILE="${PROJECT_ROOT}/logs/docker-entrypoint.log"
 
 # shellcheck disable=SC1091

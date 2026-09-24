@@ -34,6 +34,7 @@ TMUX_SESSION_NAME="minimax"
 # Défini avant de sourcer lib/utils.sh (qui ne fixe ce chemin que si vide)
 # pour que TOUS les logs de ce script, dès la toute première ligne,
 # atterrissent dans launch.log — comportement inchangé par rapport à avant.
+# shellcheck disable=SC2034  # lib/utils.sh (sourced below) defines the log_* helpers around $LOG_FILE
 LOG_FILE="${PROJECT_ROOT}/logs/launch.log"
 
 # shellcheck disable=SC1091

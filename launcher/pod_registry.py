@@ -1,10 +1,10 @@
 """Persistent registry for the launcher-created RunPod pods.
 
 Records the identity of every pod the launcher created on this machine,
-keyed by workload stack (``agent`` / ``comfy``), so subsequent CLI
+keyed by workload stack (``comfy`` / ``train``), so subsequent CLI
 invocations (``start``/``stop``/``status``/``doctor``) can discover and
-manage them without requiring ``RUNPOD_POD_ID``. Two pods may coexist —
-an agent (vLLM) pod and a comfy (ComfyUI) pod — each with its own template
+manage them without requiring ``RUNPOD_POD_ID``. Both stacks can run at
+once — a ComfyUI pod and a LoRA-training pod — each with its own template
 and lifecycle.
 
 The records are non-secret by design: each holds only the pod ID, name,
@@ -16,8 +16,8 @@ a partial record.
 
 File format: version 1 (legacy) held a single top-level pod record; version
 2 holds a ``pods`` mapping of stack name to record. Version 1 files are
-read as the ``agent`` stack and transparently upgraded to version 2 on the
-next save (the existing agent record is preserved).
+read as the ``comfy`` stack and transparently upgraded to version 2 on the
+next save (the existing record is preserved).
 """
 # Vendored from openfox-forge@58e7935 — see NOTICE for the licensing
 # and the resynchronisation procedure.
@@ -65,7 +65,7 @@ class PodRecord:
     gpu_id: Optional[str]
     gpu_count: int
     data_center_id: Optional[str] = None
-    stack: str = "agent"
+    stack: str = "comfy"
     version: int = CURRENT_VERSION
 
 
@@ -97,7 +97,7 @@ def _record_from_dict(raw: dict, stack: str) -> PodRecord:
 class PodRegistry:
     """Read/write the pod records at ``<home>\\pod.json`` (atomic writes).
 
-    All methods take an optional *stack* (default ``"agent"``) so the
+    All methods take an optional *stack* (default ``"comfy"``) so the
     pre-multi-stack call sites keep working unchanged.
     """
 
@@ -138,20 +138,20 @@ class PodRegistry:
             return {k: v for k, v in pods.items() if isinstance(v, dict)}
         if version == LEGACY_VERSION:
             return {
-                "agent": {
+                "comfy": {
                     "pod_id": raw.get("pod_id"),
                     "name": raw.get("name"),
                     "created_at": raw.get("created_at"),
                     "gpu_id": raw.get("gpu_id"),
                     "gpu_count": raw.get("gpu_count", 1),
                     "data_center_id": raw.get("data_center_id"),
-                    "stack": "agent",
+                    "stack": "comfy",
                 }
             }
         logger.warning("Pod registry file has an unknown version; ignoring it")
         return {}
 
-    def load(self, stack: str = "agent") -> Optional[PodRecord]:
+    def load(self, stack: str = "comfy") -> Optional[PodRecord]:
         """Return the stored record for *stack*, or ``None`` when absent.
 
         Corrupt content, an unknown version, or missing fields degrade to
@@ -220,7 +220,7 @@ class PodRegistry:
         }
         self._write(records)
 
-    def clear(self, stack: str = "agent") -> None:
+    def clear(self, stack: str = "comfy") -> None:
         """Remove the record for *stack* (idempotent; a missing file is fine).
 
         When the last record is removed the file itself is deleted.

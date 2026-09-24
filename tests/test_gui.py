@@ -15,6 +15,18 @@ from types import SimpleNamespace
 
 import pytest
 
+#: macOS CI runners have no interactive session: Tk opens no window there, and
+#: a Tk call then HANGS instead of raising, which is how a 4-hour CI stall
+#: happened. The workflow sets this flag on macOS so the module is skipped;
+#: Windows and Linux/xvfb keep running it. It is deliberately an explicit
+#: opt-out rather than an auto-detect: "no display" is indistinguishable from
+#: "slow to start" at import time.
+if os.environ.get("MINIMAX_SKIP_GUI_TESTS"):
+    pytest.skip(
+        "MINIMAX_SKIP_GUI_TESTS is set (no interactive session on this runner)",
+        allow_module_level=True,
+    )
+
 try:
     import tkinter as tk
 except ImportError:  # pragma: no cover - tkinter is always present in the

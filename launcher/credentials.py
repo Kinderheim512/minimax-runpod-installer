@@ -192,7 +192,14 @@ def default_credentials_path() -> Path:
 
     Raises :class:`CredentialStoreUnsupported` only when the per-user
     directory cannot be resolved at all (no ``APPDATA``, no ``HOME``).
+
+    :data:`CREDENTIALS_DIR_ENV` wins over all of them (the file name is
+    kept), which is what keeps the test suite off the operator's real
+    store.
     """
+    override = os.environ.get(CREDENTIALS_DIR_ENV)
+    if override:
+        return Path(override) / CREDENTIALS_FILENAME
     if os.name == "nt":
         appdata = os.environ.get("APPDATA")
         if not appdata:
@@ -226,6 +233,20 @@ def default_credentials_path() -> Path:
 #: Service/account names of the external stores (Keychain, Secret Service).
 _VAULT_SERVICE = "minimax-launcher"
 _VAULT_ACCOUNT = "runpod-credentials"
+
+#: Override the store DIRECTORY (the file still holds the token/ciphertext).
+#: Set by the test suite so no test can reach the operator's real store, and
+#: usable by anyone who wants the launcher's state on a specific volume.
+CREDENTIALS_DIR_ENV = "MINIMAX_LAUNCHER_CREDENTIALS_DIR"
+
+#: Force a backend instead of auto-detecting one. The test suite pins
+#: ``file``: on macOS the Keychain (``security``) BLOCKS on a runner with no
+#: interactive session — waiting for an unlock prompt that never comes — and
+#: on Linux the Secret Service needs a session bus CI does not have.
+CREDENTIALS_BACKEND_ENV = "MINIMAX_LAUNCHER_CREDENTIAL_BACKEND"
+
+#: Values :data:`CREDENTIALS_BACKEND_ENV` accepts.
+CREDENTIALS_BACKENDS = ("dpapi", "keychain", "secret-service", "file")
 
 
 def _which(name: str) -> bool:
@@ -351,7 +372,17 @@ def _file_unprotect(blob: bytes) -> bytes:
 
 
 def default_backend_name() -> str:
-    """Which backend this machine will use (``dpapi``/``keychain``/``secret-service``/``file``)."""
+    """Which backend this machine will use.
+
+    One of ``dpapi`` / ``keychain`` / ``secret-service`` / ``file``.
+    :data:`CREDENTIALS_BACKEND_ENV` forces one of
+    :data:`CREDENTIALS_BACKENDS`; an unrecognised value falls back to the
+    auto-detection rather than failing (a typo must not make the store
+    unusable).
+    """
+    forced = (os.environ.get(CREDENTIALS_BACKEND_ENV) or "").strip().lower()
+    if forced in CREDENTIALS_BACKENDS:
+        return forced
     if os.name == "nt":
         return "dpapi"
     if sys.platform == "darwin" and _which("security"):

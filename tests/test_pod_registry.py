@@ -34,8 +34,8 @@ def test_atomic_replace_leaves_no_partial_or_temp_file(tmp_path) -> None:
     reg.save(_record())
     reg.save(_record(pod_id="pod_second", name="second-name"))
     raw = json.loads((tmp_path / "pod.json").read_text(encoding="utf-8"))
-    assert raw["pods"]["agent"]["pod_id"] == "pod_second"
-    assert raw["pods"]["agent"]["name"] == "second-name"
+    assert raw["pods"]["comfy"]["pod_id"] == "pod_second"
+    assert raw["pods"]["comfy"]["name"] == "second-name"
     # The directory contains exactly the registry file — no temp leftovers.
     assert sorted(p.name for p in tmp_path.iterdir()) == ["pod.json"]
 
@@ -80,7 +80,7 @@ def test_no_secret_keys_in_file(tmp_path) -> None:
     raw = json.loads(path.read_text(encoding="utf-8"))
     assert set(raw.keys()) == {"version", "pods"}
     assert raw["version"] == CURRENT_VERSION
-    record = raw["pods"]["agent"]
+    record = raw["pods"]["comfy"]
     assert set(record.keys()) == {
         "pod_id",
         "name",
@@ -158,13 +158,13 @@ def test_legacy_v1_file_upgrades_on_save(tmp_path) -> None:
         encoding="utf-8",
     )
     reg = PodRegistry(path)
-    assert reg.load("agent").pod_id == "pod_legacy"
-    reg.save(_record(pod_id="pod_comfy", stack="comfy"))
+    assert reg.load("comfy").pod_id == "pod_legacy"
+    reg.save(_record(pod_id="pod_train", stack="train"))
     raw = json.loads(path.read_text(encoding="utf-8"))
     assert raw["version"] == CURRENT_VERSION
-    assert raw["pods"]["agent"]["pod_id"] == "pod_legacy"
-    assert raw["pods"]["comfy"]["pod_id"] == "pod_comfy"
-    # The legacy agent pod survives the in-place upgrade.
-    assert reg.load("agent").pod_id == "pod_legacy"
+    assert raw["pods"]["comfy"]["pod_id"] == "pod_legacy"
+    assert raw["pods"]["train"]["pod_id"] == "pod_train"
+    # The legacy pod survives the in-place upgrade.
+    assert reg.load("comfy").pod_id == "pod_legacy"
 
 

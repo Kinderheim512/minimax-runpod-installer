@@ -400,7 +400,15 @@ export H3_DASIWA_DIRECTOR_HYBRID_VARIANT="$WIZ_DASIWA_DIRECTOR_HYBRID_VARIANT"
 # Rétro-compatibilité : l'ancienne variable scalaire reste synchronisée (les
 # lecteurs existants et la garde de variante historique continuent de
 # fonctionner ; config.env la surcharge via H3_DASIWA_CHECKPOINT_VARIANTS).
-export H3_DASIWA_CHECKPOINT_VARIANT="$([[ ",${WIZ_DASIWA_CHECKPOINT_VARIANTS}," == *",dasiwa_hybrid,"* ]] && echo dasiwa_hybrid || echo pruned)"
+# Declared then exported rather than ``export VAR="$(...)"``: the one-liner
+# masked the command substitution's exit status (SC2155), so a failure inside
+# it was invisible to ``set -e``.
+if [[ ",${WIZ_DASIWA_CHECKPOINT_VARIANTS}," == *",dasiwa_hybrid,"* ]]; then
+  H3_DASIWA_CHECKPOINT_VARIANT="dasiwa_hybrid"
+else
+  H3_DASIWA_CHECKPOINT_VARIANT="pruned"
+fi
+export H3_DASIWA_CHECKPOINT_VARIANT
 
 # Persist these choices on /workspace (RunPod's PERSISTENT volume — unlike
 # everything else on this line, which only lives in this shell's exported

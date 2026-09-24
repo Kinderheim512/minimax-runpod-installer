@@ -32,22 +32,36 @@ def _isolate_runtime_state(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _isolate_credentials_dir(tmp_path, monkeypatch):
-    """Point the default secure credential store at a per-test APPDATA dir.
+    """Point the credential store at a per-test directory, on every platform.
 
-    The launcher stores DPAPI-encrypted RunPod credentials under
-    %APPDATA%\\OpenFoxForge. Tests must never read or write the operator's
-    real store, so APPDATA is redirected per test.
+    The store is per-user state whose location is platform-dependent
+    (``%APPDATA%`` on Windows, ``~/Library/Application Support`` on macOS,
+    ``$XDG_DATA_HOME`` on Linux), so all of them are redirected here:
+    redirecting only APPDATA left the POSIX paths pointing at the operator's
+    real home.
+
+    On POSIX the backend is pinned to ``file`` too. Auto-detection would pick
+    the login Keychain on macOS, whose ``security`` CLI **blocks** on a runner
+    with no interactive session (waiting for an unlock prompt that never
+    comes — a four-hour CI hang), and the Secret Service on Linux, which needs
+    a session bus CI does not have. Windows keeps DPAPI, so the
+    DPAPI-specific tests still exercise the real thing.
     """
+    monkeypatch.setenv("MINIMAX_LAUNCHER_CREDENTIALS_DIR", str(tmp_path / "credentials"))
     monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+    if os.name != "nt":
+        monkeypatch.setenv("MINIMAX_LAUNCHER_CREDENTIAL_BACKEND", "file")
 
 
 @pytest.fixture(autouse=True)
 def _isolate_launcher_home(tmp_path, monkeypatch):
     """Keep the launcher home (pod registry / provisioning lock) per-test.
 
-    Tests must never read or write the operator's real
-    %APPDATA%\\OpenFoxForge\\pod.json or provision.lock. Any test that needs
-    a custom home can monkeypatch OPENFOX_FORGE_HOME after this fixture runs.
+    Tests must never read or write the operator's real ``pod.json`` or
+    ``provision.lock``. Any test that needs a custom home can monkeypatch
+    ``MINIMAX_LAUNCHER_HOME`` after this fixture runs.
     """
     monkeypatch.delenv("MINIMAX_LAUNCHER_HOME", raising=False)
 
@@ -112,10 +126,7 @@ def _offline_health_probes(monkeypatch):
 
     for module in (doctor, main):
         for name, stub in (
-            ("check_health", _unreachable),
-            ("check_model", _unreachable),
             ("check_comfy", _not_ready),
-            ("check_llamacpp", _not_ready),
             ("check_train", _not_ready),
         ):
             if hasattr(module, name):

@@ -3,6 +3,7 @@
 
 set -Eeuo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2034  # lib/utils.sh (sourced below) defines the log_* helpers around $LOG_FILE
 LOG_FILE="${PROJECT_ROOT}/logs/install.log"
 
 # shellcheck disable=SC1091

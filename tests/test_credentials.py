@@ -574,6 +574,9 @@ def test_no_plaintext_credential_file_is_created(tmp_path) -> None:
 @pytest.mark.skipif(os.name != "nt", reason="default store path is Windows-specific")
 def test_default_path_requires_appdata(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("APPDATA", raising=False)
+    # The suite-wide isolation fixture points the store at a temp directory;
+    # this test is about the *fallback* resolution, so the override goes too.
+    monkeypatch.delenv("MINIMAX_LAUNCHER_CREDENTIALS_DIR", raising=False)
     with pytest.raises(CredentialStoreUnsupported):
         default_credentials_path()
 

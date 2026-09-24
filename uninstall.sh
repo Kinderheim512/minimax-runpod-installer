@@ -9,6 +9,11 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="${PROJECT_ROOT}/logs/uninstall.log"
 
 for arg in "$@"; do
+  # shellcheck disable=SC2034  # the case items set ASSUME_YES / H3_TIER /
+  # H3_WORKFLOWS / H3_PRESETS, which lib/utils.sh, lib/models.sh and
+  # lib/presets.sh (sourced below) consume. ShellCheck cannot see across
+  # files, so a directive inside a case item is not allowed: this one
+  # covers the whole statement.
   case "$arg" in
     --yes|-y) ASSUME_YES="true" ;;
   esac

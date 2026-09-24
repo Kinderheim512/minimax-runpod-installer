@@ -22,6 +22,7 @@ find "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" \
     -name "*.sh" \
     -exec sed -i 's/\r$//' {} \;
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2034  # lib/utils.sh (sourced below) defines the log_* helpers around $LOG_FILE
 LOG_FILE="${PROJECT_ROOT}/logs/install.log"
 
 SKIP_MODELS="false"
@@ -29,6 +30,11 @@ ONLY_MODELS="false"
 FORCE="false"
 
 for arg in "$@"; do
+  # shellcheck disable=SC2034  # the case items set ASSUME_YES / H3_TIER /
+  # H3_WORKFLOWS / H3_PRESETS, which lib/utils.sh, lib/models.sh and
+  # lib/presets.sh (sourced below) consume. ShellCheck cannot see across
+  # files, so a directive inside a case item is not allowed: this one
+  # covers the whole statement.
   case "$arg" in
     --skip-models) SKIP_MODELS="true" ;;
     --only-models) ONLY_MODELS="true" ;;
